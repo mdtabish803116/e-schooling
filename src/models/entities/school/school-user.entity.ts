@@ -1,5 +1,5 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
-import { RoleEnum, StatusEnum } from '../../enums/enums';
+import { UserTypeEnum, StatusEnum } from '../../enums/enums';
 
 @Entity({ name: 'school_users', schema: 'e_schooling' })
 export class SchoolUser {
@@ -20,11 +20,14 @@ export class SchoolUser {
   @Column({ name: 'username', type: 'varchar', nullable: true, comment: 'Unique username' })
   username: string;
 
+  @Column({ name: 'password_hash', type: 'varchar', nullable: true, comment: 'Hashed password' })
+  passwordHash: string;
+
   @Column({ name: 'phone', type: 'varchar', nullable: true, comment: 'User phone number' })
   phone: string;
 
   @Column({ name: 'user_type', type: 'varchar', nullable: true, comment: 'admin | teacher | accountant | staff' })
-  userType: RoleEnum;
+  userType: UserTypeEnum;
 
   @Column({ name: 'status', type: 'varchar', nullable: true, comment: 'active | inactive | deleted' })
   status: StatusEnum;

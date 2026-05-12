@@ -7,6 +7,8 @@ import { AppModule } from './app.module';
 import { WorkerModule } from './api/worker/worker.module';
 import { Config } from './config/index';
 import { ServerMode } from './config/enums_config';
+import { GlobalHttpExceptionFilter } from './shared/filters/http-exception.filter';
+import { SwaggerMiddleWare } from './middlewares/swagger.middleware';
 
 const createServer = async (): Promise<{ app: INestApplication | INestApplicationContext, mode: string }> => {
   const mode = Config.getSecret(
@@ -23,7 +25,7 @@ const createServer = async (): Promise<{ app: INestApplication | INestApplicatio
     return { app, mode };
   } else {
     const app = await NestFactory.create(AppModule);
-    
+
     // CORS configuration
     if (!process.env.ORIGINS) {
       throw new Error('ORIGINS not configured in environment variables');
@@ -43,6 +45,15 @@ const createServer = async (): Promise<{ app: INestApplication | INestApplicatio
           }
         },
       });
+    }
+
+    // Global filters
+    app.useGlobalFilters(new GlobalHttpExceptionFilter());
+
+    // Swagger — only available outside production
+    if (process.env.NODE_ENV !== 'prod') {
+      const swagger = new SwaggerMiddleWare(app);
+      swagger.register();
     }
 
     return { app, mode };

@@ -1,5 +1,5 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
-import { RoleEnum, StatusEnum } from '../../enums/enums';
+import { PlatformRoleEnum, StatusEnum } from '../../enums/enums';
 
 @Entity({ name: 'platform_users', schema: 'e_schooling' })
 export class PlatformUser {
@@ -17,7 +17,7 @@ export class PlatformUser {
   passwordHash: string;
 
   @Column({ name: 'role', type: 'varchar', nullable: true, comment: 'super_admin | ops | support' })
-  role: RoleEnum;
+  role: PlatformRoleEnum;
 
   @Column({ name: 'status', type: 'varchar', nullable: true, comment: 'active | inactive | deleted' })
   status: StatusEnum;

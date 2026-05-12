@@ -1,5 +1,5 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
-import { EnrollmentStatusEnum } from '../../enums/enums';
+import { EnrollmentStatusEnum, EnrollmentTypeEnum } from '../../enums/enums';
 
 @Entity({ name: 'student_enrollments', schema: 'e_schooling' })
 export class StudentEnrollment {
@@ -29,12 +29,24 @@ export class StudentEnrollment {
   @Column({ name: 'roll_number', type: 'varchar', nullable: true, comment: 'Roll number' })
   rollNumber: string;
 
+  @Column({ name: 'enrollment_type', type: 'varchar', nullable: true, comment: 'admission | promotion | demotion | transfer | repeat | special_promotion' })
+  enrollmentType: EnrollmentTypeEnum;
+
   @Column({ name: 'enrollment_status', type: 'varchar', nullable: true, comment: 'active | promoted | demoted | transferred | completed | dropped' })
   enrollmentStatus: EnrollmentStatusEnum;
 
   @Index()
   @Column({ name: 'previous_enrollment_id', type: 'bigint', nullable: true, comment: 'Reference to previous StudentEnrollment' })
   previousEnrollmentId: string;
+
+  @Column({ name: 'is_current', type: 'boolean', default: false, comment: 'Whether this is the student\'s current active enrollment' })
+  isCurrent: boolean;
+
+  @Column({ name: 'start_date', type: 'date', nullable: true, comment: 'Enrollment start date' })
+  startDate: string;
+
+  @Column({ name: 'end_date', type: 'date', nullable: true, comment: 'Enrollment end date (set when student is promoted/transferred)' })
+  endDate: string;
 
   @Column({ name: 'joined_at', type: 'timestamp', nullable: true, comment: 'Join timestamp' })
   joinedAt: Date;

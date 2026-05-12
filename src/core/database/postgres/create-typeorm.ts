@@ -24,6 +24,8 @@ export const createOrmConfig = (): DataSourceOptions => {
       min: postgressPool.min,
       idleTimeoutMillis: postgressPool.idleTimeoutMillis,
       connectionTimeoutMillis: postgressPool.connectionTimeoutMillis,
+      // Enforce Indian Standard Time directly at the PostgreSQL connection session level
+      options: '-c timezone=Asia/Kolkata',
     },
   };
   return connectionOpts;

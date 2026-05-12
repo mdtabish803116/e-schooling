@@ -1,5 +1,5 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
-import { RoleEnum, InvitationStatusEnum, StatusEnum } from '../../enums/enums';
+import { SchoolOwnerRoleEnum, InvitationStatusEnum, StatusEnum } from '../../enums/enums';
 
 @Entity({ name: 'school_members', schema: 'e_schooling' })
 @Index(['schoolId', 'schoolOwnerId'], { unique: true })
@@ -16,7 +16,7 @@ export class SchoolMember {
   schoolOwnerId: string;
 
   @Column({ name: 'role', type: 'varchar', nullable: true, comment: 'owner | admin | teacher | accountant | staff' })
-  role: RoleEnum;
+  role: SchoolOwnerRoleEnum;
 
   @Column({ name: 'is_primary_owner', type: 'boolean', nullable: true, comment: 'Whether the user is the primary owner' })
   isPrimaryOwner: boolean;
