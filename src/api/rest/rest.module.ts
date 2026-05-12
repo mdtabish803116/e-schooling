@@ -4,9 +4,10 @@ import { AuthModule } from './v1/auth/auth.module';
 import { SchoolsModule } from './v1/schools/schools.module';
 import { SchoolUsersModule } from './v1/school-users/school-users.module';
 import { RolesModule } from './v1/roles/roles.module';
+import { SubscriptionsModule } from './v1/subscriptions/subscriptions.module';
 
 @Module({
-  imports: [CloudinaryModule, AuthModule, SchoolsModule, SchoolUsersModule, RolesModule],
+  imports: [CloudinaryModule, AuthModule, SchoolsModule, SchoolUsersModule, RolesModule, SubscriptionsModule],
   controllers: [],
   providers: [],
 })

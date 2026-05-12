@@ -100,6 +100,18 @@ export enum SubscriptionStatusEnum {
   SUSPENDED = 'suspended'
 }
 
+export enum PlanCodeEnum {
+  TRIAL = 'TRIAL',
+  BASIC = 'BASIC',
+  STANDARD = 'STANDARD',
+  PREMIUM = 'PREMIUM'
+}
+
+export enum AddonTypeEnum {
+  STUDENT_BOOSTER_50 = 'STUDENT_BOOSTER_50',
+  STUDENT_BOOSTER_100 = 'STUDENT_BOOSTER_100'
+}
+
 export enum PaymentGatewayEnum {
   RAZORPAY = 'razorpay',
   STRIPE = 'stripe',

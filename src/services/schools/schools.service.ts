@@ -7,14 +7,22 @@ import {
 import { DataSource } from 'typeorm';
 import { School } from '../../models/entities/school/school.entity';
 import { SchoolMember } from '../../models/entities/school/school-member.entity';
-import { SchoolOwnerRoleEnum, StatusEnum } from '../../models/enums/enums';
+import { SubscriptionPlan } from '../../models/entities/subscription/subscription-plan.entity';
+import { SchoolSubscription } from '../../models/entities/subscription/school-subscription.entity';
+import {
+  SchoolOwnerRoleEnum,
+  StatusEnum,
+  PlanCodeEnum,
+  SubscriptionStatusEnum,
+  BillingCycleEnum,
+} from '../../models/enums/enums';
 import { AuthContext } from '../../interfaces/auth-context.interface';
 import { CreateSchoolDto } from '../../interfaces/request/school/create-school.dto';
 import { UpdateSchoolDto } from '../../interfaces/request/school/update-school.dto';
 
 @Injectable()
 export class SchoolsService {
-  constructor(private dataSource: DataSource) {}
+  constructor(private dataSource: DataSource) { }
 
   /**
    * Helper to generate unique internal school code based on school name.
@@ -41,8 +49,78 @@ export class SchoolsService {
   }
 
   /**
+   * Ensure master configurable subscription plans exist in the DB.
+   */
+  private async ensureSubscriptionPlansExist(manager: any): Promise<SubscriptionPlan> {
+    let trialPlan = await manager.findOne(SubscriptionPlan, {
+      where: { code: PlanCodeEnum.TRIAL },
+    });
+
+    if (!trialPlan) {
+      // Seed default Master Plans
+      const baseFeatures = ['admission', 'attendance', 'classes', 'subjects', 'teachers', 'students'];
+      const standardFeatures = [...baseFeatures, 'fees', 'reports', 'notifications'];
+
+      const plans = [
+        {
+          code: PlanCodeEnum.TRIAL,
+          name: 'Free Trial (30 Days)',
+          description: 'Basic features included for evaluation',
+          maxStudents: 50,
+          maxStaff: 5,
+          maxClasses: 5,
+          maxSections: 10,
+          features: baseFeatures,
+        },
+        {
+          code: PlanCodeEnum.BASIC,
+          name: 'Basic Plan',
+          description: 'Core school management modules',
+          maxStudents: 300,
+          maxStaff: null,
+          maxClasses: null,
+          maxSections: null,
+          features: baseFeatures,
+        },
+        {
+          code: PlanCodeEnum.STANDARD,
+          name: 'Standard Plan',
+          description: 'Advanced reporting and fee tracking',
+          maxStudents: 500,
+          maxStaff: null,
+          maxClasses: null,
+          maxSections: null,
+          features: standardFeatures,
+        },
+        {
+          code: PlanCodeEnum.PREMIUM,
+          name: 'Premium Plan',
+          description: 'Full automated multi-tenant ERP suites',
+          maxStudents: 1000,
+          maxStaff: null,
+          maxClasses: null,
+          maxSections: null,
+          features: standardFeatures,
+        },
+      ];
+
+      for (const p of plans) {
+        const entity = new SubscriptionPlan();
+        Object.assign(entity, p);
+        const saved = await manager.save(entity);
+        if (p.code === PlanCodeEnum.TRIAL) {
+          trialPlan = saved;
+        }
+      }
+    }
+
+    return trialPlan;
+  }
+
+  /**
    * Create a new school post-login.
-   * Generates internal/external codes based on school name and atomically attaches the owner.
+   * Generates internal/external codes based on school name and atomically attaches the owner
+   * along with a newly minted 30-day Free Trial subscription state.
    */
   async createSchool(caller: AuthContext, dto: CreateSchoolDto) {
     if (caller.actorType !== 'school_owner') {
@@ -55,16 +133,17 @@ export class SchoolsService {
 
     try {
       const internalCode = this.generateSchoolCode(dto.schoolName);
-      // Generate external code based on internal code if not manually specified
       const externalCode = dto.externalSchoolCode || `EXT-${internalCode.replace('SCH-', '')}`;
 
-      // Verify code uniqueness just in case
       const existing = await queryRunner.manager.findOne(School, {
         where: { internalSchoolCode: internalCode },
       });
       if (existing) {
         throw new BadRequestException('School code collision. Please try submitting again.');
       }
+
+      // Ensure Master Plans exist
+      const trialPlan = await this.ensureSubscriptionPlansExist(queryRunner.manager);
 
       const school = new School();
       school.schoolName = dto.schoolName;
@@ -99,11 +178,32 @@ export class SchoolsService {
 
       await queryRunner.manager.save(member);
 
+      // Automatically assign 30-day Free Trial subscription
+      const now = new Date();
+      const trialEnd = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000); // +30 days
+
+      const subscription = new SchoolSubscription();
+      subscription.schoolId = savedSchool.id;
+      subscription.planId = trialPlan.id;
+      subscription.status = SubscriptionStatusEnum.TRIAL;
+      subscription.billingCycle = BillingCycleEnum.MONTHLY;
+      subscription.trialStartAt = now;
+      subscription.trialEndAt = trialEnd;
+      subscription.currentPeriodStart = now;
+      subscription.currentPeriodEnd = trialEnd;
+
+      await queryRunner.manager.save(subscription);
+
       await queryRunner.commitTransaction();
 
       return {
-        message: 'School created successfully',
+        message: 'School created successfully with active 30-day Free Trial',
         school: savedSchool,
+        subscriptionStatus: {
+          plan: trialPlan.name,
+          status: subscription.status,
+          expiresAt: subscription.trialEndAt,
+        },
       };
     } catch (error) {
       await queryRunner.rollbackTransaction();
@@ -112,6 +212,7 @@ export class SchoolsService {
       await queryRunner.release();
     }
   }
+
 
   /**
    * Update school details.

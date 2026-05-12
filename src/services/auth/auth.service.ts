@@ -12,7 +12,7 @@ export class AuthService {
   constructor(
     private dataSource: DataSource,
     private jwtService: JwtService,
-  ) {}
+  ) { }
 
   async register(dto: SchoolOwnerRegisterDto) {
     const queryRunner = this.dataSource.createQueryRunner();
@@ -38,7 +38,7 @@ export class AuthService {
       owner.phone = dto.ownerPhone;
       owner.passwordHash = hashedPassword;
       owner.status = StatusEnum.ACTIVE;
-      
+
       const savedOwner = await queryRunner.manager.save(owner);
 
       await queryRunner.commitTransaction();

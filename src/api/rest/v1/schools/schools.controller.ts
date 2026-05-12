@@ -12,7 +12,7 @@ import { UpdateSchoolDto } from '../../../../interfaces/request/school/update-sc
 @UseGuards(JwtAuthGuard)
 @Controller('schools')
 export class SchoolsController {
-  constructor(private readonly schoolsService: SchoolsService) {}
+  constructor(private readonly schoolsService: SchoolsService) { }
 
   @ApiOperation({ summary: 'Create a new school (post-login)' })
   @Post()
