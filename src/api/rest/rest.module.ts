@@ -5,10 +5,12 @@ import { SchoolsModule } from './v1/schools/schools.module';
 import { SchoolUsersModule } from './v1/school-users/school-users.module';
 import { RolesModule } from './v1/roles/roles.module';
 import { SubscriptionsModule } from './v1/subscriptions/subscriptions.module';
+import { EntitlementModule } from './v1/entitlement/entitlement.module';
+import { GeoModule } from './v1/geo/geo.module';
 
 @Module({
-  imports: [CloudinaryModule, AuthModule, SchoolsModule, SchoolUsersModule, RolesModule, SubscriptionsModule],
+  imports: [CloudinaryModule, AuthModule, SchoolsModule, SchoolUsersModule, RolesModule, SubscriptionsModule, EntitlementModule, GeoModule],
   controllers: [],
   providers: [],
 })
-export class RestModule {}
+export class RestModule { }

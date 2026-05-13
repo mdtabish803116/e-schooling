@@ -40,6 +40,12 @@ export class SchoolUser {
   @Column({ name: 'updated_by_id', type: 'bigint', nullable: true, comment: 'Reference to SchoolOwner' })
   updatedById: string;
 
+  @Column({ name: 'state_id', type: 'bigint', nullable: true, comment: 'Reference to parent State' })
+  stateId: string;
+
+  @Column({ name: 'district_id', type: 'bigint', nullable: true, comment: 'Reference to parent District' })
+  districtId: string;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamp', comment: 'Creation timestamp' })
   createdAt: Date;
 

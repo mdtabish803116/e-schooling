@@ -7,11 +7,10 @@ import {
 import { Reflector } from '@nestjs/core';
 import { DataSource, In } from 'typeorm';
 import { PERMISSION_KEY } from '../decorators/require-permission.decorator';
-import { PermissionKeyEnum } from '../../models/enums/enums';
 import { AuthContext } from '../../interfaces/auth-context.interface';
 import { UserRole } from '../../models/entities/rbac/user-role.entity';
 import { RolePermission } from '../../models/entities/rbac/role-permission.entity';
-import { Permission } from '../../models/entities/rbac/permission.entity';
+import { ModuleOperationPermission } from '../../models/entities/rbac/module-operation-permission.entity';
 
 @Injectable()
 export class PermissionsGuard implements CanActivate {
@@ -21,7 +20,7 @@ export class PermissionsGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const requiredPermission = this.reflector.getAllAndOverride<PermissionKeyEnum>(
+    const requiredPermission = this.reflector.getAllAndOverride<string>(
       PERMISSION_KEY,
       [context.getHandler(), context.getClass()],
     );
@@ -56,7 +55,7 @@ export class PermissionsGuard implements CanActivate {
     const roleIds = userRoles.map((ur) => ur.roleId);
 
     // Find the required permission ID by key
-    const permission = await this.dataSource.getRepository(Permission).findOne({
+    const permission = await this.dataSource.getRepository(ModuleOperationPermission).findOne({
       where: { key: requiredPermission },
       select: ['id'],
     });

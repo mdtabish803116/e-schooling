@@ -1,5 +1,4 @@
 import { SetMetadata } from '@nestjs/common';
-import { PermissionKeyEnum } from '../../models/enums/enums';
 
 export const PERMISSION_KEY = 'required_permission';
 
@@ -16,5 +15,5 @@ export const PERMISSION_KEY = 'required_permission';
  *   @Post('/attendance')
  *   createAttendance() { ... }
  */
-export const RequirePermission = (permission: PermissionKeyEnum) =>
-  SetMetadata(PERMISSION_KEY, permission);
+export const RequirePermission = (permissionKey: string) =>
+  SetMetadata(PERMISSION_KEY, permissionKey);

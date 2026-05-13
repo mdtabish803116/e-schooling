@@ -51,6 +51,15 @@ export class Student {
   @Column({ name: 'updated_by_id', type: 'bigint', nullable: true, comment: 'Reference to SchoolUser' })
   updatedById: string;
 
+  @Column({ name: 'state_id', type: 'bigint', nullable: true, comment: 'Reference to parent State' })
+  stateId: string;
+
+  @Column({ name: 'district_id', type: 'bigint', nullable: true, comment: 'Reference to parent District' })
+  districtId: string;
+
+  @Column({ name: 'place_id', type: 'bigint', nullable: true, comment: 'Reference to custom local Place/Village cluster' })
+  placeId: string;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamp', comment: 'Creation timestamp' })
   createdAt: Date;
 

@@ -10,6 +10,8 @@ import { SubscriptionPlan } from '../../models/entities/subscription/subscriptio
 import { PlanPrice } from '../../models/entities/subscription/plan-price.entity';
 import { SchoolSubscription } from '../../models/entities/subscription/school-subscription.entity';
 import { SchoolAddon } from '../../models/entities/subscription/school-addon.entity';
+import { PlanFeature } from '../../models/entities/entitlement/plan-feature.entity';
+import { PlatformFeature } from '../../models/entities/entitlement/platform-feature.entity';
 import {
   PlanCodeEnum,
   BillingCycleEnum,
@@ -119,6 +121,23 @@ export class SubscriptionsService {
       order: { createdAt: 'DESC' },
     });
 
+    // Look up enabled features natively mapped to this global plan via the Entitlement architecture
+    const planFeatures = await this.dataSource
+      .getRepository(PlanFeature)
+      .find({ where: { planId: plan.id, isEnabled: true } });
+
+    const featureIds = planFeatures.map((pf) => pf.featureId);
+    let featuresIncluded: string[] = [];
+
+    if (featureIds.length > 0) {
+      const platformFeatures = await this.dataSource
+        .getRepository(PlatformFeature)
+        .createQueryBuilder('pf')
+        .where('pf.id IN (:...featureIds)', { featureIds })
+        .getMany();
+      featuresIncluded = platformFeatures.map((pf) => pf.code);
+    }
+
     return {
       summary: {
         schoolId,
@@ -133,7 +152,7 @@ export class SubscriptionsService {
         planDetails: {
           code: plan.code,
           name: plan.name,
-          featuresIncluded: plan.features,
+          featuresIncluded,
           baseLimits: {
             maxStudents: plan.maxStudents,
             maxStaff: plan.maxStaff,

@@ -1,23 +1,24 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
 
-@Entity({ name: 'role_permissions', schema: 'e_schooling' })
-export class RolePermission {
+@Entity({ name: 'places', schema: 'e_schooling' })
+export class Place {
   @PrimaryGeneratedColumn('increment', { type: 'bigint', comment: 'Primary key' })
   id: string;
 
   @Index()
-  @Column({ name: 'role_id', type: 'bigint', nullable: true, comment: 'Reference to Role' })
-  roleId: string;
+  @Column({ name: 'school_id', type: 'bigint', nullable: false, comment: 'Target tenant branch customizing this place' })
+  schoolId: string;
 
   @Index()
-  @Column({ name: 'permission_id', type: 'bigint', nullable: true, comment: 'Reference to ModuleOperationPermission' })
-  permissionId: string;
+  @Column({ name: 'district_id', type: 'bigint', nullable: false, comment: 'Reference to parent District' })
+  districtId: string;
 
-  @Column({ name: 'created_by_id', type: 'bigint', nullable: true, comment: 'Reference to Creator' })
-  createdById: string;
+  @Index()
+  @Column({ name: 'name', type: 'varchar', nullable: false, comment: 'Village, City, or custom local cluster name' })
+  name: string;
 
-  @Column({ name: 'updated_by_id', type: 'bigint', nullable: true, comment: 'Reference to Updater' })
-  updatedById: string;
+  @Column({ name: 'pincode', type: 'varchar', nullable: true, comment: 'Postal code' })
+  pincode: string;
 
   @Column({ name: 'is_active', type: 'boolean', nullable: false, default: true, comment: 'Active status toggle' })
   isActive: boolean;

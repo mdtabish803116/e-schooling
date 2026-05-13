@@ -28,9 +28,6 @@ export class SubscriptionPlan {
   @Column({ name: 'max_sections', type: 'int', nullable: true, comment: 'Maximum allowed sections. Null means unlimited.' })
   maxSections: number | null;
 
-  @Column({ name: 'features', type: 'jsonb', nullable: true, comment: 'Array of permitted feature module keys' })
-  features: string[];
-
   @CreateDateColumn({ name: 'created_at', type: 'timestamp', comment: 'Creation timestamp' })
   createdAt: Date;
 

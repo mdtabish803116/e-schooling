@@ -28,6 +28,12 @@ export class SchoolOwner {
   @Column({ name: 'phone_verified', type: 'boolean', nullable: true, comment: 'Phone verification status' })
   phoneVerified: boolean;
 
+  @Column({ name: 'state_id', type: 'bigint', nullable: true, comment: 'Reference to parent State' })
+  stateId: string;
+
+  @Column({ name: 'district_id', type: 'bigint', nullable: true, comment: 'Reference to parent District' })
+  districtId: string;
+
   @Column({ name: 'last_login_at', type: 'timestamp', nullable: true, comment: 'Last login timestamp' })
   lastLoginAt: Date;
 

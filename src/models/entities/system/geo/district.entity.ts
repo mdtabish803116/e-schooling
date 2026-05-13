@@ -1,23 +1,17 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
 
-@Entity({ name: 'role_permissions', schema: 'e_schooling' })
-export class RolePermission {
+@Entity({ name: 'districts', schema: 'e_schooling' })
+export class District {
   @PrimaryGeneratedColumn('increment', { type: 'bigint', comment: 'Primary key' })
   id: string;
 
   @Index()
-  @Column({ name: 'role_id', type: 'bigint', nullable: true, comment: 'Reference to Role' })
-  roleId: string;
+  @Column({ name: 'state_id', type: 'bigint', nullable: false, comment: 'Reference to parent State' })
+  stateId: string;
 
   @Index()
-  @Column({ name: 'permission_id', type: 'bigint', nullable: true, comment: 'Reference to ModuleOperationPermission' })
-  permissionId: string;
-
-  @Column({ name: 'created_by_id', type: 'bigint', nullable: true, comment: 'Reference to Creator' })
-  createdById: string;
-
-  @Column({ name: 'updated_by_id', type: 'bigint', nullable: true, comment: 'Reference to Updater' })
-  updatedById: string;
+  @Column({ name: 'name', type: 'varchar', nullable: false, comment: 'District name' })
+  name: string;
 
   @Column({ name: 'is_active', type: 'boolean', nullable: false, default: true, comment: 'Active status toggle' })
   isActive: boolean;

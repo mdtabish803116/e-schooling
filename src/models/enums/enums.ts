@@ -177,3 +177,34 @@ export enum AttendanceStatusEnum {
   LEAVE = 'leave',
   HALF_DAY = 'half_day'
 }
+
+/** Feature Entitlement & Billing Add-ons mapping */
+export enum FeatureTypeEnum {
+  CORE = 'CORE',
+  ADDON = 'ADDON',
+  ENTERPRISE = 'ENTERPRISE',
+}
+
+export enum UsageUnitEnum {
+  NONE = 'NONE',
+  STUDENTS = 'STUDENTS',
+  MESSAGES = 'MESSAGES',
+  ADMINS = 'ADMINS',
+  STORAGE_GB = 'STORAGE_GB',
+  API_CALLS = 'API_CALLS',
+}
+
+export enum OverrideTypeEnum {
+  ENABLE = 'ENABLE',
+  DISABLE = 'DISABLE',
+  CUSTOM_PRICE = 'CUSTOM_PRICE',
+  CUSTOM_LIMIT = 'CUSTOM_LIMIT',
+  FREE_ACCESS = 'FREE_ACCESS',
+}
+
+export enum FeatureBillingCycleEnum {
+  MONTHLY = 'MONTHLY',
+  YEARLY = 'YEARLY',
+  ONE_TIME = 'ONE_TIME',
+}
+

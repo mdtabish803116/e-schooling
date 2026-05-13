@@ -58,9 +58,6 @@ export class SchoolsService {
 
     if (!trialPlan) {
       // Seed default Master Plans
-      const baseFeatures = ['admission', 'attendance', 'classes', 'subjects', 'teachers', 'students'];
-      const standardFeatures = [...baseFeatures, 'fees', 'reports', 'notifications'];
-
       const plans = [
         {
           code: PlanCodeEnum.TRIAL,
@@ -70,7 +67,6 @@ export class SchoolsService {
           maxStaff: 5,
           maxClasses: 5,
           maxSections: 10,
-          features: baseFeatures,
         },
         {
           code: PlanCodeEnum.BASIC,
@@ -80,7 +76,6 @@ export class SchoolsService {
           maxStaff: null,
           maxClasses: null,
           maxSections: null,
-          features: baseFeatures,
         },
         {
           code: PlanCodeEnum.STANDARD,
@@ -90,7 +85,6 @@ export class SchoolsService {
           maxStaff: null,
           maxClasses: null,
           maxSections: null,
-          features: standardFeatures,
         },
         {
           code: PlanCodeEnum.PREMIUM,
@@ -100,7 +94,6 @@ export class SchoolsService {
           maxStaff: null,
           maxClasses: null,
           maxSections: null,
-          features: standardFeatures,
         },
       ];
 

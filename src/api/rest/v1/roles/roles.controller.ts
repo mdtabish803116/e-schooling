@@ -32,10 +32,13 @@ export class RolesController {
     return this.rolesService.listRoles(caller, schoolId);
   }
 
-  @ApiOperation({ summary: 'List all available permissions (created by platform admins) — use when building a role' })
+  @ApiOperation({ summary: 'Intelligently compiles pre-filtered accordion-ready permissions available specifically to this tenant tier' })
   @Get('permissions')
-  async listPermissions() {
-    return this.rolesService.listPermissions();
+  async listPermissions(
+    @Param('schoolId') schoolId: string,
+    @CurrentUser() caller: AuthContext,
+  ) {
+    return this.rolesService.listAccessiblePermissionsForSchool(caller, schoolId);
   }
 }
 
