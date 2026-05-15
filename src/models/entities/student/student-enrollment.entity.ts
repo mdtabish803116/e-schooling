@@ -32,8 +32,8 @@ export class StudentEnrollment {
   @Column({ name: 'enrollment_type', type: 'varchar', nullable: true, comment: 'admission | promotion | demotion | transfer | repeat | special_promotion' })
   enrollmentType: EnrollmentTypeEnum;
 
-  @Column({ name: 'enrollment_status', type: 'varchar', nullable: true, comment: 'active | promoted | demoted | transferred | completed | dropped' })
-  enrollmentStatus: EnrollmentStatusEnum;
+  @Column({ name: 'enrollment_state', type: 'varchar', nullable: true, comment: 'active | promoted | demoted | transferred | completed | dropped' })
+  enrollmentState: EnrollmentStatusEnum;
 
   @Index()
   @Column({ name: 'previous_enrollment_id', type: 'bigint', nullable: true, comment: 'Reference to previous StudentEnrollment' })
@@ -66,6 +66,12 @@ export class StudentEnrollment {
 
   @Column({ name: 'updated_by_id', type: 'bigint', nullable: true, comment: 'Reference to Updater' })
   updatedById: string;
+
+  @Column({ name: 'is_active', type: 'boolean', nullable: false, default: true, comment: 'Active status toggle' })
+  isActive: boolean;
+
+  @Column({ name: 'is_delete', type: 'boolean', nullable: false, default: false, comment: 'Soft delete marker' })
+  isDeleted: boolean;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamp', comment: 'Creation timestamp' })
   createdAt: Date;

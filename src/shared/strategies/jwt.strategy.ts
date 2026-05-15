@@ -7,9 +7,9 @@ import { AuthContext } from '../../interfaces/auth-context.interface';
 export interface JwtPayload {
   sub: string;
   email: string;
-  actorType: 'school_owner' | 'school_user';
+  actorType: 'school_owner' | 'school_user' | 'student';
   schoolId?: string;
-  role: string;
+  roles: string[];
 }
 
 @Injectable()
@@ -28,7 +28,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       email: payload.email,
       actorType: payload.actorType,
       schoolId: payload.schoolId,
-      role: payload.role,
+      roles: payload.roles,
     };
   }
 }

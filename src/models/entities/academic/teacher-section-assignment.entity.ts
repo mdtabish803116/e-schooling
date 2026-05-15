@@ -1,5 +1,4 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
-import { StatusEnum } from '../../enums/enums';
 
 @Entity({ name: 'teacher_section_assignments', schema: 'e_schooling' })
 export class TeacherSectionAssignment {
@@ -25,8 +24,11 @@ export class TeacherSectionAssignment {
   @Column({ name: 'is_class_teacher', type: 'boolean', nullable: true, comment: 'Whether this teacher is the class teacher' })
   isClassTeacher: boolean;
 
-  @Column({ name: 'status', type: 'varchar', nullable: true, comment: 'active | inactive' })
-  status: StatusEnum;
+  @Column({ name: 'is_active', type: 'boolean', nullable: false, default: true, comment: 'Active status toggle' })
+  isActive: boolean;
+
+  @Column({ name: 'is_delete', type: 'boolean', nullable: false, default: false, comment: 'Soft delete marker' })
+  isDeleted: boolean;
 
   @Column({ name: 'created_by_id', type: 'bigint', nullable: true, comment: 'Reference to Creator' })
   createdById: string;

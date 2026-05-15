@@ -107,7 +107,7 @@ export class SubscriptionsService {
       .createQueryBuilder('addon')
       .select('SUM(addon.quota)', 'total')
       .where('addon.schoolId = :schoolId', { schoolId })
-      .andWhere('addon.status = :status', { status: 'active' })
+      .andWhere('addon.addonState = :status', { status: 'active' })
       .andWhere('addon.endAt >= :now', { now })
       .getRawOne();
 
@@ -141,12 +141,12 @@ export class SubscriptionsService {
     return {
       summary: {
         schoolId,
-        status: subscription.status,
+        subscriptionState: subscription.subscriptionState,
         billingCycle: subscription.billingCycle,
         currentPeriodStart: subscription.currentPeriodStart,
         currentPeriodEnd: subscription.currentPeriodEnd,
         isTrialExpired:
-          subscription.status === SubscriptionStatusEnum.TRIAL &&
+          subscription.subscriptionState === SubscriptionStatusEnum.TRIAL &&
           subscription.trialEndAt &&
           now > subscription.trialEndAt,
         planDetails: {
@@ -214,7 +214,7 @@ export class SubscriptionsService {
 
     subscription.planId = targetPlan.id;
     subscription.billingCycle = dto.billingCycle;
-    subscription.status = SubscriptionStatusEnum.ACTIVE;
+    subscription.subscriptionState = SubscriptionStatusEnum.ACTIVE;
     subscription.currentPeriodStart = periodStart;
     subscription.currentPeriodEnd = periodEnd;
 
@@ -224,7 +224,7 @@ export class SubscriptionsService {
       message: `Successfully upgraded school subscription to '${targetPlan.name}' (${dto.billingCycle})`,
       amountBilled: planPrice.price,
       subscriptionDetails: {
-        status: subscription.status,
+        subscriptionState: subscription.subscriptionState,
         planName: targetPlan.name,
         billingCycle: subscription.billingCycle,
         renewingAt: subscription.currentPeriodEnd,
@@ -269,7 +269,7 @@ export class SubscriptionsService {
     addon.addonType = dto.addonType;
     addon.quota = quotaGranted;
     addon.pricePaid = amountCharged;
-    addon.status = 'active';
+    addon.addonState = 'active';
     addon.startAt = now;
     addon.endAt = expiry;
 

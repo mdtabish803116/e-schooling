@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, Index } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
 import { InvoiceStatusEnum } from '../../enums/enums';
 
 @Entity({ name: 'invoices', schema: 'e_schooling' })
@@ -29,12 +29,21 @@ export class Invoice {
   @Column({ name: 'due_date', type: 'date', nullable: true, comment: 'Due date' })
   dueDate: string;
 
-  @Column({ name: 'status', type: 'varchar', nullable: true, comment: 'paid | unpaid | overdue' })
-  status: InvoiceStatusEnum;
+  @Column({ name: 'invoice_state', type: 'varchar', nullable: true, comment: 'paid | unpaid | overdue' })
+  invoiceState: InvoiceStatusEnum;
 
   @Column({ name: 'invoice_pdf_url', type: 'varchar', nullable: true, comment: 'Invoice PDF URL' })
   invoicePdfUrl: string;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamp', comment: 'Creation timestamp' })
   createdAt: Date;
+
+  @UpdateDateColumn({ name: 'updated_at', type: 'timestamp', comment: 'Last update timestamp' })
+  updatedAt: Date;
+
+  @Column({ name: 'is_active', type: 'boolean', nullable: false, default: true, comment: 'Active status toggle' })
+  isActive: boolean;
+
+  @Column({ name: 'is_delete', type: 'boolean', nullable: false, default: false, comment: 'Soft delete marker' })
+  isDeleted: boolean;
 }

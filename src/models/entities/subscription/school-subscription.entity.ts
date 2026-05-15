@@ -14,8 +14,8 @@ export class SchoolSubscription {
   @Column({ name: 'plan_id', type: 'bigint', nullable: false, comment: 'Reference to SubscriptionPlan' })
   planId: string;
 
-  @Column({ name: 'status', type: 'varchar', nullable: false, default: SubscriptionStatusEnum.TRIAL, comment: 'trial | active | expired | cancelled | suspended' })
-  status: SubscriptionStatusEnum;
+  @Column({ name: 'subscription_state', type: 'varchar', nullable: false, default: SubscriptionStatusEnum.TRIAL, comment: 'trial | active | expired | cancelled | suspended' })
+  subscriptionState: SubscriptionStatusEnum;
 
   @Column({ name: 'billing_cycle', type: 'varchar', nullable: true, comment: 'Active billing cycle tier' })
   billingCycle: BillingCycleEnum;
@@ -37,4 +37,10 @@ export class SchoolSubscription {
 
   @UpdateDateColumn({ name: 'updated_at', type: 'timestamp', comment: 'Last update timestamp' })
   updatedAt: Date;
+
+  @Column({ name: 'is_active', type: 'boolean', nullable: false, default: true, comment: 'Active status toggle' })
+  isActive: boolean;
+
+  @Column({ name: 'is_delete', type: 'boolean', nullable: false, default: false, comment: 'Soft delete marker' })
+  isDeleted: boolean;
 }

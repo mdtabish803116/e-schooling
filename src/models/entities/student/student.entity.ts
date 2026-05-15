@@ -1,5 +1,4 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
-import { StatusEnum } from '../../enums/enums';
 
 @Entity({ name: 'students', schema: 'e_schooling' })
 export class Student {
@@ -12,6 +11,13 @@ export class Student {
 
   @Column({ name: 'admission_number', type: 'varchar', nullable: true, comment: 'Admission number' })
   admissionNumber: string;
+
+  @Index({ unique: true })
+  @Column({ name: 'student_code', type: 'varchar', nullable: true, comment: 'Unique student identification code used for login' })
+  studentCode: string;
+
+  @Column({ name: 'password_hash', type: 'varchar', nullable: true, comment: 'Hashed password' })
+  passwordHash: string;
 
   @Column({ name: 'first_name', type: 'varchar', nullable: true, comment: 'First name' })
   firstName: string;
@@ -40,8 +46,11 @@ export class Student {
   @Column({ name: 'address', type: 'text', nullable: true, comment: 'Physical address' })
   address: string;
 
-  @Column({ name: 'status', type: 'varchar', nullable: true, comment: 'active | inactive | alumni | deleted' })
-  status: StatusEnum;
+  @Column({ name: 'is_active', type: 'boolean', nullable: false, default: true, comment: 'Active status toggle' })
+  isActive: boolean;
+
+  @Column({ name: 'is_delete', type: 'boolean', nullable: false, default: false, comment: 'Soft delete marker' })
+  isDeleted: boolean;
 
   @Index()
   @Column({ name: 'created_by_id', type: 'bigint', nullable: true, comment: 'Reference to SchoolUser' })

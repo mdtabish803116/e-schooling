@@ -41,11 +41,28 @@ export enum PermissionKeyEnum {
   CLASSES_UPDATE = 'classes:update',
   CLASSES_DELETE = 'classes:delete',
 
+  // Sections
+  SECTIONS_VIEW   = 'sections:view',
+  SECTIONS_CREATE = 'sections:create',
+  SECTIONS_UPDATE = 'sections:update',
+  SECTIONS_DELETE = 'sections:delete',
+
+  // Subjects
+  SUBJECTS_VIEW   = 'subjects:view',
+  SUBJECTS_CREATE = 'subjects:create',
+  SUBJECTS_UPDATE = 'subjects:update',
+  SUBJECTS_DELETE = 'subjects:delete',
+
+  // Academic Mapping
+  ACADEMIC_MAPPING_VIEW   = 'academic_mapping:view',
+  ACADEMIC_MAPPING_MANAGE = 'academic_mapping:manage',
+
   // Students
   STUDENTS_VIEW   = 'students:view',
   STUDENTS_CREATE = 'students:create',
   STUDENTS_UPDATE = 'students:update',
   STUDENTS_DELETE = 'students:delete',
+  STUDENTS_ADMISSION = 'students:admission',
 
   // Fees
   FEES_VIEW   = 'fees:view',
@@ -71,14 +88,6 @@ export enum PermissionKeyEnum {
   SCHOOL_USERS_UPDATE = 'school_users:update',
 }
 
-export enum StatusEnum {
-  ACTIVE = 'active',
-  INACTIVE = 'inactive',
-  BLOCKED = 'blocked',
-  DELETED = 'deleted',
-  ARCHIVED = 'archived',
-  DROPPED = 'dropped'
-}
 
 export enum InvitationStatusEnum {
   PENDING = 'pending',

@@ -1,0 +1,662 @@
+// DBML for e-school project
+// Generated from scratch based on entities
+
+Table academic_sessions {
+  id bigint [pk, increment]
+  school_id bigint [note: 'Reference to School']
+  name varchar [note: 'Session name (e.g. 2025-2026)']
+  start_date date [note: 'Session start date']
+  end_date date [note: 'Session end date']
+  is_current boolean [note: 'Is this the current session']
+  status varchar [note: 'active | archived']
+  created_by_id bigint [note: 'Reference to SchoolUser']
+  updated_by_id bigint [note: 'Reference to SchoolUser']
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table class_section_subjects {
+  id bigint [pk, increment]
+  school_id bigint [note: 'Reference to School']
+  class_id bigint [note: 'Reference to Class']
+  section_id bigint [note: 'Reference to Section']
+  subject_id bigint [note: 'Reference to Subject']
+  teacher_id bigint [note: 'Reference to SchoolUser']
+  status varchar [note: 'active | inactive']
+  created_by_id bigint [note: 'Reference to Creator']
+  updated_by_id bigint [note: 'Reference to Updater']
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table classes {
+  id bigint [pk, increment]
+  school_id bigint [note: 'Reference to School']
+  name varchar [note: 'Class name']
+  has_sections boolean [note: 'Whether class has multiple sections']
+  status varchar [note: 'active | inactive']
+  created_by_id bigint [note: 'Reference to SchoolUser']
+  updated_by_id bigint [note: 'Reference to SchoolUser']
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table sections {
+  id bigint [pk, increment]
+  school_id bigint [note: 'Reference to School']
+  class_id bigint [note: 'Reference to Class']
+  name varchar [note: 'Section name']
+  is_default boolean [note: 'Is default section']
+  status varchar [note: 'active | inactive']
+  created_by_id bigint [note: 'Reference to SchoolUser']
+  updated_by_id bigint [note: 'Reference to SchoolUser']
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table subjects {
+  id bigint [pk, increment]
+  school_id bigint [note: 'Reference to School']
+  name varchar [note: 'Subject name']
+  status varchar [note: 'active | inactive']
+  created_by_id bigint [note: 'Reference to SchoolUser']
+  updated_by_id bigint [note: 'Reference to SchoolUser']
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table teacher_section_assignments {
+  id bigint [pk, increment]
+  school_id bigint [note: 'Reference to School']
+  teacher_id bigint [note: 'Reference to SchoolUser']
+  class_id bigint [note: 'Reference to Class']
+  section_id bigint [note: 'Reference to Section']
+  is_class_teacher boolean [note: 'Whether this teacher is the class teacher']
+  status varchar [note: 'active | inactive']
+  created_by_id bigint [note: 'Reference to Creator']
+  updated_by_id bigint [note: 'Reference to Updater']
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table attendance_records {
+  id bigint [pk, increment]
+  session_id bigint [note: 'Reference to AttendanceSession']
+  student_enrollment_id bigint [note: 'Reference to StudentEnrollment']
+  status varchar [note: 'present | absent | leave | half_day']
+  remarks text [note: 'Attendance remarks']
+  created_by_id bigint [note: 'Reference to Creator']
+  updated_by_id bigint [note: 'Reference to Updater']
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table attendance_sessions {
+  id bigint [pk, increment]
+  school_id bigint [note: 'Reference to School']
+  academic_session_id bigint [note: 'Reference to AcademicSession']
+  class_id bigint [note: 'Reference to Class']
+  section_id bigint [note: 'Reference to Section']
+  date date [note: 'Attendance date']
+  taken_by bigint [note: 'Reference to SchoolUser']
+  status varchar [note: 'active | inactive']
+  created_by_id bigint [note: 'Reference to Creator']
+  updated_by_id bigint [note: 'Reference to Updater']
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table feature_usage_logs {
+  id bigint [pk, increment]
+  school_id bigint [note: 'Target school context consuming resource']
+  feature_id bigint [note: 'Target metered platform feature ID']
+  usage_count bigint [note: 'Units consumed in event tracking payload']
+  usage_date timestamp [note: 'Timestamp of consumption']
+  metadata jsonb [note: 'Event telemetry tracking details']
+  is_active boolean [note: 'Active status toggle']
+  is_delete boolean [note: 'Soft delete marker']
+  created_at timestamp
+}
+
+Table plan_features {
+  id bigint [pk, increment]
+  plan_id bigint [note: 'Reference to SubscriptionPlan']
+  feature_id bigint [note: 'Reference to PlatformFeature']
+  is_enabled boolean [note: 'Baseline feature enabled state']
+  limit_value bigint [note: 'Default quota limit. Null means unlimited']
+  extra_metadata jsonb [note: 'Extensible plan configuration details']
+  is_active boolean [note: 'Active status toggle']
+  is_delete boolean [note: 'Soft delete marker']
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table platform_features {
+  id bigint [pk, increment]
+  name varchar [note: 'Display name e.g. WhatsApp Integration']
+  code varchar [note: 'Unique identification code']
+  description text [note: 'Capability documentation']
+  is_metered boolean [note: 'True if metered consumption applies']
+  is_active boolean [note: 'Global availability toggle']
+  is_delete boolean [note: 'Soft delete marker']
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table school_feature_overrides {
+  id bigint [pk, increment]
+  school_id bigint [note: 'Target School branch context']
+  feature_id bigint [note: 'Target PlatformFeature reference']
+  is_enabled boolean [note: 'Feature toggle override state']
+  custom_price decimal [note: 'Custom enterprise price mapping']
+  limit_value bigint [note: 'Tenant custom cap overriding global plan']
+  start_date timestamp [note: 'Custom access boundary activation']
+  end_date timestamp [note: 'Custom access expiration. Null signifies endless']
+  remarks text [note: 'Administrative approval context notes']
+  created_by bigint [note: 'Platform user ID who enacted override']
+  is_active boolean [note: 'Active status toggle']
+  is_delete boolean [note: 'Soft delete marker']
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table invoices {
+  id bigint [pk, increment]
+  school_id bigint [note: 'Reference to School']
+  school_subscription_id bigint [note: 'Reference to SchoolSubscription']
+  invoice_number varchar [note: 'Invoice number']
+  subtotal decimal [note: 'Subtotal amount']
+  tax decimal [note: 'Tax amount']
+  total decimal [note: 'Total amount']
+  due_date date [note: 'Due date']
+  status varchar [note: 'paid | unpaid | overdue']
+  invoice_pdf_url varchar [note: 'Invoice PDF URL']
+  created_at timestamp
+}
+
+Table payments {
+  id bigint [pk, increment]
+  school_subscription_id bigint [note: 'Reference to SchoolSubscription']
+  school_id bigint [note: 'Reference to School']
+  transaction_id varchar [note: 'Transaction ID']
+  payment_gateway varchar [note: 'razorpay | stripe | cashfree']
+  gateway_payment_id varchar [note: 'Gateway Payment ID']
+  amount decimal [note: 'Payment amount']
+  currency varchar [note: 'Payment currency']
+  payment_status varchar [note: 'pending | success | failed | refunded']
+  paid_at timestamp [note: 'Payment timestamp']
+  invoice_url varchar [note: 'Invoice PDF URL']
+  metadata jsonb [note: 'Additional metadata']
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table platform_users {
+  id bigint [pk, increment]
+  name varchar [note: 'User full name']
+  email varchar [note: 'User email address']
+  password_hash varchar [note: 'Hashed password']
+  role varchar [note: 'super_admin | ops | support']
+  status varchar [note: 'active | inactive | deleted']
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table module_masters {
+  id bigint [pk, increment]
+  name varchar [note: 'Display name e.g. Attendance Management, Fee Management']
+  code varchar [note: 'System mapping code e.g. ATTENDANCE, FEES, ADMISSION']
+  description text [note: 'Module domain capabilities description']
+  platform_feature_id bigint [note: 'Reference to underlying PlatformFeature metered/billed capability']
+  is_active boolean [note: 'Active status toggle']
+  created_by_id bigint [note: 'Creator tracking reference']
+  updated_by_id bigint [note: 'Updater tracking reference']
+  is_delete boolean [note: 'Soft delete marker']
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table module_operation_permissions {
+  id bigint [pk, increment]
+  module_id bigint [note: 'Reference to ModuleMaster catalog']
+  operation_id bigint [note: 'Reference to OperationMaster action']
+  school_id bigint [note: 'Target school context. Null signifies global baseline']
+  resource varchar [note: 'Feature module domain shortcode']
+  action varchar [note: 'Action perimeter instruction']
+  key varchar [note: 'Computed dynamic application evaluation key']
+  description varchar [note: 'Capability documentation outline']
+  created_by_id bigint [note: 'Creator user tracking reference']
+  updated_by_id bigint [note: 'Updater user tracking reference']
+  is_active boolean [note: 'Active status toggle']
+  is_delete boolean [note: 'Soft delete marker']
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table operation_masters {
+  id bigint [pk, increment]
+  name varchar [note: 'Display operation name e.g. View, Create, Approve']
+  code varchar [note: 'Action shortcode e.g. VIEW, CREATE, UPDATE, DELETE']
+  description text [note: 'Action perimeter context']
+  is_active boolean [note: 'Active status toggle']
+  created_by_id bigint [note: 'Creator tracking reference']
+  updated_by_id bigint [note: 'Updater tracking reference']
+  is_delete boolean [note: 'Soft delete marker']
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table role_permissions {
+  id bigint [pk, increment]
+  role_id bigint [note: 'Reference to Role']
+  permission_id bigint [note: 'Reference to ModuleOperationPermission']
+  created_by_id bigint [note: 'Reference to Creator']
+  updated_by_id bigint [note: 'Reference to Updater']
+  is_active boolean [note: 'Active status toggle']
+  is_delete boolean [note: 'Soft delete marker']
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table roles {
+  id bigint [pk, increment]
+  school_id bigint [note: 'Reference to School']
+  name varchar [note: 'Role name']
+  status varchar [note: 'active | inactive']
+  created_by_id bigint [note: 'Reference to SchoolUser']
+  updated_by_id bigint [note: 'Reference to SchoolUser']
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table user_roles {
+  id bigint [pk, increment]
+  user_id bigint [note: 'Reference to SchoolUser']
+  role_id bigint [note: 'Reference to Role']
+  created_by_id bigint [note: 'Reference to Creator']
+  updated_by_id bigint [note: 'Reference to Updater']
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table school_members {
+  id bigint [pk, increment]
+  school_id bigint [note: 'Reference to School']
+  school_owner_id bigint [note: 'Reference to SchoolOwner']
+  role varchar [note: 'owner | admin | teacher | accountant | staff']
+  is_primary_owner boolean [note: 'Whether the user is the primary owner']
+  invitation_status varchar [note: 'pending | accepted | rejected']
+  joined_at timestamp [note: 'Timestamp of joining']
+  status varchar [note: 'active | inactive']
+  created_by_id bigint [note: 'Reference to SchoolOwner']
+  updated_by_id bigint [note: 'Reference to SchoolOwner']
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table school_owners {
+  id bigint [pk, increment]
+  full_name varchar [note: 'Owner full name']
+  email varchar [note: 'Owner email address']
+  phone varchar [note: 'Owner phone number']
+  password_hash varchar [note: 'Hashed password']
+  status varchar [note: 'active | inactive | blocked | deleted']
+  email_verified boolean [note: 'Email verification status']
+  phone_verified boolean [note: 'Phone verification status']
+  state_id bigint [note: 'Reference to parent State']
+  district_id bigint [note: 'Reference to parent District']
+  last_login_at timestamp [note: 'Last login timestamp']
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table school_users {
+  id bigint [pk, increment]
+  school_id bigint [note: 'Reference to School']
+  school_owner_id bigint [note: 'Reference to SchoolOwner']
+  name varchar [note: 'User name']
+  username varchar [note: 'Unique username']
+  password_hash varchar [note: 'Hashed password']
+  phone varchar [note: 'User phone number']
+  user_type varchar [note: 'admin | teacher | accountant | staff']
+  status varchar [note: 'active | inactive | deleted']
+  created_by_id bigint [note: 'Reference to SchoolOwner']
+  updated_by_id bigint [note: 'Reference to SchoolOwner']
+  state_id bigint [note: 'Reference to parent State']
+  district_id bigint [note: 'Reference to parent District']
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table schools {
+  id bigint [pk, increment]
+  school_name varchar [note: 'School name']
+  internal_school_code varchar [note: 'System generated unique school code']
+  external_school_code varchar [note: 'External/Board provided school code']
+  logo_url varchar [note: 'URL of the school logo']
+  email varchar [note: 'School email']
+  phone varchar [note: 'School phone']
+  total_classes int [note: 'Total classes available']
+  total_sections int [note: 'Total sections across all classes']
+  total_students int [note: 'Total active students']
+  total_teachers int [note: 'Total employed teachers']
+  address_area varchar [note: 'Locality/Area']
+  address_landmark varchar [note: 'Nearby landmark']
+  address_city varchar [note: 'City']
+  address_district varchar [note: 'District']
+  address_state varchar [note: 'State']
+  address_pincode varchar [note: 'Postal Pincode']
+  status varchar [note: 'active | inactive']
+  created_by_id bigint [note: 'Reference to Creator']
+  updated_by_id bigint [note: 'Reference to Updater']
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table promotion_logs {
+  id bigint [pk, increment]
+  school_id bigint [note: 'Reference to School']
+  student_id bigint [note: 'Reference to Student']
+  from_enrollment_id bigint [note: 'Reference to previous StudentEnrollment']
+  to_enrollment_id bigint [note: 'Reference to new StudentEnrollment']
+  from_class_id bigint [note: 'Reference to previous Class']
+  from_section_id bigint [note: 'Reference to previous Section']
+  to_class_id bigint [note: 'Reference to new Class']
+  to_section_id bigint [note: 'Reference to new Section']
+  action_type varchar [note: 'promotion | demotion | section_transfer']
+  remarks text [note: 'Promotion remarks']
+  performed_by bigint [note: 'Reference to SchoolUser']
+  performed_at timestamp [note: 'Performance timestamp']
+  created_at timestamp
+}
+
+Table section_transfer_histories {
+  id bigint [pk, increment]
+  school_id bigint [note: 'Reference to School']
+  student_enrollment_id bigint [note: 'Reference to StudentEnrollment']
+  old_section_id bigint [note: 'Reference to old Section']
+  new_section_id bigint [note: 'Reference to new Section']
+  reason text [note: 'Transfer reason']
+  changed_by bigint [note: 'Reference to SchoolUser']
+  changed_at timestamp [note: 'Change timestamp']
+  created_at timestamp
+}
+
+Table student_enrollments {
+  id bigint [pk, increment]
+  school_id bigint [note: 'Reference to School']
+  student_id bigint [note: 'Reference to Student']
+  academic_session_id bigint [note: 'Reference to AcademicSession']
+  class_id bigint [note: 'Reference to Class']
+  section_id bigint [note: 'Reference to Section']
+  roll_number varchar [note: 'Roll number']
+  enrollment_type varchar [note: 'admission | promotion | demotion | transfer | repeat | special_promotion']
+  enrollment_status varchar [note: 'active | promoted | demoted | transferred | completed | dropped']
+  previous_enrollment_id bigint [note: 'Reference to previous StudentEnrollment']
+  is_current boolean [note: 'Whether this is the student\']
+  start_date date [note: 'Enrollment start date']
+  end_date date [note: 'Enrollment end date (set when student is promoted/transferred)']
+  joined_at timestamp [note: 'Join timestamp']
+  promoted_by bigint [note: 'Reference to SchoolUser']
+  promoted_at timestamp [note: 'Promotion timestamp']
+  remarks text [note: 'Remarks']
+  created_by_id bigint [note: 'Reference to Creator']
+  updated_by_id bigint [note: 'Reference to Updater']
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table student_subjects {
+  id bigint [pk, increment]
+  school_id bigint [note: 'Reference to School']
+  student_enrollment_id bigint [note: 'Reference to StudentEnrollment']
+  subject_id bigint [note: 'Reference to Subject']
+  status varchar [note: 'active | dropped']
+  created_by_id bigint [note: 'Reference to Creator']
+  updated_by_id bigint [note: 'Reference to Updater']
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table students {
+  id bigint [pk, increment]
+  school_id bigint [note: 'Reference to School']
+  admission_number varchar [note: 'Admission number']
+  first_name varchar [note: 'First name']
+  last_name varchar [note: 'Last name']
+  gender varchar [note: 'Gender']
+  dob date [note: 'Date of birth']
+  phone varchar [note: 'Phone number']
+  email varchar [note: 'Email']
+  parent_name varchar [note: 'Parent name']
+  parent_phone varchar [note: 'Parent phone']
+  address text [note: 'Physical address']
+  status varchar [note: 'active | inactive | alumni | deleted']
+  created_by_id bigint [note: 'Reference to SchoolUser']
+  updated_by_id bigint [note: 'Reference to SchoolUser']
+  state_id bigint [note: 'Reference to parent State']
+  district_id bigint [note: 'Reference to parent District']
+  place_id bigint [note: 'Reference to custom local Place/Village cluster']
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table plan_prices {
+  id bigint [pk, increment]
+  plan_id bigint [note: 'Reference to SubscriptionPlan']
+  billing_cycle varchar [note: 'monthly | quarterly | yearly']
+  price decimal [note: 'Price in INR']
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table school_addons {
+  id bigint [pk, increment]
+  school_id bigint [note: 'Reference to School']
+  addon_type varchar [note: 'Type of capacity booster pack e.g. STUDENT_BOOSTER_50']
+  quota int [note: 'Capacity increase granted e.g. 50']
+  price_paid decimal [note: 'Amount paid for this booster block']
+  status varchar [note: 'active | expired']
+  start_at timestamp [note: 'Booster start validity timestamp']
+  end_at timestamp [note: 'Booster expiration validity timestamp (+1 month)']
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table school_subscriptions {
+  id bigint [pk, increment]
+  school_id bigint [note: 'Reference to School']
+  plan_id bigint [note: 'Reference to SubscriptionPlan']
+  status varchar [note: 'trial | active | expired | cancelled | suspended']
+  billing_cycle varchar [note: 'Active billing cycle tier']
+  trial_start_at timestamp [note: 'Trial start timestamp']
+  trial_end_at timestamp [note: 'Trial expiration timestamp']
+  current_period_start timestamp [note: 'Current billing period start']
+  current_period_end timestamp [note: 'Current billing period expiration']
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table subscription_plans {
+  id bigint [pk, increment]
+  code varchar [note: 'Unique plan code e.g. TRIAL, BASIC, STANDARD, PREMIUM']
+  name varchar [note: 'Display name e.g. Basic Plan']
+  description varchar [note: 'Plan description']
+  max_students int [note: 'Maximum allowed students. Null means unlimited.']
+  max_staff int [note: 'Maximum allowed school staff/users. Null means unlimited.']
+  max_classes int [note: 'Maximum allowed classes. Null means unlimited.']
+  max_sections int [note: 'Maximum allowed sections. Null means unlimited.']
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table bulk_import_jobs {
+  id bigint [pk, increment]
+  school_id bigint [note: 'Reference to School']
+  job_type varchar [note: 'student_import | promotion | demotion | section_transfer']
+  file_url varchar [note: 'Import file URL']
+  total_records integer [note: 'Total records to process']
+  processed_records integer [note: 'Records processed successfully']
+  failed_records integer [note: 'Records failed']
+  status varchar [note: 'pending | processing | completed | failed']
+  uploaded_by bigint [note: 'Reference to SchoolUser']
+  started_at timestamp [note: 'Job start timestamp']
+  completed_at timestamp [note: 'Job completion timestamp']
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table districts {
+  id bigint [pk, increment]
+  state_id bigint [note: 'Reference to parent State']
+  name varchar [note: 'District name']
+  is_active boolean [note: 'Active status toggle']
+  is_delete boolean [note: 'Soft delete marker']
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table places {
+  id bigint [pk, increment]
+  school_id bigint [note: 'Target tenant branch customizing this place']
+  district_id bigint [note: 'Reference to parent District']
+  name varchar [note: 'Village, City, or custom local cluster name']
+  pincode varchar [note: 'Postal code']
+  is_active boolean [note: 'Active status toggle']
+  is_delete boolean [note: 'Soft delete marker']
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table states {
+  id bigint [pk, increment]
+  name varchar [note: 'State or Union Territory name']
+  code varchar [note: 'ISO or standardized short code e.g. MH, UP, KA']
+  is_active boolean [note: 'Active status toggle']
+  is_delete boolean [note: 'Soft delete marker']
+  created_at timestamp
+  updated_at timestamp
+}
+
+Ref: academic_sessions.school_id > schools.id
+Ref: academic_sessions.created_by_id > school_users.id
+Ref: academic_sessions.updated_by_id > school_users.id
+Ref: class_section_subjects.school_id > schools.id
+Ref: class_section_subjects.class_id > classes.id
+Ref: class_section_subjects.section_id > sections.id
+Ref: class_section_subjects.subject_id > subjects.id
+Ref: class_section_subjects.teacher_id > school_users.id
+Ref: class_section_subjects.created_by_id > school_users.id
+Ref: class_section_subjects.updated_by_id > school_users.id
+Ref: classes.school_id > schools.id
+Ref: classes.created_by_id > school_users.id
+Ref: classes.updated_by_id > school_users.id
+Ref: sections.school_id > schools.id
+Ref: sections.class_id > classes.id
+Ref: sections.created_by_id > school_users.id
+Ref: sections.updated_by_id > school_users.id
+Ref: subjects.school_id > schools.id
+Ref: subjects.created_by_id > school_users.id
+Ref: subjects.updated_by_id > school_users.id
+Ref: teacher_section_assignments.school_id > schools.id
+Ref: teacher_section_assignments.teacher_id > school_users.id
+Ref: teacher_section_assignments.class_id > classes.id
+Ref: teacher_section_assignments.section_id > sections.id
+Ref: teacher_section_assignments.created_by_id > school_users.id
+Ref: teacher_section_assignments.updated_by_id > school_users.id
+Ref: attendance_records.session_id > academic_sessions.id
+Ref: attendance_records.student_enrollment_id > student_enrollments.id
+Ref: attendance_records.created_by_id > school_users.id
+Ref: attendance_records.updated_by_id > school_users.id
+Ref: attendance_sessions.school_id > schools.id
+Ref: attendance_sessions.academic_session_id > academic_sessions.id
+Ref: attendance_sessions.class_id > classes.id
+Ref: attendance_sessions.section_id > sections.id
+Ref: attendance_sessions.created_by_id > school_users.id
+Ref: attendance_sessions.updated_by_id > school_users.id
+Ref: feature_usage_logs.school_id > schools.id
+Ref: feature_usage_logs.feature_id > platform_features.id
+Ref: plan_features.plan_id > subscription_plans.id
+Ref: plan_features.feature_id > platform_features.id
+Ref: school_feature_overrides.school_id > schools.id
+Ref: school_feature_overrides.feature_id > platform_features.id
+Ref: invoices.school_id > schools.id
+Ref: invoices.school_subscription_id > school_subscriptions.id
+Ref: payments.school_subscription_id > school_subscriptions.id
+Ref: payments.school_id > schools.id
+Ref: payments.transaction_id > transactions.id
+Ref: payments.gateway_payment_id > gateway_payments.id
+Ref: module_masters.platform_feature_id > platform_features.id
+Ref: module_masters.created_by_id > school_users.id
+Ref: module_masters.updated_by_id > school_users.id
+Ref: module_operation_permissions.module_id > module_masters.id
+Ref: module_operation_permissions.operation_id > operation_masters.id
+Ref: module_operation_permissions.school_id > schools.id
+Ref: module_operation_permissions.created_by_id > school_users.id
+Ref: module_operation_permissions.updated_by_id > school_users.id
+Ref: operation_masters.created_by_id > school_users.id
+Ref: operation_masters.updated_by_id > school_users.id
+Ref: role_permissions.role_id > roles.id
+Ref: role_permissions.permission_id > module_operation_permissions.id
+Ref: role_permissions.created_by_id > school_users.id
+Ref: role_permissions.updated_by_id > school_users.id
+Ref: roles.school_id > schools.id
+Ref: roles.created_by_id > school_users.id
+Ref: roles.updated_by_id > school_users.id
+Ref: user_roles.user_id > school_users.id
+Ref: user_roles.role_id > roles.id
+Ref: user_roles.created_by_id > school_users.id
+Ref: user_roles.updated_by_id > school_users.id
+Ref: school_members.school_id > schools.id
+Ref: school_members.school_owner_id > school_owners.id
+Ref: school_members.created_by_id > school_users.id
+Ref: school_members.updated_by_id > school_users.id
+Ref: school_owners.state_id > states.id
+Ref: school_owners.district_id > districts.id
+Ref: school_users.school_id > schools.id
+Ref: school_users.school_owner_id > school_owners.id
+Ref: school_users.created_by_id > school_users.id
+Ref: school_users.updated_by_id > school_users.id
+Ref: school_users.state_id > states.id
+Ref: school_users.district_id > districts.id
+Ref: schools.created_by_id > school_users.id
+Ref: schools.updated_by_id > school_users.id
+Ref: promotion_logs.school_id > schools.id
+Ref: promotion_logs.student_id > students.id
+Ref: promotion_logs.from_enrollment_id > student_enrollments.id
+Ref: promotion_logs.to_enrollment_id > student_enrollments.id
+Ref: promotion_logs.from_class_id > classes.id
+Ref: promotion_logs.from_section_id > sections.id
+Ref: promotion_logs.to_class_id > classes.id
+Ref: promotion_logs.to_section_id > sections.id
+Ref: section_transfer_histories.school_id > schools.id
+Ref: section_transfer_histories.student_enrollment_id > student_enrollments.id
+Ref: section_transfer_histories.old_section_id > sections.id
+Ref: section_transfer_histories.new_section_id > sections.id
+Ref: student_enrollments.school_id > schools.id
+Ref: student_enrollments.student_id > students.id
+Ref: student_enrollments.academic_session_id > academic_sessions.id
+Ref: student_enrollments.class_id > classes.id
+Ref: student_enrollments.section_id > sections.id
+Ref: student_enrollments.previous_enrollment_id > student_enrollments.id
+Ref: student_enrollments.created_by_id > school_users.id
+Ref: student_enrollments.updated_by_id > school_users.id
+Ref: student_subjects.school_id > schools.id
+Ref: student_subjects.student_enrollment_id > student_enrollments.id
+Ref: student_subjects.subject_id > subjects.id
+Ref: student_subjects.created_by_id > school_users.id
+Ref: student_subjects.updated_by_id > school_users.id
+Ref: students.school_id > schools.id
+Ref: students.created_by_id > school_users.id
+Ref: students.updated_by_id > school_users.id
+Ref: students.state_id > states.id
+Ref: students.district_id > districts.id
+Ref: students.place_id > places.id
+Ref: plan_prices.plan_id > subscription_plans.id
+Ref: school_addons.school_id > schools.id
+Ref: school_subscriptions.school_id > schools.id
+Ref: school_subscriptions.plan_id > subscription_plans.id
+Ref: bulk_import_jobs.school_id > schools.id
+Ref: districts.state_id > states.id
+Ref: places.school_id > schools.id
+Ref: places.district_id > districts.id

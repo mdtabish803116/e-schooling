@@ -1,5 +1,5 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
-import { SchoolOwnerRoleEnum, InvitationStatusEnum, StatusEnum } from '../../enums/enums';
+import { SchoolOwnerRoleEnum, InvitationStatusEnum } from '../../enums/enums';
 
 @Entity({ name: 'school_members', schema: 'e_schooling' })
 @Index(['schoolId', 'schoolOwnerId'], { unique: true })
@@ -21,14 +21,17 @@ export class SchoolMember {
   @Column({ name: 'is_primary_owner', type: 'boolean', nullable: true, comment: 'Whether the user is the primary owner' })
   isPrimaryOwner: boolean;
 
-  @Column({ name: 'invitation_status', type: 'varchar', nullable: true, comment: 'pending | accepted | rejected' })
-  invitationStatus: InvitationStatusEnum;
+  @Column({ name: 'invitation_state', type: 'varchar', nullable: true, comment: 'pending | accepted | rejected' })
+  invitationState: InvitationStatusEnum;
 
   @Column({ name: 'joined_at', type: 'timestamp', nullable: true, comment: 'Timestamp of joining' })
   joinedAt: Date;
 
-  @Column({ name: 'status', type: 'varchar', nullable: true, comment: 'active | inactive' })
-  status: StatusEnum;
+  @Column({ name: 'is_active', type: 'boolean', nullable: false, default: true, comment: 'Active status toggle' })
+  isActive: boolean;
+
+  @Column({ name: 'is_delete', type: 'boolean', nullable: false, default: false, comment: 'Soft delete marker' })
+  isDeleted: boolean;
 
   @Index()
   @Column({ name: 'created_by_id', type: 'bigint', nullable: true, comment: 'Reference to SchoolOwner' })

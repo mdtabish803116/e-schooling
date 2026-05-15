@@ -29,8 +29,8 @@ export class Payment {
   @Column({ name: 'currency', type: 'varchar', nullable: true, comment: 'Payment currency' })
   currency: string;
 
-  @Column({ name: 'payment_status', type: 'varchar', nullable: true, comment: 'pending | success | failed | refunded' })
-  paymentStatus: PaymentStatusEnum;
+  @Column({ name: 'payment_state', type: 'varchar', nullable: true, comment: 'pending | success | failed | refunded' })
+  paymentState: PaymentStatusEnum;
 
   @Column({ name: 'paid_at', type: 'timestamp', nullable: true, comment: 'Payment timestamp' })
   paidAt: Date;
@@ -46,4 +46,10 @@ export class Payment {
 
   @UpdateDateColumn({ name: 'updated_at', type: 'timestamp', comment: 'Last update timestamp' })
   updatedAt: Date;
+
+  @Column({ name: 'is_active', type: 'boolean', nullable: false, default: true, comment: 'Active status toggle' })
+  isActive: boolean;
+
+  @Column({ name: 'is_delete', type: 'boolean', nullable: false, default: false, comment: 'Soft delete marker' })
+  isDeleted: boolean;
 }

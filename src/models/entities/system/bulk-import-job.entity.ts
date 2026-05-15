@@ -25,8 +25,8 @@ export class BulkImportJob {
   @Column({ name: 'failed_records', type: 'integer', nullable: true, comment: 'Records failed' })
   failedRecords: number;
 
-  @Column({ name: 'status', type: 'varchar', nullable: true, comment: 'pending | processing | completed | failed' })
-  status: JobStatusEnum;
+  @Column({ name: 'job_state', type: 'varchar', nullable: true, comment: 'pending | processing | completed | failed' })
+  jobState: JobStatusEnum;
 
   @Index()
   @Column({ name: 'uploaded_by', type: 'bigint', nullable: true, comment: 'Reference to SchoolUser' })
@@ -43,4 +43,10 @@ export class BulkImportJob {
 
   @UpdateDateColumn({ name: 'updated_at', type: 'timestamp', comment: 'Last update timestamp' })
   updatedAt: Date;
+
+  @Column({ name: 'is_active', type: 'boolean', nullable: false, default: true, comment: 'Active status toggle' })
+  isActive: boolean;
+
+  @Column({ name: 'is_delete', type: 'boolean', nullable: false, default: false, comment: 'Soft delete marker' })
+  isDeleted: boolean;
 }

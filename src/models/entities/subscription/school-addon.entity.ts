@@ -19,8 +19,8 @@ export class SchoolAddon {
   @Column({ name: 'price_paid', type: 'decimal', precision: 10, scale: 2, nullable: false, comment: 'Amount paid for this booster block' })
   pricePaid: number;
 
-  @Column({ name: 'status', type: 'varchar', nullable: false, default: 'active', comment: 'active | expired' })
-  status: string;
+  @Column({ name: 'addon_state', type: 'varchar', nullable: false, default: 'active', comment: 'active | expired' })
+  addonState: string;
 
   @Column({ name: 'start_at', type: 'timestamp', nullable: false, comment: 'Booster start validity timestamp' })
   startAt: Date;
@@ -33,4 +33,10 @@ export class SchoolAddon {
 
   @UpdateDateColumn({ name: 'updated_at', type: 'timestamp', comment: 'Last update timestamp' })
   updatedAt: Date;
+
+  @Column({ name: 'is_active', type: 'boolean', nullable: false, default: true, comment: 'Active status toggle' })
+  isActive: boolean;
+
+  @Column({ name: 'is_delete', type: 'boolean', nullable: false, default: false, comment: 'Soft delete marker' })
+  isDeleted: boolean;
 }

@@ -11,7 +11,6 @@ import { SubscriptionPlan } from '../../models/entities/subscription/subscriptio
 import { SchoolSubscription } from '../../models/entities/subscription/school-subscription.entity';
 import {
   SchoolOwnerRoleEnum,
-  StatusEnum,
   PlanCodeEnum,
   SubscriptionStatusEnum,
   BillingCycleEnum,
@@ -155,7 +154,7 @@ export class SchoolsService {
       school.addressDistrict = dto.addressDistrict ?? '';
       school.addressState = dto.addressState ?? '';
       school.addressPincode = dto.addressPincode ?? '';
-      school.status = StatusEnum.ACTIVE;
+      school.isActive = true;
       school.createdById = caller.id;
 
       const savedSchool = await queryRunner.manager.save(school);
@@ -166,7 +165,7 @@ export class SchoolsService {
       member.schoolOwnerId = caller.id;
       member.role = SchoolOwnerRoleEnum.OWNER;
       member.isPrimaryOwner = true;
-      member.status = StatusEnum.ACTIVE;
+      member.isActive = true;
       member.createdById = caller.id;
 
       await queryRunner.manager.save(member);
@@ -178,7 +177,7 @@ export class SchoolsService {
       const subscription = new SchoolSubscription();
       subscription.schoolId = savedSchool.id;
       subscription.planId = trialPlan.id;
-      subscription.status = SubscriptionStatusEnum.TRIAL;
+      subscription.subscriptionState = SubscriptionStatusEnum.TRIAL;
       subscription.billingCycle = BillingCycleEnum.MONTHLY;
       subscription.trialStartAt = now;
       subscription.trialEndAt = trialEnd;
@@ -194,7 +193,7 @@ export class SchoolsService {
         school: savedSchool,
         subscriptionStatus: {
           plan: trialPlan.name,
-          status: subscription.status,
+          subscriptionState: subscription.subscriptionState,
           expiresAt: subscription.trialEndAt,
         },
       };
@@ -252,7 +251,7 @@ export class SchoolsService {
   async listSchools(caller: AuthContext) {
     // Find all school IDs the owner is a member of
     const memberships = await this.dataSource.getRepository(SchoolMember).find({
-      where: { schoolOwnerId: caller.id, status: StatusEnum.ACTIVE },
+      where: { schoolOwnerId: caller.id, isActive: true },
       select: ['schoolId', 'isPrimaryOwner', 'createdAt'],
     });
 

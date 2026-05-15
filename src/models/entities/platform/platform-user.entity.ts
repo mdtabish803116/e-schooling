@@ -1,5 +1,5 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
-import { PlatformRoleEnum, StatusEnum } from '../../enums/enums';
+import { PlatformRoleEnum } from '../../enums/enums';
 
 @Entity({ name: 'platform_users', schema: 'e_schooling' })
 export class PlatformUser {
@@ -19,8 +19,11 @@ export class PlatformUser {
   @Column({ name: 'role', type: 'varchar', nullable: true, comment: 'super_admin | ops | support' })
   role: PlatformRoleEnum;
 
-  @Column({ name: 'status', type: 'varchar', nullable: true, comment: 'active | inactive | deleted' })
-  status: StatusEnum;
+  @Column({ name: 'is_active', type: 'boolean', nullable: false, default: true, comment: 'Active status toggle' })
+  isActive: boolean;
+
+  @Column({ name: 'is_delete', type: 'boolean', nullable: false, default: false, comment: 'Soft delete marker' })
+  isDeleted: boolean;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamp', comment: 'Creation timestamp' })
   createdAt: Date;

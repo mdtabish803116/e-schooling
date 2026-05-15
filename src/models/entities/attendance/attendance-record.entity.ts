@@ -14,8 +14,8 @@ export class AttendanceRecord {
   @Column({ name: 'student_enrollment_id', type: 'bigint', nullable: true, comment: 'Reference to StudentEnrollment' })
   studentEnrollmentId: string;
 
-  @Column({ name: 'status', type: 'varchar', nullable: true, comment: 'present | absent | leave | half_day' })
-  status: AttendanceStatusEnum;
+  @Column({ name: 'attendance_mark', type: 'varchar', nullable: true, comment: 'present | absent | leave | half_day' })
+  attendanceMark: AttendanceStatusEnum;
 
   @Column({ name: 'remarks', type: 'text', nullable: true, comment: 'Attendance remarks' })
   remarks: string;
@@ -25,6 +25,12 @@ export class AttendanceRecord {
 
   @Column({ name: 'updated_by_id', type: 'bigint', nullable: true, comment: 'Reference to Updater' })
   updatedById: string;
+
+  @Column({ name: 'is_active', type: 'boolean', nullable: false, default: true, comment: 'Active status toggle' })
+  isActive: boolean;
+
+  @Column({ name: 'is_delete', type: 'boolean', nullable: false, default: false, comment: 'Soft delete marker' })
+  isDeleted: boolean;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamp', comment: 'Creation timestamp' })
   createdAt: Date;

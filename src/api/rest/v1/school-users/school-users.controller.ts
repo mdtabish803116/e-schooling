@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Body, Param, UseGuards } from '@nestjs/common';
+import { Controller, Post, Get, Patch, Body, Param, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../../../shared/guards/jwt-auth.guard';
 import { CurrentUser } from '../../../../shared/decorators/current-user.decorator';
@@ -6,6 +6,7 @@ import { SchoolUsersService } from '../../../../services/school-users/school-use
 import type { AuthContext } from '../../../../interfaces/auth-context.interface';
 import { CreateSchoolUserDto } from '../../../../interfaces/request/school-user/create-school-user.dto';
 import { AssignRoleDto } from '../../../../interfaces/request/school-user/assign-role.dto';
+import { UpdateSchoolUserProfileDto } from '../../../../interfaces/request/school-user/update-school-user-profile.dto';
 
 @ApiTags('School Users')
 @ApiBearerAuth('JWT-auth')
@@ -42,6 +43,27 @@ export class SchoolUsersController {
     @Body() dto: AssignRoleDto,
   ) {
     return this.schoolUsersService.assignRoles(caller, schoolId, userId, dto);
+  }
+
+  @ApiOperation({ summary: 'Upsert extended profile for a school user' })
+  @Patch(':userId/profile')
+  async upsertUserProfile(
+    @Param('schoolId') schoolId: string,
+    @Param('userId') userId: string,
+    @CurrentUser() caller: AuthContext,
+    @Body() dto: UpdateSchoolUserProfileDto,
+  ) {
+    return this.schoolUsersService.upsertUserProfile(caller, schoolId, userId, dto);
+  }
+
+  @ApiOperation({ summary: 'Get school user profile' })
+  @Get(':userId/profile')
+  async getUserProfile(
+    @Param('schoolId') schoolId: string,
+    @Param('userId') userId: string,
+    @CurrentUser() caller: AuthContext,
+  ) {
+    return this.schoolUsersService.getUserProfile(caller, schoolId, userId);
   }
 }
 

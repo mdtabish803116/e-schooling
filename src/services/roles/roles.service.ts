@@ -12,7 +12,6 @@ import { OperationMaster } from '../../models/entities/rbac/operation-master.ent
 import { PlatformFeature } from '../../models/entities/entitlement/platform-feature.entity';
 import { SchoolMember } from '../../models/entities/school/school-member.entity';
 import { EntitlementService } from '../entitlement/entitlement.service';
-import { StatusEnum } from '../../models/enums/enums';
 import { AuthContext } from '../../interfaces/auth-context.interface';
 import { CreateRoleDto } from '../../interfaces/request/role/create-role.dto';
 
@@ -48,7 +47,7 @@ export class RolesService {
       const role = new Role();
       role.schoolId = schoolId;
       role.name = dto.name;
-      role.status = StatusEnum.ACTIVE;
+      role.isActive = true;
       role.createdById = caller.id;
 
       const savedRole = await queryRunner.manager.save(role);
@@ -96,8 +95,8 @@ export class RolesService {
     await this.assertOwnershipOfSchool(caller.id, schoolId);
 
     const roles = await this.dataSource.getRepository(Role).find({
-      where: { schoolId, status: StatusEnum.ACTIVE },
-      select: ['id', 'name', 'status', 'createdAt'],
+      where: { schoolId, isActive: true },
+      select: ['id', 'name', 'isActive', 'createdAt'],
       order: { createdAt: 'DESC' },
     });
 
@@ -112,13 +111,11 @@ export class RolesService {
   async listAccessiblePermissionsForSchool(caller: AuthContext, schoolId: string) {
     await this.assertOwnershipOfSchool(caller.id, schoolId);
 
-    // 1. Fetch baseline platform master permissions alongside tenant custom overrides
+    // 1. Fetch baseline platform master permissions
     const basePermissions = await this.dataSource
       .getRepository(ModuleOperationPermission)
       .createQueryBuilder('p')
-      .where('p.schoolId IS NULL')
-      .orWhere('p.schoolId = :schoolId', { schoolId })
-      .andWhere('p.isActive = :isActive', { isActive: true })
+      .where('p.isActive = :isActive', { isActive: true })
       .andWhere('p.isDeleted = :isDeleted', { isDeleted: false })
       .getMany();
 
@@ -193,8 +190,6 @@ export class RolesService {
         groupedResults.get(p.moduleId)?.operations.push({
           permissionId: p.id,
           operationId: p.operationId,
-          resource: p.resource,
-          action: p.action,
           key: p.key,
           description: p.description,
         });

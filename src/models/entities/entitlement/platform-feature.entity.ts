@@ -23,7 +23,6 @@ export class PlatformFeature {
   @Column({ name: 'description', type: 'text', nullable: true, comment: 'Capability documentation' })
   description: string;
 
-  // Database type is varchar for zero migration friction, while app-level remains strongly typed enum
   @Column({
     name: 'feature_type',
     type: 'varchar',

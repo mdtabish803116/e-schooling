@@ -15,8 +15,8 @@ export interface AuthContext {
 
   email: string;
 
-  /** 'school_owner' | 'school_user' */
-  actorType: 'school_owner' | 'school_user';
+  /** 'school_owner' | 'school_user' | 'student' */
+  actorType: 'school_owner' | 'school_user' | 'student';
 
   /**
    * For school_owner: undefined (owner can have multiple schools via school_members).
@@ -25,8 +25,8 @@ export interface AuthContext {
   schoolId?: string;
 
   /**
-   * Role for school_user (teacher | accountant | staff | admin).
-   * For school_owner: always 'owner'.
+   * For school_user: the list of roles assigned (teacher | accountant | staff | admin).
+   * For school_owner: will contain ['owner'].
    */
-  role: string;
+  roles: string[];
 }

@@ -10,10 +10,11 @@ import { SchoolUser } from '../../models/entities/school/school-user.entity';
 import { SchoolMember } from '../../models/entities/school/school-member.entity';
 import { UserRole } from '../../models/entities/rbac/user-role.entity';
 import { Role } from '../../models/entities/rbac/role.entity';
-import { StatusEnum } from '../../models/enums/enums';
+import { SchoolUserProfile } from '../../models/entities/school/school-user-profile.entity';
 import { AuthContext } from '../../interfaces/auth-context.interface';
 import { CreateSchoolUserDto } from '../../interfaces/request/school-user/create-school-user.dto';
 import { AssignRoleDto } from '../../interfaces/request/school-user/assign-role.dto';
+import { UpdateSchoolUserProfileDto } from '../../interfaces/request/school-user/update-school-user-profile.dto';
 
 @Injectable()
 export class SchoolUsersService {
@@ -66,7 +67,7 @@ export class SchoolUsersService {
       user.phone = dto.phone ?? '';
       user.passwordHash = passwordHash;
       user.userType = dto.userType;
-      user.status = StatusEnum.ACTIVE;
+      user.isActive = true;
       user.createdById = caller.id;
 
       const savedUser = await queryRunner.manager.save(user);
@@ -80,7 +81,7 @@ export class SchoolUsersService {
           name: savedUser.name,
           username: savedUser.username,
           userType: savedUser.userType,
-          status: savedUser.status,
+          isActive: savedUser.isActive,
         },
       };
     } catch (error) {
@@ -98,8 +99,8 @@ export class SchoolUsersService {
     await this.assertOwnershipOfSchool(caller.id, schoolId);
 
     const users = await this.dataSource.getRepository(SchoolUser).find({
-      where: { schoolId, status: StatusEnum.ACTIVE },
-      select: ['id', 'name', 'username', 'phone', 'userType', 'status', 'createdAt'],
+      where: { schoolId, isActive: true },
+      select: ['id', 'name', 'username', 'phone', 'userType', 'isActive', 'createdAt'],
       order: { createdAt: 'DESC' },
     });
 
@@ -149,5 +150,60 @@ export class SchoolUsersService {
     } finally {
       await queryRunner.release();
     }
+  }
+
+  /**
+   * Upsert extended profile for a school user.
+   */
+  async upsertUserProfile(caller: AuthContext, schoolId: string, userId: string, dto: UpdateSchoolUserProfileDto) {
+    await this.assertOwnershipOfSchool(caller.id, schoolId);
+
+    const user = await this.dataSource.getRepository(SchoolUser).findOne({
+      where: { id: userId, schoolId },
+    });
+    if (!user) throw new NotFoundException('School user not found');
+
+    const profileRepo = this.dataSource.getRepository(SchoolUserProfile);
+    let profile = await profileRepo.findOne({ where: { schoolUserId: userId } });
+
+    if (!profile) {
+      profile = new SchoolUserProfile();
+      profile.schoolUserId = userId;
+    }
+
+    if (dto.fatherName !== undefined) profile.fatherName = dto.fatherName;
+    if (dto.motherName !== undefined) profile.motherName = dto.motherName;
+    if (dto.profilePicUrl !== undefined) profile.profilePicUrl = dto.profilePicUrl;
+    if (dto.dob !== undefined) profile.dob = dto.dob;
+    if (dto.aadhaarNumber !== undefined) profile.aadhaarNumber = dto.aadhaarNumber;
+    if (dto.yearsOfExperience !== undefined) profile.yearsOfExperience = dto.yearsOfExperience;
+    if (dto.previousOrganization !== undefined) profile.previousOrganization = dto.previousOrganization;
+    if (dto.expertise !== undefined) profile.expertise = dto.expertise;
+    if (dto.subjects !== undefined) profile.subjects = dto.subjects;
+
+    const savedProfile = await profileRepo.save(profile);
+
+    return {
+      message: 'User profile updated successfully',
+      profile: savedProfile,
+    };
+  }
+
+  /**
+   * Get school user profile.
+   */
+  async getUserProfile(caller: AuthContext, schoolId: string, userId: string) {
+    await this.assertOwnershipOfSchool(caller.id, schoolId);
+
+    const user = await this.dataSource.getRepository(SchoolUser).findOne({
+      where: { id: userId, schoolId },
+    });
+    if (!user) throw new NotFoundException('School user not found');
+
+    const profile = await this.dataSource.getRepository(SchoolUserProfile).findOne({
+      where: { schoolUserId: userId },
+    });
+
+    return { user, profile: profile || null };
   }
 }
