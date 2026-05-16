@@ -8,7 +8,7 @@ import { SchoolOwnerLoginDto } from '../../interfaces/request/auth/school-owner-
 import { SchoolUser } from '../../models/entities/school/school-user.entity';
 import { Student } from '../../models/entities/student/student.entity';
 import { SchoolUserRole } from '../../models/entities/rbac/school-user-role.entity';
-import { Role } from '../../models/entities/rbac/role.entity';
+import { SchoolRole } from '../../models/entities/rbac/school-role.entity';
 import { School } from '../../models/entities/school/school.entity';
 import { SchoolOwnerRoleEnum } from '../../models/enums/enums';
 import { SchoolUserLoginDto } from 'src/interfaces/request/auth/school-user-login.dto';
@@ -154,7 +154,7 @@ export class AuthService {
 
     // Get role names
     const roleIds = userRoles.map(ur => ur.roleId);
-    const roleEntities = await this.dataSource.getRepository(Role).createQueryBuilder('role')
+    const roleEntities = await this.dataSource.getRepository(SchoolRole).createQueryBuilder('role')
       .where('role.id IN (:...roleIds)', { roleIds })
       .getMany();
     

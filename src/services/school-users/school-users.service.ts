@@ -9,7 +9,7 @@ import * as bcrypt from 'bcrypt';
 import { SchoolUser } from '../../models/entities/school/school-user.entity';
 import { SchoolOwnerMember } from '../../models/entities/school/school_owner_members.entity';
 import { SchoolUserRole } from '../../models/entities/rbac/school-user-role.entity';
-import { Role } from '../../models/entities/rbac/role.entity';
+import { SchoolRole } from '../../models/entities/rbac/school-role.entity';
 import { SchoolUserProfile } from '../../models/entities/school/school-user-profile.entity';
 import { AuthContext } from '../../interfaces/auth-context.interface';
 import { CreateSchoolUserDto } from '../../interfaces/request/school-user/create-school-user.dto';
@@ -125,7 +125,7 @@ export class SchoolUsersService {
 
     try {
       for (const roleId of dto.roleIds) {
-        const role = await queryRunner.manager.findOne(Role, {
+        const role = await queryRunner.manager.findOne(SchoolRole, {
           where: { id: roleId, schoolId },
         });
         if (!role) throw new NotFoundException(`Role ${roleId} not found in this school`);

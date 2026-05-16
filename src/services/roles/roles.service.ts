@@ -4,8 +4,8 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { DataSource } from 'typeorm';
-import { Role } from '../../models/entities/rbac/role.entity';
-import { RolePermission } from '../../models/entities/rbac/role-permission.entity';
+import { SchoolRole } from '../../models/entities/rbac/school-role.entity';
+import { SchoolRolePermission } from '../../models/entities/rbac/school-role-permission.entity';
 import { ModuleOperationPermission } from '../../models/entities/rbac/module-operation-permission.entity';
 import { ModuleMaster } from '../../models/entities/rbac/module-master.entity';
 import { PlatformFeature } from '../../models/entities/entitlement/platform-feature.entity';
@@ -43,7 +43,7 @@ export class RolesService {
     await queryRunner.startTransaction();
 
     try {
-      const role = new Role();
+      const role = new SchoolRole();
       role.schoolId = schoolId;
       role.name = dto.name;
       role.isActive = true;
@@ -61,7 +61,7 @@ export class RolesService {
             throw new NotFoundException(`Permission ${permissionId} not found`);
           }
 
-          const rp = new RolePermission();
+          const rp = new SchoolRolePermission();
           rp.roleId = savedRole.id;
           rp.permissionId = permissionId;
           rp.createdById = caller.id;
@@ -93,7 +93,7 @@ export class RolesService {
   async listRoles(caller: AuthContext, schoolId: string) {
     await this.assertOwnershipOfSchool(caller.id, schoolId);
 
-    const roles = await this.dataSource.getRepository(Role).find({
+    const roles = await this.dataSource.getRepository(SchoolRole).find({
       where: { schoolId, isActive: true },
       select: ['id', 'name', 'isActive', 'createdAt'],
       order: { createdAt: 'DESC' },

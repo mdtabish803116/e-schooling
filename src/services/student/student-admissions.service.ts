@@ -9,10 +9,10 @@ import { Class } from '../../models/entities/academic/class.entity';
 import { Section } from '../../models/entities/academic/section.entity';
 import { AcademicSession } from '../../models/entities/academic/academic-session.entity';
 import { SchoolUserRole } from '../../models/entities/rbac/school-user-role.entity';
-import { Role } from '../../models/entities/rbac/role.entity';
 import { StudentAdmissionDto } from '../../interfaces/request/student/student-admission.dto';
 import { AuthContext } from '../../interfaces/auth-context.interface';
 import { EnrollmentStatusEnum, EnrollmentTypeEnum } from '../../models/enums/enums';
+import { SchoolRole } from 'src/models/entities/rbac/school-role.entity';
 
 @Injectable()
 export class StudentAdmissionsService {
@@ -57,7 +57,7 @@ export class StudentAdmissionsService {
     const targetSession = await this.dataSource.getRepository(AcademicSession).findOne({ where: { id: dto.academicSessionId, schoolId } });
     if (!targetSession) throw new NotFoundException('Academic session not found');
 
-    const targetRole = await this.dataSource.getRepository(Role).findOne({ where: { id: dto.roleId, schoolId } });
+    const targetRole = await this.dataSource.getRepository(SchoolRole).findOne({ where: { id: dto.roleId, schoolId } });
     if (!targetRole) throw new NotFoundException('Role not found for this school');
 
     const queryRunner = this.dataSource.createQueryRunner();

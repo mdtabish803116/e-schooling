@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { SchoolUserRole } from '../../models/entities/rbac/school-user-role.entity';
-import { RolePermission } from '../../models/entities/rbac/role-permission.entity';
+import { SchoolRolePermission } from '../../models/entities/rbac/school-role-permission.entity';
 import { ModuleOperationPermission } from '../../models/entities/rbac/module-operation-permission.entity';
 
 @Injectable()
@@ -13,7 +13,7 @@ export class RBACService {
     const result = await this.dataSource
       .getRepository(SchoolUserRole)
       .createQueryBuilder('ur')
-      .innerJoin(RolePermission, 'rp', 'rp.role_id = ur.role_id')
+      .innerJoin(SchoolRolePermission, 'rp', 'rp.role_id = ur.role_id')
       .innerJoin(ModuleOperationPermission, 'p', 'p.id = rp.permission_id')
       .where('ur.user_id = :userId', { userId })
       .andWhere('p.key = :permissionKey', { permissionKey })
@@ -30,7 +30,7 @@ export class RBACService {
     const permissions = await this.dataSource
       .getRepository(SchoolUserRole)
       .createQueryBuilder('ur')
-      .innerJoin(RolePermission, 'rp', 'rp.role_id = ur.role_id')
+      .innerJoin(SchoolRolePermission, 'rp', 'rp.role_id = ur.role_id')
       .innerJoin(ModuleOperationPermission, 'p', 'p.id = rp.permission_id')
       .select('p.key', 'key')
       .where('ur.user_id = :userId', { userId })
