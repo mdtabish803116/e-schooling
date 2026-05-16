@@ -1,5 +1,7 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Index, OneToMany } from 'typeorm';
 import { PlanCodeEnum } from '../../enums/enums';
+import { SubscriptionPlanPrice } from './subscription-plan-price.entity';
+import { SubscriptionPlanPlatformFeatureMapping } from '../entitlement/subscription-plan-platform-feature-mapping.entity';
 
 @Entity({ name: 'subscription_plans', schema: 'e_schooling' })
 export class SubscriptionPlan {
@@ -9,6 +11,12 @@ export class SubscriptionPlan {
   @Index({ unique: true })
   @Column({ name: 'code', type: 'varchar', nullable: false, comment: 'Unique plan code e.g. TRIAL, BASIC, STANDARD, PREMIUM' })
   code: PlanCodeEnum;
+
+  @OneToMany(() => SubscriptionPlanPrice, (price) => price.subscriptionPlan)
+  prices: SubscriptionPlanPrice[];
+
+  @OneToMany(() => SubscriptionPlanPlatformFeatureMapping, (mapping) => mapping.subscriptionPlan)
+  featureMappings: SubscriptionPlanPlatformFeatureMapping[];
 
   @Column({ name: 'name', type: 'varchar', nullable: false, comment: 'Display name e.g. Basic Plan' })
   name: string;

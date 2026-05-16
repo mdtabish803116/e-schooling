@@ -5,7 +5,11 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   Index,
+  ManyToOne,
+  JoinColumn,
 } from 'typeorm';
+import { SubscriptionPlan } from '../subscription/subscription-plan.entity';
+import { PlatformFeature } from './platform-feature.entity';
 
 @Entity({ name: 'subscription_plan_platform_feature_mappings', schema: 'e_schooling' })
 export class SubscriptionPlanPlatformFeatureMapping {
@@ -16,9 +20,17 @@ export class SubscriptionPlanPlatformFeatureMapping {
   @Column({ name: 'subscription_plan_id', type: 'bigint', nullable: false, comment: 'Reference to SubscriptionPlan' })
   subscriptionPlanId: string;
 
+  @ManyToOne(() => SubscriptionPlan, (plan) => plan.featureMappings)
+  @JoinColumn({ name: 'subscription_plan_id' })
+  subscriptionPlan: SubscriptionPlan;
+
   @Index()
   @Column({ name: 'platform_feature_id', type: 'bigint', nullable: false, comment: 'Reference to PlatformFeature' })
   platformFeatureId: string;
+
+  @ManyToOne(() => PlatformFeature)
+  @JoinColumn({ name: 'platform_feature_id' })
+  platformFeature: PlatformFeature;
 
   @Column({ name: 'is_enabled', type: 'boolean', nullable: false, default: true, comment: 'Baseline feature enabled state' })
   isEnabled: boolean;

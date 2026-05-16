@@ -1,15 +1,20 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Index, ManyToOne, JoinColumn } from 'typeorm';
 import { BillingCycleEnum } from '../../enums/enums';
+import { SubscriptionPlan } from './subscription-plan.entity';
 
 @Entity({ name: 'subscription_plan_prices', schema: 'e_schooling' })
 @Index(['subscriptionPlanId', 'billingCycle'], { unique: true })
-export class PlanPrice {
+export class SubscriptionPlanPrice {
   @PrimaryGeneratedColumn('increment', { type: 'bigint', comment: 'Primary key' })
   id: string;
 
   @Index()
   @Column({ name: 'subscription_plan_id', type: 'bigint', nullable: false, comment: 'Reference to SubscriptionPlan' })
   subscriptionPlanId: string;
+
+  @ManyToOne(() => SubscriptionPlan)
+  @JoinColumn({ name: 'subscription_plan_id' })
+  subscriptionPlan: SubscriptionPlan;
 
   @Column({ name: 'billing_cycle', type: 'varchar', nullable: false, comment: 'monthly | quarterly | yearly' })
   billingCycle: BillingCycleEnum;

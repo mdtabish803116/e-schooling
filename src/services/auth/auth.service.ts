@@ -3,6 +3,7 @@ import { DataSource } from 'typeorm';
 import { Config } from '../../config/index';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
+import { validateEmail, validateMobile } from '../../shared/utils/validation.utils';
 import { SchoolOwnerRegisterDto } from '../../interfaces/request/auth/school-owner-register.dto';
 import { SchoolOwnerLoginDto } from '../../interfaces/request/auth/school-owner-login.dto';
 import { SchoolUser } from '../../models/entities/school/school-user.entity';
@@ -33,12 +34,30 @@ export class AuthService {
     await queryRunner.startTransaction();
 
     try {
+      // 1. Validation
+      if (!dto.termsAccepted) {
+        throw new BadRequestException('You must accept terms and conditions to register');
+      }
+
+      if (!validateEmail(dto.ownerEmail)) {
+        throw new BadRequestException('Invalid email address format');
+      }
+
+      if (!validateMobile(dto.ownerPhone)) {
+        throw new BadRequestException('Invalid mobile number format. Use international format (e.g. +919876543210)');
+      }
+
+      // 2. Uniqueness Check
       const existingOwner = await queryRunner.manager.findOne(SchoolOwner, {
-        where: { email: dto.ownerEmail },
+        where: [
+          { email: dto.ownerEmail },
+          { phone: dto.ownerPhone }
+        ],
       });
 
       if (existingOwner) {
-        throw new BadRequestException('Email already registered');
+        if (existingOwner.email === dto.ownerEmail) throw new BadRequestException('Email already registered');
+        if (existingOwner.phone === dto.ownerPhone) throw new BadRequestException('Mobile number already registered');
       }
 
       const salt = await bcrypt.genSalt(10);
@@ -50,6 +69,7 @@ export class AuthService {
       owner.email = dto.ownerEmail;
       owner.phone = dto.ownerPhone;
       owner.passwordHash = hashedPassword;
+      owner.termsAccepted = true;
       owner.isActive = true;
 
       const savedOwner = await queryRunner.manager.save(owner);
@@ -81,7 +101,10 @@ export class AuthService {
 
   async login(dto: SchoolOwnerLoginDto) {
     const owner = await this.dataSource.getRepository(SchoolOwner).findOne({
-      where: { email: dto.email },
+      where: [
+        { email: dto.identifier },
+        { phone: dto.identifier }
+      ],
     });
 
     if (!owner) {

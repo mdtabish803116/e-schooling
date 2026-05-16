@@ -1,8 +1,8 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
 import { JobTypeEnum, JobStatusEnum } from '../../enums/enums';
 
-@Entity({ name: 'bulk_import_jobs', schema: 'e_schooling' })
-export class BulkImportJob {
+@Entity({ name: 'background_jobs', schema: 'e_schooling' })
+export class BackgroundJob {
   @PrimaryGeneratedColumn('increment', { type: 'bigint', comment: 'Primary key' })
   id: string;
 

@@ -9,12 +9,12 @@ export class School {
   schoolName: string;
 
   @Index({ unique: true })
-  @Column({ name: 'internal_school_code', type: 'varchar', nullable: true, comment: 'System generated unique school code' })
+  @Column({ name: 'internal_school_code', type: 'varchar', nullable: false, comment: 'System generated unique school code' })
   internalSchoolCode: string;
 
   @Index()
   @Column({ name: 'external_school_code', type: 'varchar', nullable: true, comment: 'External/Board provided school code' })
-  externalSchoolCode: string;
+  externalSchoolCode: string | null;
 
   @Column({ name: 'logo_url', type: 'varchar', nullable: true, comment: 'URL of the school logo' })
   logoUrl: string;

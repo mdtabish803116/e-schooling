@@ -4,7 +4,7 @@ import * as bcrypt from 'bcrypt';
 import { Student } from '../../models/entities/student/student.entity';
 import { StudentEnrollment } from '../../models/entities/student/student-enrollment.entity';
 import { School } from '../../models/entities/school/school.entity';
-import { SchoolOwnerMember } from '../../models/entities/school/school_owner_members.entity';
+import { SchoolOwnerMember } from '../../models/entities/school/school-owner-member.entity';
 import { Class } from '../../models/entities/academic/class.entity';
 import { Section } from '../../models/entities/academic/section.entity';
 import { AcademicSession } from '../../models/entities/academic/academic-session.entity';

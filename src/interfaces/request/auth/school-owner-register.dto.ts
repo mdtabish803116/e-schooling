@@ -22,4 +22,13 @@ export class SchoolOwnerRegisterDto {
   @IsString()
   @MinLength(6)
   password: string;
+
+  @ApiProperty({ example: true, description: 'Must accept terms and conditions' })
+  @IsNotEmpty()
+  termsAccepted: boolean;
+
+  @ApiProperty({ example: 'ABCD', description: 'Captcha verification string' })
+  @IsNotEmpty()
+  @IsString()
+  captcha: string;
 }

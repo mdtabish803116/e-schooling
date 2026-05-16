@@ -12,8 +12,12 @@ export class SchoolOwner {
   @Column({ name: 'email', type: 'varchar', nullable: false, comment: 'Primary contact and login email' })
   email: string;
 
-  @Column({ name: 'phone', type: 'varchar', nullable: true, comment: 'Contact phone number' })
+  @Index({ unique: true })
+  @Column({ name: 'phone', type: 'varchar', nullable: false, comment: 'Contact phone number (Mobile)' })
   phone: string;
+
+  @Column({ name: 'terms_accepted', type: 'boolean', default: false, comment: 'Whether user accepted terms and conditions' })
+  termsAccepted: boolean;
 
   @Column({ name: 'password_hash', type: 'varchar', nullable: false, comment: 'Bcrypt hashed password' })
   passwordHash: string;

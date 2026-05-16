@@ -1,5 +1,6 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Index, ManyToOne, JoinColumn } from 'typeorm';
 import { SubscriptionStatusEnum, BillingCycleEnum } from '../../enums/enums';
+import { SubscriptionPlan } from './subscription-plan.entity';
 
 @Entity({ name: 'school_subscriptions', schema: 'e_schooling' })
 export class SchoolSubscription {
@@ -13,6 +14,10 @@ export class SchoolSubscription {
   @Index()
   @Column({ name: 'subscription_plan_id', type: 'bigint', nullable: false, comment: 'Reference to SubscriptionPlan' })
   subscriptionPlanId: string;
+
+  @ManyToOne(() => SubscriptionPlan)
+  @JoinColumn({ name: 'subscription_plan_id' })
+  subscriptionPlan: SubscriptionPlan;
 
   @Column({ name: 'subscription_state', type: 'varchar', nullable: false, default: SubscriptionStatusEnum.TRIAL, comment: 'trial | active | expired | cancelled | suspended' })
   subscriptionState: SubscriptionStatusEnum;

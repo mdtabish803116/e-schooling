@@ -4,17 +4,16 @@ import {
   ForbiddenException,
   BadRequestException,
 } from '@nestjs/common';
-import { DataSource } from 'typeorm';
+import { DataSource, In } from 'typeorm';
 import { School } from '../../models/entities/school/school.entity';
-import { SchoolOwnerMember } from '../../models/entities/school/school_owner_members.entity';
-import { SubscriptionPlan } from '../../models/entities/subscription/subscription-plan.entity';
+import { SchoolOwnerMember } from '../../models/entities/school/school-owner-member.entity';
+import { validateEmail, validateMobile } from '../../shared/utils/validation.utils';
 import { SchoolSubscription } from '../../models/entities/subscription/school-subscription.entity';
-import {
-  SchoolOwnerRoleEnum,
-  PlanCodeEnum,
-  SubscriptionStatusEnum,
-  BillingCycleEnum,
-} from '../../models/enums/enums';
+import { ModuleMaster } from '../../models/entities/rbac/module-master.entity';
+import { SchoolRole } from '../../models/entities/rbac/school-role.entity';
+import { SchoolRolePermission } from '../../models/entities/rbac/school-role-permission.entity';
+import { ModuleOperationPermission } from '../../models/entities/rbac/module-operation-permission.entity';
+import { SchoolOwnerRoleEnum } from '../../models/enums/enums';
 import { AuthContext } from '../../interfaces/auth-context.interface';
 import { CreateSchoolDto } from '../../interfaces/request/school/create-school.dto';
 import { UpdateSchoolDto } from '../../interfaces/request/school/update-school.dto';
@@ -24,142 +23,57 @@ export class SchoolsService {
   constructor(private dataSource: DataSource) { }
 
   /**
-   * Helper to generate unique internal school code based on school name.
-   * Format: SCH-{FIRST_WORD}_{RANDOM_4_DIGITS}
+   * Helper to generate unique internal school code.
    */
-  private generateSchoolCode(schoolName: string): string {
+  private async generateUniqueSchoolCode(schoolName: string): Promise<string> {
     const firstWord = schoolName.trim().split(' ')[0].toUpperCase();
     const cleanWord = firstWord.replace(/[^A-Z]/g, '').substring(0, 5) || 'SCH';
-    const randomNums = Math.floor(1000 + Math.random() * 9000);
-    return `SCH-${cleanWord}_${randomNums}`;
+    
+    let isUnique = false;
+    let code = '';
+    
+    while (!isUnique) {
+      const randomNums = Math.floor(1000 + Math.random() * 9000);
+      code = `SCH-${cleanWord}_${randomNums}`;
+      const existing = await this.dataSource.getRepository(School).findOne({ where: { internalSchoolCode: code } });
+      if (!existing) isUnique = true;
+    }
+    return code;
   }
 
-  /**
-   * Verifies that the logged-in owner manages/owns the requested school.
-   */
   private async assertOwnershipOfSchool(ownerId: string, schoolId: string): Promise<void> {
     const membership = await this.dataSource
       .getRepository(SchoolOwnerMember)
       .findOne({ where: { schoolOwnerId: ownerId, schoolId } });
-
-    if (!membership) {
-      throw new ForbiddenException('You do not have access to manage this school');
-    }
+    if (!membership) throw new ForbiddenException('You do not have access to manage this school');
   }
 
   /**
-   * Ensure master configurable subscription plans exist in the DB.
-   */
-  private async ensureSubscriptionPlansExist(manager: any): Promise<SubscriptionPlan> {
-    let trialPlan = await manager.findOne(SubscriptionPlan, {
-      where: { code: PlanCodeEnum.TRIAL },
-    });
-
-    if (!trialPlan) {
-      // Seed default Master Plans
-      const plans = [
-        {
-          code: PlanCodeEnum.TRIAL,
-          name: 'Free Trial (30 Days)',
-          description: 'Basic features included for evaluation',
-          maxStudents: 50,
-          maxStaff: 5,
-          maxClasses: 5,
-          maxSections: 10,
-        },
-        {
-          code: PlanCodeEnum.BASIC,
-          name: 'Basic Plan',
-          description: 'Core school management modules',
-          maxStudents: 300,
-          maxStaff: null,
-          maxClasses: null,
-          maxSections: null,
-        },
-        {
-          code: PlanCodeEnum.STANDARD,
-          name: 'Standard Plan',
-          description: 'Advanced reporting and fee tracking',
-          maxStudents: 500,
-          maxStaff: null,
-          maxClasses: null,
-          maxSections: null,
-        },
-        {
-          code: PlanCodeEnum.PREMIUM,
-          name: 'Premium Plan',
-          description: 'Full automated multi-tenant ERP suites',
-          maxStudents: 1000,
-          maxStaff: null,
-          maxClasses: null,
-          maxSections: null,
-        },
-      ];
-
-      for (const p of plans) {
-        const entity = new SubscriptionPlan();
-        Object.assign(entity, p);
-        const saved = await manager.save(entity);
-        if (p.code === PlanCodeEnum.TRIAL) {
-          trialPlan = saved;
-        }
-      }
-    }
-
-    return trialPlan;
-  }
-
-  /**
-   * Create a new school post-login.
-   * Generates internal/external codes based on school name and atomically attaches the owner
-   * along with a newly minted 30-day Free Trial subscription state.
+   * Create a new school.
+   * Note: Subscription must be initiated separately via SubscriptionsService.
    */
   async createSchool(caller: AuthContext, dto: CreateSchoolDto) {
-    if (caller.actorType !== 'school_owner') {
-      throw new ForbiddenException('Only registered school owners can create new schools');
-    }
+    if (caller.actorType !== 'school_owner') throw new ForbiddenException('Only registered school owners can create new schools');
+
+    if (!validateEmail(dto.email)) throw new BadRequestException('Invalid school email address format');
+    if (!validateMobile(dto.phone)) throw new BadRequestException('Invalid school phone number format');
 
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
     try {
-      const internalCode = this.generateSchoolCode(dto.schoolName);
-      const externalCode = dto.externalSchoolCode || `EXT-${internalCode.replace('SCH-', '')}`;
-
-      const existing = await queryRunner.manager.findOne(School, {
-        where: { internalSchoolCode: internalCode },
-      });
-      if (existing) {
-        throw new BadRequestException('School code collision. Please try submitting again.');
-      }
-
-      // Ensure Master Plans exist
-      const trialPlan = await this.ensureSubscriptionPlansExist(queryRunner.manager);
-
+      const internalCode = await this.generateUniqueSchoolCode(dto.schoolName);
+      
       const school = new School();
-      school.schoolName = dto.schoolName;
+      Object.assign(school, dto);
       school.internalSchoolCode = internalCode;
-      school.externalSchoolCode = externalCode;
-      school.email = dto.email;
-      school.phone = dto.phone;
-      school.logoUrl = dto.logoUrl ?? '';
-      school.totalClasses = dto.totalClasses ?? 0;
-      school.totalSections = dto.totalSections ?? 0;
-      school.totalStudents = dto.totalStudents ?? 0;
-      school.totalTeachers = dto.totalTeachers ?? 0;
-      school.addressArea = dto.addressArea ?? '';
-      school.addressLandmark = dto.addressLandmark ?? '';
-      school.addressCity = dto.addressCity ?? '';
-      school.addressDistrict = dto.addressDistrict ?? '';
-      school.addressState = dto.addressState ?? '';
-      school.addressPincode = dto.addressPincode ?? '';
+      school.externalSchoolCode = dto.externalSchoolCode || null;
       school.isActive = true;
       school.createdById = caller.id;
 
       const savedSchool = await queryRunner.manager.save(school);
 
-      // Atomically link the calling school owner to this school as the primary owner
       const member = new SchoolOwnerMember();
       member.schoolId = savedSchool.id;
       member.schoolOwnerId = caller.id;
@@ -169,33 +83,11 @@ export class SchoolsService {
       member.createdById = caller.id;
 
       await queryRunner.manager.save(member);
-
-      // Automatically assign 30-day Free Trial subscription
-      const now = new Date();
-      const trialEnd = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000); // +30 days
-
-      const subscription = new SchoolSubscription();
-      subscription.schoolId = savedSchool.id;
-      subscription.subscriptionPlanId = trialPlan.id;
-      subscription.subscriptionState = SubscriptionStatusEnum.TRIAL;
-      subscription.billingCycle = BillingCycleEnum.MONTHLY;
-      subscription.trialStartAt = now;
-      subscription.trialEndAt = trialEnd;
-      subscription.currentPeriodStart = now;
-      subscription.currentPeriodEnd = trialEnd;
-
-      await queryRunner.manager.save(subscription);
-
       await queryRunner.commitTransaction();
 
       return {
-        message: 'School created successfully with active 30-day Free Trial',
+        message: 'School registered successfully. Please select a subscription plan to continue.',
         school: savedSchool,
-        subscriptionStatus: {
-          plan: trialPlan.name,
-          subscriptionState: subscription.subscriptionState,
-          expiresAt: subscription.trialEndAt,
-        },
       };
     } catch (error) {
       await queryRunner.rollbackTransaction();
@@ -205,94 +97,112 @@ export class SchoolsService {
     }
   }
 
-
-  /**
-   * Update school details.
-   */
   async updateSchool(caller: AuthContext, schoolId: string, dto: UpdateSchoolDto) {
     await this.assertOwnershipOfSchool(caller.id, schoolId);
-
     const schoolRepo = this.dataSource.getRepository(School);
     const school = await schoolRepo.findOne({ where: { id: schoolId } });
+    if (!school) throw new NotFoundException('School not found');
 
-    if (!school) {
-      throw new NotFoundException('School not found');
-    }
-
-    if (dto.schoolName !== undefined) school.schoolName = dto.schoolName;
-    if (dto.email !== undefined) school.email = dto.email;
-    if (dto.phone !== undefined) school.phone = dto.phone;
-    if (dto.logoUrl !== undefined) school.logoUrl = dto.logoUrl;
-    if (dto.externalSchoolCode !== undefined) school.externalSchoolCode = dto.externalSchoolCode;
-    if (dto.totalClasses !== undefined) school.totalClasses = dto.totalClasses;
-    if (dto.totalSections !== undefined) school.totalSections = dto.totalSections;
-    if (dto.totalStudents !== undefined) school.totalStudents = dto.totalStudents;
-    if (dto.totalTeachers !== undefined) school.totalTeachers = dto.totalTeachers;
-    if (dto.addressArea !== undefined) school.addressArea = dto.addressArea;
-    if (dto.addressLandmark !== undefined) school.addressLandmark = dto.addressLandmark;
-    if (dto.addressCity !== undefined) school.addressCity = dto.addressCity;
-    if (dto.addressDistrict !== undefined) school.addressDistrict = dto.addressDistrict;
-    if (dto.addressState !== undefined) school.addressState = dto.addressState;
-    if (dto.addressPincode !== undefined) school.addressPincode = dto.addressPincode;
-
+    Object.assign(school, dto);
     school.updatedById = caller.id;
-
     const updatedSchool = await schoolRepo.save(school);
 
+    return { message: 'School updated successfully', school: updatedSchool };
+  }
+
+  async listSchools(caller: AuthContext) {
+    const memberships = await this.dataSource.getRepository(SchoolOwnerMember).find({
+      where: { schoolOwnerId: caller.id, isActive: true },
+    });
+    if (!memberships.length) return { schools: [] };
+
+    const schoolIds = memberships.map(m => m.schoolId);
+    const schools = await this.dataSource.getRepository(School).find({
+      where: { id: In(schoolIds) },
+      order: { createdAt: 'DESC' }
+    });
+
     return {
-      message: 'School updated successfully',
-      school: updatedSchool,
+      schools: schools.map(s => ({
+        ...s,
+        isPrimaryOwner: memberships.find(m => m.schoolId === s.id)?.isPrimaryOwner ?? false
+      }))
     };
   }
 
+  async getSchool(caller: AuthContext, schoolId: string) {
+    await this.assertOwnershipOfSchool(caller.id, schoolId);
+    const school = await this.dataSource.getRepository(School).findOne({ where: { id: schoolId } });
+    if (!school) throw new NotFoundException('School not found');
+    return { school };
+  }
+
   /**
-   * List all schools belonging to the logged-in owner.
+   * Optimized Master Context API.
+   * Uses bulk-fetching to prevent N+1 query performance issues.
    */
-  async listSchools(caller: AuthContext) {
-    // Find all school IDs the owner is a member of
+  async getOwnerMasterContext(caller: AuthContext) {
     const memberships = await this.dataSource.getRepository(SchoolOwnerMember).find({
       where: { schoolOwnerId: caller.id, isActive: true },
-      select: ['schoolId', 'isPrimaryOwner', 'createdAt'],
     });
+    if (!memberships.length) return { schools: [] };
 
-    if (!memberships || memberships.length === 0) {
-      return { schools: [] };
+    const schoolIds = memberships.map(m => m.schoolId);
+
+    // 1. Bulk fetch all primary school assets
+    const [schools, subscriptions, roles, modules] = await Promise.all([
+      this.dataSource.getRepository(School).find({ where: { id: In(schoolIds) } }),
+      this.dataSource.getRepository(SchoolSubscription).find({ where: { schoolId: In(schoolIds) }, relations: ['subscriptionPlan'] }),
+      this.dataSource.getRepository(SchoolRole).find({ where: { schoolId: In(schoolIds), isActive: true, isDeleted: false } }),
+      this.dataSource.getRepository(ModuleMaster).find({ where: { isActive: true }, order: { displayOrder: 'ASC' } }),
+    ]);
+
+    // 2. Bulk fetch all role permissions
+    const roleIds = roles.map(r => r.id);
+    let rolePermissionMap: Record<string, any[]> = {};
+
+    if (roleIds.length > 0) {
+      const permissions = await this.dataSource.getRepository(SchoolRolePermission).createQueryBuilder('rp')
+        .innerJoinAndSelect(ModuleOperationPermission, 'p', 'p.id = rp.permission_id')
+        .select(['rp.role_id as role_id', 'p.id as p_id', 'p.key as p_key', 'p.description as p_desc'])
+        .where('rp.role_id IN (:...roleIds)', { roleIds })
+        .andWhere('rp.isActive = true')
+        .getRawMany();
+
+      permissions.forEach(p => {
+        if (!rolePermissionMap[p.role_id]) rolePermissionMap[p.role_id] = [];
+        rolePermissionMap[p.role_id].push({ id: p.p_id, key: p.p_key, description: p.p_desc });
+      });
     }
 
-    const schoolIds = memberships.map((m) => m.schoolId);
+    // 3. Aggregate results in memory
+    const results = schools.map(school => {
+      const schoolSub = subscriptions.find(s => s.schoolId === school.id);
+      const schoolRoles = roles.filter(r => r.schoolId === school.id);
 
-    const schools = await this.dataSource.getRepository(School).createQueryBuilder('school')
-      .where('school.id IN (:...schoolIds)', { schoolIds })
-      .orderBy('school.createdAt', 'DESC')
-      .getMany();
-
-    // Map ownership details
-    const result = schools.map((school) => {
-      const membership = memberships.find((m) => m.schoolId === school.id);
       return {
-        ...school,
-        isPrimaryOwner: membership?.isPrimaryOwner ?? false,
+        id: school.id,
+        name: school.schoolName,
+        code: school.internalSchoolCode,
+        email: school.email,
+        phone: school.phone,
+        isPrimaryOwner: memberships.find(m => m.schoolId === school.id)?.isPrimaryOwner ?? false,
+        subscription: schoolSub ? {
+          planId: schoolSub.subscriptionPlanId,
+          planName: schoolSub.subscriptionPlan?.name,
+          planCode: schoolSub.subscriptionPlan?.code,
+          status: schoolSub.subscriptionState,
+          expiryDate: schoolSub.currentPeriodEnd,
+        } : null,
+        roles: schoolRoles.map(r => ({
+          id: r.id,
+          name: r.name,
+          permissions: rolePermissionMap[r.id] || [],
+        })),
+        sidebarModules: modules,
       };
     });
 
-    return { schools: result };
-  }
-
-  /**
-   * Get detail of a specific school.
-   */
-  async getSchool(caller: AuthContext, schoolId: string) {
-    await this.assertOwnershipOfSchool(caller.id, schoolId);
-
-    const school = await this.dataSource.getRepository(School).findOne({
-      where: { id: schoolId },
-    });
-
-    if (!school) {
-      throw new NotFoundException('School not found');
-    }
-
-    return { school };
+    return { schools: results };
   }
 }
-

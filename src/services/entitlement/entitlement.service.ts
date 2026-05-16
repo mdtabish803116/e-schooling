@@ -1,7 +1,6 @@
 import {
   Injectable,
   NotFoundException,
-  ForbiddenException,
   BadRequestException,
 } from '@nestjs/common';
 import { DataSource } from 'typeorm';
@@ -48,6 +47,16 @@ export class EntitlementService {
       };
     }
 
+    // Expiry Check
+    const now = new Date();
+    if (subscription.currentPeriodEnd && subscription.currentPeriodEnd < now) {
+      return {
+        isAllowed: false,
+        featureDetails: { code: feature.code, name: feature.name, usageUnit: feature.usageUnit },
+        reason: 'SubscriptionExpired',
+      };
+    }
+
     // Retrieve global plan feature baseline configuration
     const planFeatureRepo = this.dataSource.getRepository(SubscriptionPlanPlatformFeatureMapping);
     const planFeature = await planFeatureRepo.findOne({
@@ -62,7 +71,6 @@ export class EntitlementService {
     });
 
     // Check if an unexpired active override governs execution
-    const now = new Date();
     const activeOverride = overrides.find((o) => {
       const started = !o.startDate || o.startDate <= now;
       const unexpired = !o.endDate || o.endDate >= now;

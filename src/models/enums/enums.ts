@@ -148,6 +148,19 @@ export enum PaymentStatusEnum {
   REFUNDED = 'refunded'
 }
 
+export enum OrderStatusEnum {
+  PENDING = 'pending',
+  PAID = 'paid',
+  FAILED = 'failed',
+  CANCELLED = 'cancelled'
+}
+
+export enum OrderItemTypeEnum {
+  PLAN = 'PLAN',
+  FEATURE = 'FEATURE',
+  ADDON = 'ADDON'
+}
+
 export enum InvoiceStatusEnum {
   PAID = 'paid',
   UNPAID = 'unpaid',
@@ -184,7 +197,9 @@ export enum JobTypeEnum {
   STUDENT_IMPORT = 'student_import',
   PROMOTION = 'promotion',
   DEMOTION = 'demotion',
-  SECTION_TRANSFER = 'section_transfer'
+  SECTION_TRANSFER = 'section_transfer',
+  PAYMENT_RECONCILIATION = 'payment_reconciliation',
+  SUBSCRIPTION_EXPIRY_CHECK = 'subscription_expiry_check'
 }
 
 export enum JobStatusEnum {

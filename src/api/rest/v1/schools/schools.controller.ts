@@ -52,6 +52,12 @@ export class SchoolsController {
     return this.schoolsService.listSchools(caller);
   }
 
+  @ApiOperation({ summary: 'Get a full snapshot of all schools, plans, and permissions (Owner Dashboard)' })
+  @Get('context/master')
+  async getMasterContext(@CurrentUser() caller: AuthContext) {
+    return this.schoolsService.getOwnerMasterContext(caller);
+  }
+
   @ApiOperation({ summary: 'Get details of a specific school' })
   @ApiResponse({ 
     status: 200, 

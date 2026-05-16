@@ -9,7 +9,7 @@ import { SchoolRolePermission } from '../../models/entities/rbac/school-role-per
 import { ModuleOperationPermission } from '../../models/entities/rbac/module-operation-permission.entity';
 import { ModuleMaster } from '../../models/entities/rbac/module-master.entity';
 import { PlatformFeature } from '../../models/entities/entitlement/platform-feature.entity';
-import { SchoolOwnerMember } from '../../models/entities/school/school_owner_members.entity';
+import { SchoolOwnerMember } from '../../models/entities/school/school-owner-member.entity';
 import { EntitlementService } from '../entitlement/entitlement.service';
 import { AuthContext } from '../../interfaces/auth-context.interface';
 import { CreateRoleDto } from '../../interfaces/request/role/create-role.dto';
