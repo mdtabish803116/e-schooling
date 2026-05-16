@@ -7,8 +7,8 @@ import {
 import { DataSource } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { SchoolUser } from '../../models/entities/school/school-user.entity';
-import { SchoolMember } from '../../models/entities/school/school-member.entity';
-import { UserRole } from '../../models/entities/rbac/user-role.entity';
+import { SchoolOwnerMember } from '../../models/entities/school/school_owner_members.entity';
+import { SchoolUserRole } from '../../models/entities/rbac/school-user-role.entity';
 import { Role } from '../../models/entities/rbac/role.entity';
 import { SchoolUserProfile } from '../../models/entities/school/school-user-profile.entity';
 import { AuthContext } from '../../interfaces/auth-context.interface';
@@ -19,7 +19,7 @@ import { UserTypeEnum } from '../../models/enums/enums';
 
 @Injectable()
 export class SchoolUsersService {
-  constructor(private dataSource: DataSource) {}
+  constructor(private dataSource: DataSource) { }
 
   /**
    * Verifies that the caller (school_owner) owns/manages the given school.
@@ -27,7 +27,7 @@ export class SchoolUsersService {
    */
   private async assertOwnershipOfSchool(ownerId: string, schoolId: string): Promise<void> {
     const membership = await this.dataSource
-      .getRepository(SchoolMember)
+      .getRepository(SchoolOwnerMember)
       .findOne({ where: { schoolOwnerId: ownerId, schoolId } });
 
     if (!membership) {
@@ -118,7 +118,7 @@ export class SchoolUsersService {
       where: { id: userId, schoolId },
     });
     if (!user) throw new NotFoundException('School user not found');
-    
+
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -131,11 +131,11 @@ export class SchoolUsersService {
         if (!role) throw new NotFoundException(`Role ${roleId} not found in this school`);
 
         // Avoid duplicate assignment
-        const existing = await queryRunner.manager.findOne(UserRole, {
+        const existing = await queryRunner.manager.findOne(SchoolUserRole, {
           where: { userId, roleId },
         });
         if (!existing) {
-          const userRole = new UserRole();
+          const userRole = new SchoolUserRole();
           userRole.userId = userId;
           userRole.roleId = roleId;
           userRole.createdById = caller.id;

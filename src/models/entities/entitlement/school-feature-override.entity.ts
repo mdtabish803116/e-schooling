@@ -18,8 +18,8 @@ export class SchoolFeatureOverride {
   schoolId: string;
 
   @Index()
-  @Column({ name: 'feature_id', type: 'bigint', nullable: false, comment: 'Target PlatformFeature reference' })
-  featureId: string;
+  @Column({ name: 'platform_feature_id', type: 'bigint', nullable: false, comment: 'Target PlatformFeature reference' })
+  platformFeatureId: string;
 
   @Column({
     name: 'override_type',

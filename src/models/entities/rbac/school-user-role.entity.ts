@@ -1,15 +1,15 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
 
-@Entity({ name: 'user_roles', schema: 'e_schooling' })
-export class UserRole {
+@Entity({ name: 'school_user_roles', schema: 'e_schooling' })
+export class SchoolUserRole {
   @PrimaryGeneratedColumn('increment', { type: 'bigint', comment: 'Primary key' })
   id: string;
 
   @Index()
-  @Column({ name: 'user_id', type: 'bigint', nullable: true, comment: 'Reference to SchoolUser or Student' })
+  @Column({ name: 'user_id', type: 'bigint', nullable: true, comment: 'Reference to SchoolUser' })
   userId: string;
 
-  @Column({ name: 'user_type', type: 'varchar', nullable: true, default: 'school_user', comment: 'school_user | student' })
+  @Column({ name: 'user_type', type: 'varchar', nullable: true, default: 'school_user', comment: 'Always school_user for this mapping' })
   userType: string;
 
   @Index()

@@ -7,18 +7,18 @@ import {
   Index,
 } from 'typeorm';
 
-@Entity({ name: 'plan_features', schema: 'e_schooling' })
-export class PlanFeature {
+@Entity({ name: 'subscription_plan_platform_feature_mappings', schema: 'e_schooling' })
+export class SubscriptionPlanPlatformFeatureMapping {
   @PrimaryGeneratedColumn('increment', { type: 'bigint', comment: 'Primary key' })
   id: string;
 
   @Index()
-  @Column({ name: 'plan_id', type: 'bigint', nullable: false, comment: 'Reference to SubscriptionPlan' })
-  planId: string;
+  @Column({ name: 'subscription_plan_id', type: 'bigint', nullable: false, comment: 'Reference to SubscriptionPlan' })
+  subscriptionPlanId: string;
 
   @Index()
-  @Column({ name: 'feature_id', type: 'bigint', nullable: false, comment: 'Reference to PlatformFeature' })
-  featureId: string;
+  @Column({ name: 'platform_feature_id', type: 'bigint', nullable: false, comment: 'Reference to PlatformFeature' })
+  platformFeatureId: string;
 
   @Column({ name: 'is_enabled', type: 'boolean', nullable: false, default: true, comment: 'Baseline feature enabled state' })
   isEnabled: boolean;
@@ -35,9 +35,9 @@ export class PlanFeature {
   @Column({ name: 'is_delete', type: 'boolean', nullable: false, default: false, comment: 'Soft delete marker' })
   isDeleted: boolean;
 
-  @CreateDateColumn({ name: 'created_at', type: 'timestamp', comment: 'Creation timestamp' })
+  @CreateDateColumn({ name: 'created_at', type: 'timestamp' })
   createdAt: Date;
 
-  @UpdateDateColumn({ name: 'updated_at', type: 'timestamp', comment: 'Last update timestamp' })
+  @UpdateDateColumn({ name: 'updated_at', type: 'timestamp' })
   updatedAt: Date;
 }

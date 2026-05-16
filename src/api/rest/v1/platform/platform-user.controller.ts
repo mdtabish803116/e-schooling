@@ -3,7 +3,7 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@ne
 import { PlatformService } from '../../../../services/platform/platform.service';
 import { PlatformUserService } from '../../../../services/platform/platform-user.service';
 import { PaginationDto } from '../../../../interfaces/request/common/pagination.dto';
-import { CreatePlatformFeatureDto, CreateModuleMasterDto } from '../../../../interfaces/request/platform/platform-management.dto';
+import { CreatePlatformFeatureDto, CreateModuleMasterDto, CreateOperationMasterDto, AssignPermissionDto } from '../../../../interfaces/request/platform/platform-management.dto';
 import { JwtAuthGuard } from '../../../../shared/guards/jwt-auth.guard';
 import { PlatformGuard } from '../../../../shared/guards/platform.guard';
 import { PlatformPermissionGuard } from '../../../../shared/guards/platform-permission.guard';
@@ -52,6 +52,27 @@ export class PlatformUserController {
   @Permission(PermissionKeyEnum.PLATFORM_MODULES_VIEW)
   async listModules() {
     return this.platformService.listModules();
+  }
+
+  @ApiOperation({ summary: 'Create a new operation' })
+  @Post('operations')
+  @Permission(PermissionKeyEnum.PLATFORM_FEATURES_MANAGE)
+  async createOperation(@Body() dto: CreateOperationMasterDto, @CurrentUser() caller: AuthContext) {
+    return this.platformService.createOperation(dto, caller);
+  }
+
+  @ApiOperation({ summary: 'List all operations' })
+  @Get('operations')
+  @Permission(PermissionKeyEnum.PLATFORM_FEATURES_VIEW)
+  async listOperations() {
+    return this.platformService.listOperations();
+  }
+
+  @ApiOperation({ summary: 'Assign permission (Module + Operation)' })
+  @Post('permissions')
+  @Permission(PermissionKeyEnum.PLATFORM_FEATURES_MANAGE)
+  async assignPermission(@Body() dto: AssignPermissionDto) {
+    return this.platformService.assignPermission(dto);
   }
 
   // --- Schools & Owners ---

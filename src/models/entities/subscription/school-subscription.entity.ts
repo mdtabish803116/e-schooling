@@ -11,8 +11,8 @@ export class SchoolSubscription {
   schoolId: string;
 
   @Index()
-  @Column({ name: 'plan_id', type: 'bigint', nullable: false, comment: 'Reference to SubscriptionPlan' })
-  planId: string;
+  @Column({ name: 'subscription_plan_id', type: 'bigint', nullable: false, comment: 'Reference to SubscriptionPlan' })
+  subscriptionPlanId: string;
 
   @Column({ name: 'subscription_state', type: 'varchar', nullable: false, default: SubscriptionStatusEnum.TRIAL, comment: 'trial | active | expired | cancelled | suspended' })
   subscriptionState: SubscriptionStatusEnum;

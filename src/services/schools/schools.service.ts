@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { School } from '../../models/entities/school/school.entity';
-import { SchoolMember } from '../../models/entities/school/school-member.entity';
+import { SchoolOwnerMember } from '../../models/entities/school/school_owner_members.entity';
 import { SubscriptionPlan } from '../../models/entities/subscription/subscription-plan.entity';
 import { SchoolSubscription } from '../../models/entities/subscription/school-subscription.entity';
 import {
@@ -39,7 +39,7 @@ export class SchoolsService {
    */
   private async assertOwnershipOfSchool(ownerId: string, schoolId: string): Promise<void> {
     const membership = await this.dataSource
-      .getRepository(SchoolMember)
+      .getRepository(SchoolOwnerMember)
       .findOne({ where: { schoolOwnerId: ownerId, schoolId } });
 
     if (!membership) {
@@ -160,7 +160,7 @@ export class SchoolsService {
       const savedSchool = await queryRunner.manager.save(school);
 
       // Atomically link the calling school owner to this school as the primary owner
-      const member = new SchoolMember();
+      const member = new SchoolOwnerMember();
       member.schoolId = savedSchool.id;
       member.schoolOwnerId = caller.id;
       member.role = SchoolOwnerRoleEnum.OWNER;
@@ -176,7 +176,7 @@ export class SchoolsService {
 
       const subscription = new SchoolSubscription();
       subscription.schoolId = savedSchool.id;
-      subscription.planId = trialPlan.id;
+      subscription.subscriptionPlanId = trialPlan.id;
       subscription.subscriptionState = SubscriptionStatusEnum.TRIAL;
       subscription.billingCycle = BillingCycleEnum.MONTHLY;
       subscription.trialStartAt = now;
@@ -250,7 +250,7 @@ export class SchoolsService {
    */
   async listSchools(caller: AuthContext) {
     // Find all school IDs the owner is a member of
-    const memberships = await this.dataSource.getRepository(SchoolMember).find({
+    const memberships = await this.dataSource.getRepository(SchoolOwnerMember).find({
       where: { schoolOwnerId: caller.id, isActive: true },
       select: ['schoolId', 'isPrimaryOwner', 'createdAt'],
     });

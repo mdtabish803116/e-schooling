@@ -5,10 +5,9 @@ import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { SchoolOwnerRegisterDto } from '../../interfaces/request/auth/school-owner-register.dto';
 import { SchoolOwnerLoginDto } from '../../interfaces/request/auth/school-owner-login.dto';
-import { SchoolOwner } from '../../models/entities/school/school-owner.entity';
 import { SchoolUser } from '../../models/entities/school/school-user.entity';
 import { Student } from '../../models/entities/student/student.entity';
-import { UserRole } from '../../models/entities/rbac/user-role.entity';
+import { SchoolUserRole } from '../../models/entities/rbac/school-user-role.entity';
 import { Role } from '../../models/entities/rbac/role.entity';
 import { School } from '../../models/entities/school/school.entity';
 import { SchoolOwnerRoleEnum } from '../../models/enums/enums';
@@ -19,6 +18,7 @@ import { PlatformRegisterDto } from 'src/interfaces/request/auth/platform-regist
 import { PlatformUser } from '../../models/entities/platform/platform-user.entity';
 import { PlatformRole } from '../../models/entities/platform/platform-role.entity';
 import { PlatformUserRoleMapping } from '../../models/entities/platform/platform-user-role-mapping.entity';
+import { SchoolOwner } from 'src/models/entities/school/school-owner.entity';
 
 @Injectable()
 export class AuthService {
@@ -144,7 +144,7 @@ export class AuthService {
     }
 
     // Fetch assigned roles
-    const userRoles = await this.dataSource.getRepository(UserRole).find({
+    const userRoles = await this.dataSource.getRepository(SchoolUserRole).find({
       where: { userId: user.id, isActive: true, isDeleted: false }
     });
 

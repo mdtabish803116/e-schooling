@@ -5,12 +5,12 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { DataSource } from 'typeorm';
-import { SchoolMember } from '../../models/entities/school/school-member.entity';
+import { SchoolOwnerMember } from '../../models/entities/school/school_owner_members.entity';
 import { SubscriptionPlan } from '../../models/entities/subscription/subscription-plan.entity';
-import { PlanPrice } from '../../models/entities/subscription/plan-price.entity';
+import { PlanPrice } from '../../models/entities/subscription/subscription-plan-price.entity';
 import { SchoolSubscription } from '../../models/entities/subscription/school-subscription.entity';
 import { SchoolFeatureOverride } from '../../models/entities/entitlement/school-feature-override.entity';
-import { PlanFeature } from '../../models/entities/entitlement/plan-feature.entity';
+import { SubscriptionPlanPlatformFeatureMapping } from '../../models/entities/entitlement/subscription-plan-platform-feature-mapping.entity';
 import { PlatformFeature } from '../../models/entities/entitlement/platform-feature.entity';
 import {
   PlanCodeEnum,
@@ -26,14 +26,14 @@ import { PurchaseAddonDto } from '../../interfaces/request/subscription/purchase
 
 @Injectable()
 export class SubscriptionsService {
-  constructor(private dataSource: DataSource) {}
+  constructor(private dataSource: DataSource) { }
 
   /**
    * Asserts caller ownership of target school.
    */
   private async assertOwnership(ownerId: string, schoolId: string): Promise<void> {
     const member = await this.dataSource
-      .getRepository(SchoolMember)
+      .getRepository(SchoolOwnerMember)
       .findOne({ where: { schoolOwnerId: ownerId, schoolId } });
 
     if (!member) {
@@ -44,9 +44,9 @@ export class SubscriptionsService {
   /**
    * Pre-seeds standard customizable pricing data if absent in the DB.
    */
-  private async ensurePlanPricesExist(planId: string, planCode: PlanCodeEnum): Promise<void> {
+  private async ensurePlanPricesExist(subscriptionPlanId: string, planCode: PlanCodeEnum): Promise<void> {
     const priceRepo = this.dataSource.getRepository(PlanPrice);
-    const existing = await priceRepo.findOne({ where: { planId } });
+    const existing = await priceRepo.findOne({ where: { subscriptionPlanId } });
 
     if (!existing && planCode !== PlanCodeEnum.TRIAL) {
       const pricingMap: Record<PlanCodeEnum, Record<BillingCycleEnum, number>> = {
@@ -71,7 +71,7 @@ export class SubscriptionsService {
       const cycles = [BillingCycleEnum.MONTHLY, BillingCycleEnum.QUARTERLY, BillingCycleEnum.YEARLY];
       for (const c of cycles) {
         const p = new PlanPrice();
-        p.planId = planId;
+        p.subscriptionPlanId = subscriptionPlanId;
         p.billingCycle = c;
         p.price = pricingMap[planCode]?.[c] || 0;
         await priceRepo.save(p);
@@ -94,7 +94,7 @@ export class SubscriptionsService {
     }
 
     const plan = await this.dataSource.getRepository(SubscriptionPlan).findOne({
-      where: { id: subscription.planId },
+      where: { id: subscription.subscriptionPlanId },
     });
 
     if (!plan) {
@@ -129,17 +129,17 @@ export class SubscriptionsService {
 
     // Look up enabled features natively mapped to this global plan via the Entitlement architecture
     const planFeatures = await this.dataSource
-      .getRepository(PlanFeature)
-      .find({ where: { planId: plan.id, isEnabled: true } });
+      .getRepository(SubscriptionPlanPlatformFeatureMapping)
+      .find({ where: { subscriptionPlanId: plan.id, isEnabled: true } });
 
-    const featureIds = planFeatures.map((pf) => pf.featureId);
+    const platformFeatureIds = planFeatures.map((pf) => pf.platformFeatureId);
     let featuresIncluded: string[] = [];
 
-    if (featureIds.length > 0) {
+    if (platformFeatureIds.length > 0) {
       const platformFeatures = await this.dataSource
         .getRepository(PlatformFeature)
         .createQueryBuilder('pf')
-        .where('pf.id IN (:...featureIds)', { featureIds })
+        .where('pf.id IN (:...platformFeatureIds)', { platformFeatureIds })
         .getMany();
       featuresIncluded = platformFeatures.map((pf) => pf.code);
     }
@@ -192,7 +192,7 @@ export class SubscriptionsService {
     await this.ensurePlanPricesExist(targetPlan.id, targetPlan.code);
 
     const planPrice = await this.dataSource.getRepository(PlanPrice).findOne({
-      where: { planId: targetPlan.id, billingCycle: dto.billingCycle },
+      where: { subscriptionPlanId: targetPlan.id, billingCycle: dto.billingCycle },
     });
 
     if (!planPrice) {
@@ -218,7 +218,7 @@ export class SubscriptionsService {
       periodEnd.setFullYear(periodEnd.getFullYear() + 1);
     }
 
-    subscription.planId = targetPlan.id;
+    subscription.subscriptionPlanId = targetPlan.id;
     subscription.billingCycle = dto.billingCycle;
     subscription.subscriptionState = SubscriptionStatusEnum.ACTIVE;
     subscription.currentPeriodStart = periodStart;
@@ -281,7 +281,7 @@ export class SubscriptionsService {
 
     const override = new SchoolFeatureOverride();
     override.schoolId = schoolId;
-    override.featureId = studentFeature.id;
+    override.platformFeatureId = studentFeature.id;
     override.overrideType = OverrideTypeEnum.CUSTOM_LIMIT;
     override.limitValue = quotaGranted.toString();
     override.customPrice = amountCharged;

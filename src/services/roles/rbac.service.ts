@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { DataSource } from 'typeorm';
-import { UserRole } from '../../models/entities/rbac/user-role.entity';
+import { SchoolUserRole } from '../../models/entities/rbac/school-user-role.entity';
 import { RolePermission } from '../../models/entities/rbac/role-permission.entity';
 import { ModuleOperationPermission } from '../../models/entities/rbac/module-operation-permission.entity';
 
@@ -11,7 +11,7 @@ export class RBACService {
   async hasPermission(userId: string, permissionKey: string): Promise<boolean> {
     // This query joins user roles -> role permissions -> permissions to check if key exists
     const result = await this.dataSource
-      .getRepository(UserRole)
+      .getRepository(SchoolUserRole)
       .createQueryBuilder('ur')
       .innerJoin(RolePermission, 'rp', 'rp.role_id = ur.role_id')
       .innerJoin(ModuleOperationPermission, 'p', 'p.id = rp.permission_id')
@@ -28,7 +28,7 @@ export class RBACService {
 
   async getAllUserPermissions(userId: string): Promise<string[]> {
     const permissions = await this.dataSource
-      .getRepository(UserRole)
+      .getRepository(SchoolUserRole)
       .createQueryBuilder('ur')
       .innerJoin(RolePermission, 'rp', 'rp.role_id = ur.role_id')
       .innerJoin(ModuleOperationPermission, 'p', 'p.id = rp.permission_id')

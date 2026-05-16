@@ -64,3 +64,42 @@ export class CreateModuleMasterDto {
   @IsOptional()
   isMenuGroup?: boolean;
 }
+
+export class CreateOperationMasterDto {
+  @ApiProperty({ example: 'Create', description: 'Action name' })
+  @IsString()
+  @IsNotEmpty()
+  name: string;
+
+  @ApiProperty({ example: 'CREATE', description: 'Unique action code' })
+  @IsString()
+  @IsNotEmpty()
+  code: string;
+
+  @ApiPropertyOptional({ example: 'Ability to create new records', description: 'Action description' })
+  @IsString()
+  @IsOptional()
+  description?: string;
+}
+
+export class AssignPermissionDto {
+  @ApiProperty({ example: '1', description: 'Module ID' })
+  @IsString()
+  @IsNotEmpty()
+  moduleId: string;
+
+  @ApiProperty({ example: '1', description: 'Operation ID' })
+  @IsString()
+  @IsNotEmpty()
+  operationId: string;
+
+  @ApiProperty({ example: 'attendance:create', description: 'The unique permission key string' })
+  @IsString()
+  @IsNotEmpty()
+  key: string;
+
+  @ApiPropertyOptional({ example: 'Can take attendance for students', description: 'Description' })
+  @IsString()
+  @IsOptional()
+  description?: string;
+}

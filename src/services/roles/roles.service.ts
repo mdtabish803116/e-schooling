@@ -8,9 +8,8 @@ import { Role } from '../../models/entities/rbac/role.entity';
 import { RolePermission } from '../../models/entities/rbac/role-permission.entity';
 import { ModuleOperationPermission } from '../../models/entities/rbac/module-operation-permission.entity';
 import { ModuleMaster } from '../../models/entities/rbac/module-master.entity';
-import { OperationMaster } from '../../models/entities/rbac/operation-master.entity';
 import { PlatformFeature } from '../../models/entities/entitlement/platform-feature.entity';
-import { SchoolMember } from '../../models/entities/school/school-member.entity';
+import { SchoolOwnerMember } from '../../models/entities/school/school_owner_members.entity';
 import { EntitlementService } from '../entitlement/entitlement.service';
 import { AuthContext } from '../../interfaces/auth-context.interface';
 import { CreateRoleDto } from '../../interfaces/request/role/create-role.dto';
@@ -20,11 +19,11 @@ export class RolesService {
   constructor(
     private dataSource: DataSource,
     private entitlementService: EntitlementService,
-  ) {}
+  ) { }
 
   private async assertOwnershipOfSchool(ownerId: string, schoolId: string): Promise<void> {
     const membership = await this.dataSource
-      .getRepository(SchoolMember)
+      .getRepository(SchoolOwnerMember)
       .findOne({ where: { schoolOwnerId: ownerId, schoolId } });
 
     if (!membership) {

@@ -4,11 +4,11 @@ import * as bcrypt from 'bcrypt';
 import { Student } from '../../models/entities/student/student.entity';
 import { StudentEnrollment } from '../../models/entities/student/student-enrollment.entity';
 import { School } from '../../models/entities/school/school.entity';
-import { SchoolMember } from '../../models/entities/school/school-member.entity';
+import { SchoolOwnerMember } from '../../models/entities/school/school_owner_members.entity';
 import { Class } from '../../models/entities/academic/class.entity';
 import { Section } from '../../models/entities/academic/section.entity';
 import { AcademicSession } from '../../models/entities/academic/academic-session.entity';
-import { UserRole } from '../../models/entities/rbac/user-role.entity';
+import { SchoolUserRole } from '../../models/entities/rbac/school-user-role.entity';
 import { Role } from '../../models/entities/rbac/role.entity';
 import { StudentAdmissionDto } from '../../interfaces/request/student/student-admission.dto';
 import { AuthContext } from '../../interfaces/auth-context.interface';
@@ -16,10 +16,10 @@ import { EnrollmentStatusEnum, EnrollmentTypeEnum } from '../../models/enums/enu
 
 @Injectable()
 export class StudentAdmissionsService {
-  constructor(private dataSource: DataSource) {}
+  constructor(private dataSource: DataSource) { }
 
   private async assertOwnership(ownerId: string, schoolId: string): Promise<School> {
-    const membership = await this.dataSource.getRepository(SchoolMember).findOne({
+    const membership = await this.dataSource.getRepository(SchoolOwnerMember).findOne({
       where: { schoolOwnerId: ownerId, schoolId }
     });
 
@@ -35,7 +35,7 @@ export class StudentAdmissionsService {
   private async generateStudentCode(schoolCode: string): Promise<string> {
     const randomSuffix = Math.floor(1000 + Math.random() * 9000);
     const code = `${schoolCode}-${randomSuffix}`;
-    
+
     // Check uniqueness
     const existing = await this.dataSource.getRepository(Student).findOne({ where: { studentCode: code } });
     if (existing) {
@@ -66,7 +66,7 @@ export class StudentAdmissionsService {
 
     try {
       const studentCode = await this.generateStudentCode(school.internalSchoolCode);
-      
+
       // Default password is DOB (plain string) hashed
       const salt = await bcrypt.genSalt(10);
       const passwordHash = await bcrypt.hash(dto.dob, salt);
@@ -102,7 +102,7 @@ export class StudentAdmissionsService {
       await queryRunner.manager.save(enrollment);
 
       // Assign Role to Student
-      const userRole = new UserRole();
+      const userRole = new SchoolUserRole();
       userRole.userId = savedStudent.id;
       userRole.roleId = dto.roleId;
       userRole.createdById = caller.id;

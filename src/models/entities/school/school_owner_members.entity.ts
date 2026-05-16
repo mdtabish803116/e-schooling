@@ -1,9 +1,9 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
 import { SchoolOwnerRoleEnum, InvitationStatusEnum } from '../../enums/enums';
 
-@Entity({ name: 'school_members', schema: 'e_schooling' })
+@Entity({ name: 'school_owner_members', schema: 'e_schooling' })
 @Index(['schoolId', 'schoolOwnerId'], { unique: true })
-export class SchoolMember {
+export class SchoolOwnerMember {
   @PrimaryGeneratedColumn('increment', { type: 'bigint', comment: 'Primary key' })
   id: string;
 

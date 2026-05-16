@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { PlatformFeature } from '../../models/entities/entitlement/platform-feature.entity';
-import { PlanFeature } from '../../models/entities/entitlement/plan-feature.entity';
+import { SubscriptionPlanPlatformFeatureMapping } from '../../models/entities/entitlement/subscription-plan-platform-feature-mapping.entity';
 import { SchoolFeatureOverride } from '../../models/entities/entitlement/school-feature-override.entity';
 import { FeatureUsageLog } from '../../models/entities/entitlement/feature-usage-log.entity';
 import { SchoolSubscription } from '../../models/entities/subscription/school-subscription.entity';
@@ -49,15 +49,15 @@ export class EntitlementService {
     }
 
     // Retrieve global plan feature baseline configuration
-    const planFeatureRepo = this.dataSource.getRepository(PlanFeature);
+    const planFeatureRepo = this.dataSource.getRepository(SubscriptionPlanPlatformFeatureMapping);
     const planFeature = await planFeatureRepo.findOne({
-      where: { planId: subscription.planId, featureId: feature.id },
+      where: { subscriptionPlanId: subscription.subscriptionPlanId, platformFeatureId: feature.id },
     });
 
     // Retrieve per-school specific override priority rules
     const overrideRepo = this.dataSource.getRepository(SchoolFeatureOverride);
     const overrides = await overrideRepo.find({
-      where: { schoolId, featureId: feature.id },
+      where: { schoolId, platformFeatureId: feature.id },
       order: { createdAt: 'DESC' },
     });
 
@@ -109,7 +109,7 @@ export class EntitlementService {
         .createQueryBuilder('log')
         .select('SUM(CAST(log.usageCount AS BIGINT))', 'total')
         .where('log.schoolId = :schoolId', { schoolId })
-        .andWhere('log.featureId = :featureId', { featureId: feature.id })
+        .andWhere('log.platformFeatureId = :platformFeatureId', { platformFeatureId: feature.id })
         .andWhere('log.usageDate >= :startOfMonth', { startOfMonth })
         .getRawOne();
 
@@ -157,7 +157,7 @@ export class EntitlementService {
 
     const log = new FeatureUsageLog();
     log.schoolId = schoolId;
-    log.featureId = feature.id;
+    log.platformFeatureId = feature.id;
     log.usageCount = unitsConsumed.toString();
     log.usageDate = new Date();
     log.metadata = telemetryPayload || {};

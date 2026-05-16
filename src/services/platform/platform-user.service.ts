@@ -1,10 +1,10 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { DataSource, Like } from 'typeorm';
 import { School } from '../../models/entities/school/school.entity';
-import { SchoolOwner } from '../../models/entities/school/school-owner.entity';
 import { Student } from '../../models/entities/student/student.entity';
 import { SchoolUser } from '../../models/entities/school/school-user.entity';
 import { PaginationDto } from '../../interfaces/request/common/pagination.dto';
+import { SchoolOwner } from 'src/models/entities/school/school-owner.entity';
 
 @Injectable()
 export class PlatformUserService {
