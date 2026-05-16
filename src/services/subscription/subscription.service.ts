@@ -9,6 +9,8 @@ import { PlatformFeature } from '../../models/entities/entitlement/platform-feat
 import { FeaturePrice } from '../../models/entities/entitlement/feature-price.entity';
 import { Order, OrderMetadata } from '../../models/entities/finance/order.entity';
 import { Payment } from '../../models/entities/finance/payment.entity';
+import { Invoice } from '../../models/entities/finance/invoice.entity';
+import { Student } from '../../models/entities/student/student.entity';
 import { AuthContext } from '../../interfaces/auth-context.interface';
 import { 
   SubscriptionStatusEnum, 
@@ -369,5 +371,69 @@ export class SubscriptionsService {
     }
 
     return { message: 'Order still pending on Razorpay', rpStatus: rpOrder.status };
+  }
+
+  /**
+   * Returns a complete audit trail of orders and payments for a school.
+   */
+  async getBillingHistory(schoolId: string) {
+    const orders = await this.dataSource.getRepository(Order).find({
+      where: { schoolId },
+      order: { createdAt: 'DESC' },
+      relations: ['payments']
+    });
+
+    return { orders };
+  }
+
+  /**
+   * Returns a list of invoices for the school.
+   */
+  async listInvoices(schoolId: string) {
+    const invoiceRepo = this.dataSource.getRepository(Invoice);
+    const invoices = await invoiceRepo.find({
+      where: { schoolId },
+      order: { createdAt: 'DESC' }
+    });
+    return { invoices };
+  }
+
+  /**
+   * Calculates real-time usage against subscription limits.
+   */
+  async getUsageStats(schoolId: string) {
+    const sub = await this.dataSource.getRepository(SchoolSubscription).findOne({
+      where: { schoolId },
+      relations: ['subscriptionPlan']
+    });
+
+    if (!sub) throw new NotFoundException('Subscription not found');
+
+    // 1. Calculate Enrolled Students
+    const studentCount = await this.dataSource.getRepository(Student).count({
+      where: { schoolId, isActive: true }
+    });
+
+    // 2. Fetch Base Limit from Plan + Boosters
+    const baseLimit = sub.studentLimit || 0;
+    
+    // 3. Fetch specific metered features usage from EntitlementService if needed
+    // For now, focusing on the core student booster limit
+
+    return {
+      subscription: {
+        planName: sub.subscriptionPlan?.name || 'Custom',
+        status: sub.subscriptionState,
+        expiry: sub.currentPeriodEnd
+      },
+      usage: {
+        students: {
+          used: studentCount,
+          limit: baseLimit,
+          remaining: Math.max(0, baseLimit - studentCount),
+          utilizationPercentage: baseLimit > 0 ? (studentCount / baseLimit) * 100 : 0
+        }
+      }
+    };
   }
 }

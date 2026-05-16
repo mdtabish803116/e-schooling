@@ -100,6 +100,11 @@ export enum PermissionKeyEnum {
 
   PLATFORM_MODULES_VIEW = 'platform:modules:view',
   PLATFORM_MODULES_MANAGE = 'platform:modules:manage',
+
+  // Finance & Subscription
+  FINANCE_ORDER_VIEW   = 'finance:order:view',
+  FINANCE_INVOICE_VIEW = 'finance:invoice:view',
+  SUBSCRIPTION_VIEW    = 'subscription:view'
 }
 
 

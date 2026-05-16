@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Patch, Body, Param, UseGuards } from '@nestjs/common';
+import { Controller, Post, Get, Patch, Delete, Body, Param, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../../../shared/guards/jwt-auth.guard';
 import { CurrentUser } from '../../../../shared/decorators/current-user.decorator';
@@ -43,6 +43,17 @@ export class SchoolUsersController {
     @Body() dto: AssignRoleDto,
   ) {
     return this.schoolUsersService.assignRoles(caller, schoolId, userId, dto);
+  }
+
+  @ApiOperation({ summary: 'De-assign / Remove a role from a school user (Soft Delete)' })
+  @Delete(':userId/roles/:roleId')
+  async deassignRole(
+    @Param('schoolId') schoolId: string,
+    @Param('userId') userId: string,
+    @Param('roleId') roleId: string,
+    @CurrentUser() caller: AuthContext
+  ) {
+    return this.schoolUsersService.deassignRole(caller, schoolId, userId, roleId);
   }
 
   @ApiOperation({ summary: 'Upsert extended profile for a school user' })

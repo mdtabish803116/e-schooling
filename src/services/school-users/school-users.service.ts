@@ -15,30 +15,18 @@ import { AuthContext } from '../../interfaces/auth-context.interface';
 import { CreateSchoolUserDto } from '../../interfaces/request/school-user/create-school-user.dto';
 import { AssignRoleDto } from '../../interfaces/request/school-user/assign-role.dto';
 import { UpdateSchoolUserProfileDto } from '../../interfaces/request/school-user/update-school-user-profile.dto';
-import { UserTypeEnum } from '../../models/enums/enums';
 
 @Injectable()
 export class SchoolUsersService {
   constructor(private dataSource: DataSource) { }
 
-  /**
-   * Verifies that the caller (school_owner) owns/manages the given school.
-   * Throws ForbiddenException if not.
-   */
   private async assertOwnershipOfSchool(ownerId: string, schoolId: string): Promise<void> {
     const membership = await this.dataSource
       .getRepository(SchoolOwnerMember)
       .findOne({ where: { schoolOwnerId: ownerId, schoolId } });
-
-    if (!membership) {
-      throw new ForbiddenException('You do not have access to this school');
-    }
+    if (!membership) throw new ForbiddenException('You do not have access to this school');
   }
 
-  /**
-   * Create a new school user (teacher / accountant / admin / staff)
-   * under the specified school. Use the assign-roles endpoint to assign roles.
-   */
   async createUser(caller: AuthContext, schoolId: string, dto: CreateSchoolUserDto) {
     await this.assertOwnershipOfSchool(caller.id, schoolId);
 
@@ -47,43 +35,28 @@ export class SchoolUsersService {
     await queryRunner.startTransaction();
 
     try {
-      // Check username uniqueness within school
       const existingUsername = await queryRunner.manager.findOne(SchoolUser, {
         where: { schoolId, username: dto.username },
       });
-      if (existingUsername) {
-        throw new BadRequestException('Username already exists in this school');
-      }
+      if (existingUsername) throw new BadRequestException('Username already exists in this school');
 
-      // Hash password
       const salt = await bcrypt.genSalt(10);
       const passwordHash = await bcrypt.hash(dto.password, salt);
 
-      // Create school user
       const user = new SchoolUser();
+      Object.assign(user, dto);
       user.schoolId = schoolId;
       user.schoolOwnerId = caller.id;
-      user.name = dto.name;
-      user.username = dto.username;
-      user.phone = dto.phone ?? '';
       user.passwordHash = passwordHash;
-      user.userType = dto.userType;
       user.isActive = true;
       user.createdById = caller.id;
 
       const savedUser = await queryRunner.manager.save(user);
-
       await queryRunner.commitTransaction();
 
       return {
         message: 'School user created successfully',
-        user: {
-          id: savedUser.id,
-          name: savedUser.name,
-          username: savedUser.username,
-          userType: savedUser.userType,
-          isActive: savedUser.isActive,
-        },
+        user: { id: savedUser.id, name: savedUser.name, username: savedUser.username }
       };
     } catch (error) {
       await queryRunner.rollbackTransaction();
@@ -93,30 +66,22 @@ export class SchoolUsersService {
     }
   }
 
-  /**
-   * List all users in a school (for the school owner).
-   */
   async listUsers(caller: AuthContext, schoolId: string) {
     await this.assertOwnershipOfSchool(caller.id, schoolId);
-
     const users = await this.dataSource.getRepository(SchoolUser).find({
       where: { schoolId, isActive: true },
-      select: ['id', 'name', 'username', 'phone', 'userType', 'isActive', 'createdAt'],
       order: { createdAt: 'DESC' },
     });
-
     return { users };
   }
 
   /**
-   * Assign one or more roles to a school user.
+   * Assign Roles to a User (Handles Reactivation for Soft-Deleted records).
    */
   async assignRoles(caller: AuthContext, schoolId: string, userId: string, dto: AssignRoleDto) {
     await this.assertOwnershipOfSchool(caller.id, schoolId);
 
-    const user = await this.dataSource.getRepository(SchoolUser).findOne({
-      where: { id: userId, schoolId },
-    });
+    const user = await this.dataSource.getRepository(SchoolUser).findOne({ where: { id: userId, schoolId } });
     if (!user) throw new NotFoundException('School user not found');
 
     const queryRunner = this.dataSource.createQueryRunner();
@@ -125,26 +90,26 @@ export class SchoolUsersService {
 
     try {
       for (const roleId of dto.roleIds) {
-        const role = await queryRunner.manager.findOne(SchoolRole, {
-          where: { id: roleId, schoolId },
-        });
-        if (!role) throw new NotFoundException(`Role ${roleId} not found in this school`);
+        const role = await queryRunner.manager.findOne(SchoolRole, { where: { id: roleId, schoolId } });
+        if (!role) throw new NotFoundException(`Role ${roleId} not found`);
 
-        // Avoid duplicate assignment
-        const existing = await queryRunner.manager.findOne(SchoolUserRole, {
-          where: { userId, roleId },
-        });
-        if (!existing) {
-          const userRole = new SchoolUserRole();
-          userRole.userId = userId;
-          userRole.roleId = roleId;
-          userRole.createdById = caller.id;
-          await queryRunner.manager.save(userRole);
+        let mapping = await queryRunner.manager.findOne(SchoolUserRole, { where: { userId, roleId } });
+
+        if (mapping) {
+          mapping.isDeleted = false;
+          mapping.isActive = true;
+        } else {
+          mapping = new SchoolUserRole();
+          mapping.userId = userId;
+          mapping.roleId = roleId;
         }
+        mapping.createdById = caller.id;
+        mapping.updatedById = caller.id;
+        await queryRunner.manager.save(mapping);
       }
 
       await queryRunner.commitTransaction();
-      return { message: 'Roles assigned successfully' };
+      return { message: 'Roles assigned/reactivated successfully' };
     } catch (error) {
       await queryRunner.rollbackTransaction();
       throw error;
@@ -154,14 +119,27 @@ export class SchoolUsersService {
   }
 
   /**
-   * Upsert extended profile for a school user.
+   * De-assign / Deactivate a Role from a User (Soft Delete).
    */
-  async upsertUserProfile(caller: AuthContext, schoolId: string, userId: string, dto: UpdateSchoolUserProfileDto) {
+  async deassignRole(caller: AuthContext, schoolId: string, userId: string, roleId: string) {
     await this.assertOwnershipOfSchool(caller.id, schoolId);
 
-    const user = await this.dataSource.getRepository(SchoolUser).findOne({
-      where: { id: userId, schoolId },
-    });
+    const mappingRepo = this.dataSource.getRepository(SchoolUserRole);
+    const mapping = await mappingRepo.findOne({ where: { userId, roleId } });
+
+    if (mapping) {
+      mapping.isDeleted = true;
+      mapping.isActive = false;
+      mapping.updatedById = caller.id;
+      await mappingRepo.save(mapping);
+    }
+
+    return { message: 'Role de-assigned successfully (Soft Deleted)' };
+  }
+
+  async upsertUserProfile(caller: AuthContext, schoolId: string, userId: string, dto: UpdateSchoolUserProfileDto) {
+    await this.assertOwnershipOfSchool(caller.id, schoolId);
+    const user = await this.dataSource.getRepository(SchoolUser).findOne({ where: { id: userId, schoolId } });
     if (!user) throw new NotFoundException('School user not found');
 
     const profileRepo = this.dataSource.getRepository(SchoolUserProfile);
@@ -172,39 +150,17 @@ export class SchoolUsersService {
       profile.schoolUserId = userId;
     }
 
-    if (dto.fatherName !== undefined) profile.fatherName = dto.fatherName;
-    if (dto.motherName !== undefined) profile.motherName = dto.motherName;
-    if (dto.profilePicUrl !== undefined) profile.profilePicUrl = dto.profilePicUrl;
-    if (dto.dob !== undefined) profile.dob = dto.dob;
-    if (dto.aadhaarNumber !== undefined) profile.aadhaarNumber = dto.aadhaarNumber;
-    if (dto.yearsOfExperience !== undefined) profile.yearsOfExperience = dto.yearsOfExperience;
-    if (dto.previousOrganization !== undefined) profile.previousOrganization = dto.previousOrganization;
-    if (dto.expertise !== undefined) profile.expertise = dto.expertise;
-    if (dto.subjects !== undefined) profile.subjects = dto.subjects;
-
+    Object.assign(profile, dto);
     const savedProfile = await profileRepo.save(profile);
-
-    return {
-      message: 'User profile updated successfully',
-      profile: savedProfile,
-    };
+    return { message: 'User profile updated successfully', profile: savedProfile };
   }
 
-  /**
-   * Get school user profile.
-   */
   async getUserProfile(caller: AuthContext, schoolId: string, userId: string) {
     await this.assertOwnershipOfSchool(caller.id, schoolId);
-
-    const user = await this.dataSource.getRepository(SchoolUser).findOne({
-      where: { id: userId, schoolId },
-    });
+    const user = await this.dataSource.getRepository(SchoolUser).findOne({ where: { id: userId, schoolId } });
     if (!user) throw new NotFoundException('School user not found');
 
-    const profile = await this.dataSource.getRepository(SchoolUserProfile).findOne({
-      where: { schoolUserId: userId },
-    });
-
+    const profile = await this.dataSource.getRepository(SchoolUserProfile).findOne({ where: { schoolUserId: userId } });
     return { user, profile: profile || null };
   }
 }

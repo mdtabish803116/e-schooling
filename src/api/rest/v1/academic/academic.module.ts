@@ -2,10 +2,11 @@ import { Module } from '@nestjs/common';
 import { AcademicController } from './academic.controller';
 import { AcademicService } from '../../../../services/academic/academic.service';
 import { EntitlementService } from '../../../../services/entitlement/entitlement.service';
-import { RBACService } from '../../../../services/roles/rbac.service';
+import { RBACModule } from '../roles/rbac.module';
 
 @Module({
+  imports: [RBACModule],
   controllers: [AcademicController],
-  providers: [AcademicService, EntitlementService, RBACService],
+  providers: [AcademicService, EntitlementService],
 })
 export class AcademicModule {}

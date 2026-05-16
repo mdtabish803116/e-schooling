@@ -22,6 +22,9 @@ export class SchoolSubscription {
   @Column({ name: 'subscription_state', type: 'varchar', nullable: false, default: SubscriptionStatusEnum.TRIAL, comment: 'trial | active | expired | cancelled | suspended' })
   subscriptionState: SubscriptionStatusEnum;
 
+  @Column({ name: 'student_limit', type: 'integer', nullable: true, default: 0, comment: 'Current total allowed students (Plan + Boosters)' })
+  studentLimit: number;
+
   @Column({ name: 'billing_cycle', type: 'varchar', nullable: true, comment: 'Active billing cycle tier' })
   billingCycle: BillingCycleEnum;
 
