@@ -9,7 +9,7 @@ import { SchoolMember } from '../../models/entities/school/school-member.entity'
 import { SubscriptionPlan } from '../../models/entities/subscription/subscription-plan.entity';
 import { PlanPrice } from '../../models/entities/subscription/plan-price.entity';
 import { SchoolSubscription } from '../../models/entities/subscription/school-subscription.entity';
-import { SchoolAddon } from '../../models/entities/subscription/school-addon.entity';
+import { SchoolFeatureOverride } from '../../models/entities/entitlement/school-feature-override.entity';
 import { PlanFeature } from '../../models/entities/entitlement/plan-feature.entity';
 import { PlatformFeature } from '../../models/entities/entitlement/platform-feature.entity';
 import {
@@ -17,6 +17,8 @@ import {
   BillingCycleEnum,
   SubscriptionStatusEnum,
   AddonTypeEnum,
+  OverrideTypeEnum,
+  FeatureBillingCycleEnum,
 } from '../../models/enums/enums';
 import { AuthContext } from '../../interfaces/auth-context.interface';
 import { UpgradePlanDto } from '../../interfaces/request/subscription/upgrade-plan.dto';
@@ -101,25 +103,29 @@ export class SubscriptionsService {
 
     const now = new Date();
 
-    // Query dynamically calculated active add-on capacities
-    const activeAddonsSum = await this.dataSource
-      .getRepository(SchoolAddon)
-      .createQueryBuilder('addon')
-      .select('SUM(addon.quota)', 'total')
-      .where('addon.schoolId = :schoolId', { schoolId })
-      .andWhere('addon.addonState = :status', { status: 'active' })
-      .andWhere('addon.endAt >= :now', { now })
-      .getRawOne();
+    // Query dynamically calculated active boosters from Overrides
+    const activeBoosters = await this.dataSource.getRepository(SchoolFeatureOverride).find({
+      where: {
+        schoolId,
+        overrideType: OverrideTypeEnum.CUSTOM_LIMIT,
+        isActive: true,
+        isDeleted: false,
+      },
+    });
 
-    const activeBoosterQuota = parseInt(activeAddonsSum?.total || '0', 10);
+    // Sum up limit values (Boosters are additive to base limit in this logic)
+    let activeBoosterQuota = 0;
+    activeBoosters.forEach((b) => {
+      if (b.endDate === null || b.endDate >= now) {
+        activeBoosterQuota += parseInt(b.limitValue || '0', 10);
+      }
+    });
+
     const baseStudentLimit = plan.maxStudents;
     const effectiveStudentLimit = baseStudentLimit !== null ? baseStudentLimit + activeBoosterQuota : null;
 
-    // Fetch complete historical booster ledger
-    const boosterPacks = await this.dataSource.getRepository(SchoolAddon).find({
-      where: { schoolId },
-      order: { createdAt: 'DESC' },
-    });
+    // Fetch historical booster ledger (all custom limit overrides)
+    const boosterPacks = activeBoosters;
 
     // Look up enabled features natively mapped to this global plan via the Entitlement architecture
     const planFeatures = await this.dataSource
@@ -262,27 +268,39 @@ export class SubscriptionsService {
 
     const now = new Date();
     const expiry = new Date(now);
-    expiry.setMonth(expiry.getMonth() + 1); // Exact independent 1-month lifecycle
+    expiry.setMonth(expiry.getMonth() + 1);
 
-    const addon = new SchoolAddon();
-    addon.schoolId = schoolId;
-    addon.addonType = dto.addonType;
-    addon.quota = quotaGranted;
-    addon.pricePaid = amountCharged;
-    addon.addonState = 'active';
-    addon.startAt = now;
-    addon.endAt = expiry;
+    // Find the feature ID for "STUDENTS"
+    const studentFeature = await this.dataSource.getRepository(PlatformFeature).findOne({
+      where: { code: 'STUDENTS' }
+    });
 
-    const savedAddon = await this.dataSource.getRepository(SchoolAddon).save(addon);
+    if (!studentFeature) {
+      throw new NotFoundException('Student Limit feature configuration missing');
+    }
+
+    const override = new SchoolFeatureOverride();
+    override.schoolId = schoolId;
+    override.featureId = studentFeature.id;
+    override.overrideType = OverrideTypeEnum.CUSTOM_LIMIT;
+    override.limitValue = quotaGranted.toString();
+    override.customPrice = amountCharged;
+    override.billingCycle = FeatureBillingCycleEnum.ONE_TIME;
+    override.startDate = now;
+    override.endDate = expiry;
+    override.remarks = `Purchased Booster: ${dto.addonType}`;
+    override.isActive = true;
+
+    const savedOverride = await this.dataSource.getRepository(SchoolFeatureOverride).save(override);
 
     return {
       message: `Capacity booster purchased successfully (+${quotaGranted} students)`,
       boosterDetails: {
-        id: savedAddon.id,
-        addonType: savedAddon.addonType,
-        quotaAdded: savedAddon.quota,
-        priceBilled: savedAddon.pricePaid,
-        validUntil: savedAddon.endAt,
+        id: savedOverride.id,
+        addonType: dto.addonType,
+        quotaAdded: quotaGranted,
+        priceBilled: amountCharged,
+        validUntil: savedOverride.endDate,
       },
     };
   }

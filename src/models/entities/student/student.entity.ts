@@ -1,4 +1,5 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Index, ManyToOne, JoinColumn } from 'typeorm';
+import { School } from '../school/school.entity';
 
 @Entity({ name: 'students', schema: 'e_schooling' })
 export class Student {
@@ -8,6 +9,10 @@ export class Student {
   @Index()
   @Column({ name: 'school_id', type: 'bigint', nullable: true, comment: 'Reference to School' })
   schoolId: string;
+
+  @ManyToOne(() => School)
+  @JoinColumn({ name: 'school_id' })
+  school: School;
 
   @Column({ name: 'admission_number', type: 'varchar', nullable: true, comment: 'Admission number' })
   admissionNumber: string;

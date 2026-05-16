@@ -15,8 +15,8 @@ export interface AuthContext {
 
   email: string;
 
-  /** 'school_owner' | 'school_user' | 'student' */
-  actorType: 'school_owner' | 'school_user' | 'student';
+  /** 'school_owner' | 'school_user' | 'student' | 'platform_user' */
+  actorType: 'school_owner' | 'school_user' | 'student' | 'platform_user';
 
   /**
    * For school_owner: undefined (owner can have multiple schools via school_members).

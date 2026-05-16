@@ -1,5 +1,6 @@
 import { Injectable, UnauthorizedException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
+import { Config } from '../../config/index';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { SchoolOwnerRegisterDto } from '../../interfaces/request/auth/school-owner-register.dto';
@@ -13,6 +14,11 @@ import { School } from '../../models/entities/school/school.entity';
 import { SchoolOwnerRoleEnum } from '../../models/enums/enums';
 import { SchoolUserLoginDto } from 'src/interfaces/request/auth/school-user-login.dto';
 import { StudentLoginDto } from 'src/interfaces/request/auth/student-login.dto';
+import { PlatformLoginDto } from 'src/interfaces/request/auth/platform-login.dto';
+import { PlatformRegisterDto } from 'src/interfaces/request/auth/platform-register.dto';
+import { PlatformUser } from '../../models/entities/platform/platform-user.entity';
+import { PlatformRole } from '../../models/entities/platform/platform-role.entity';
+import { PlatformUserRoleMapping } from '../../models/entities/platform/platform-user-role-mapping.entity';
 
 @Injectable()
 export class AuthService {
@@ -113,10 +119,11 @@ export class AuthService {
    */
   async schoolUserLogin(dto: SchoolUserLoginDto) {
     const school = await this.dataSource.getRepository(School).findOne({
-      where: { internalSchoolCode: dto.schoolCode, isActive: true, isDeleted: false }
+      where: { internalSchoolCode: dto.schoolCode, isDeleted: false }
     });
-    if (!school) {
-      throw new UnauthorizedException('Invalid school code');
+    
+    if (!school || !school.isActive) {
+      throw new UnauthorizedException('Your school is deactivated, blocked or deleted');
     }
 
     const user = await this.dataSource.getRepository(SchoolUser).findOne({
@@ -179,10 +186,11 @@ export class AuthService {
    */
   async studentLogin(dto: StudentLoginDto) {
     const school = await this.dataSource.getRepository(School).findOne({
-      where: { internalSchoolCode: dto.schoolCode, isActive: true, isDeleted: false }
+      where: { internalSchoolCode: dto.schoolCode, isDeleted: false }
     });
-    if (!school) {
-      throw new UnauthorizedException('Invalid school code');
+    
+    if (!school || !school.isActive) {
+      throw new UnauthorizedException('Your school is deactivated, blocked or deleted');
     }
 
     const student = await this.dataSource.getRepository(Student).findOne({
@@ -223,6 +231,108 @@ export class AuthService {
         lastName: student.lastName,
         roles: roleNames,
       }
+    };
+  }
+
+  /**
+   * Login as a Platform Admin
+   */
+  async platformLogin(dto: PlatformLoginDto) {
+    const user = await this.dataSource.getRepository(PlatformUser).findOne({
+      where: { email: dto.email, isActive: true, isDeleted: false },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    const isMatch = await bcrypt.compare(dto.password, user.passwordHash);
+    if (!isMatch) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    // Fetch platform roles
+    const userRoles = await this.dataSource.getRepository(PlatformUserRoleMapping).find({
+      where: { platformUserId: user.id, isActive: true, isDeleted: false }
+    });
+
+    let roleNames: string[] = [];
+    if (userRoles.length > 0) {
+      const roleIds = userRoles.map(ur => ur.platformRoleId);
+      const roleEntities = await this.dataSource.getRepository(PlatformRole).createQueryBuilder('role')
+        .where('role.id IN (:...roleIds)', { roleIds })
+        .getMany();
+      roleNames = roleEntities.map(r => r.name);
+    }
+
+    const payload = { 
+      sub: user.id, 
+      email: user.email, 
+      roles: roleNames, 
+      actorType: 'platform_user' as const 
+    };
+    const token = this.jwtService.sign(payload);
+
+    return {
+      token,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        roles: roleNames,
+      }
+    };
+  }
+
+  /**
+   * Register a new Platform Admin
+   */
+  async platformRegister(dto: PlatformRegisterDto, apiKey: string) {
+    const secretKey = Config.getPlatformRegisterApiKey();
+    if (apiKey !== secretKey) {
+      throw new ForbiddenException('Invalid platform registration key');
+    }
+    const existingUser = await this.dataSource.getRepository(PlatformUser).findOne({
+      where: { email: dto.email }
+    });
+
+    if (existingUser) {
+      throw new BadRequestException('Email already registered for platform');
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(dto.password, salt);
+
+    const user = new PlatformUser();
+    user.name = dto.name;
+    user.email = dto.email;
+    user.passwordHash = hashedPassword;
+    user.isActive = true;
+
+    const savedUser = await this.dataSource.getRepository(PlatformUser).save(user);
+
+    // Find or create 'ADMIN' role
+    let adminRole = await this.dataSource.getRepository(PlatformRole).findOne({
+      where: { name: 'ADMIN', isDeleted: false }
+    });
+
+    if (!adminRole) {
+      adminRole = new PlatformRole();
+      adminRole.name = 'ADMIN';
+      adminRole.description = 'Full platform access';
+      adminRole = await this.dataSource.getRepository(PlatformRole).save(adminRole);
+    }
+
+    // Assign the role
+    const mapping = new PlatformUserRoleMapping();
+    mapping.platformUserId = savedUser.id;
+    mapping.platformRoleId = adminRole.id;
+    await this.dataSource.getRepository(PlatformUserRoleMapping).save(mapping);
+
+    return {
+      message: 'Platform user registered successfully and assigned to ADMIN role',
+      id: savedUser.id,
+      email: savedUser.email
     };
   }
 }

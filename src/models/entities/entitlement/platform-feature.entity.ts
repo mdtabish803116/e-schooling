@@ -21,7 +21,7 @@ export class PlatformFeature {
   code: string;
 
   @Column({ name: 'description', type: 'text', nullable: true, comment: 'Capability documentation' })
-  description: string;
+  description?: string;
 
   @Column({
     name: 'feature_type',
@@ -49,6 +49,14 @@ export class PlatformFeature {
 
   @Column({ name: 'is_delete', type: 'boolean', nullable: false, default: false, comment: 'Soft delete marker' })
   isDeleted: boolean;
+
+  @Index()
+  @Column({ name: 'created_by_id', type: 'bigint', nullable: true, comment: 'Reference to Creator' })
+  createdById?: string;
+
+  @Index()
+  @Column({ name: 'updated_by_id', type: 'bigint', nullable: true, comment: 'Reference to Updater' })
+  updatedById?: string;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamp', comment: 'Creation timestamp' })
   createdAt: Date;

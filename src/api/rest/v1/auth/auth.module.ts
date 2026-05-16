@@ -12,7 +12,7 @@ import { Config } from '../../../../config/index';
     JwtModule.registerAsync({
       useFactory: () => ({
         secret: Config.getSecret('JWT_SECRET', String) || 'default_secret_please_change_in_production',
-        signOptions: { expiresIn: '7d' },
+        signOptions: { expiresIn: '1d' },
       }),
     }),
   ],

@@ -68,4 +68,12 @@ export class Config {
       api_secret: apiSecret,
     };
   }
+
+  static getPlatformRegisterApiKey(): string {
+    const key = this.getSecret('PLATFORM_REGISTRATION_KEY', String);
+    if (!key) {
+      throw new Error('PLATFORM_REGISTRATION_KEY is not defined in environment variables');
+    }
+    return key;
+  }
 }

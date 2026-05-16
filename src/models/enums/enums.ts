@@ -1,10 +1,8 @@
 
 /** Roles/types for school users (teachers, staff, etc.) */
 export enum UserTypeEnum {
-  ADMIN = 'admin',
-  TEACHER = 'teacher',
-  ACCOUNTANT = 'accountant',
-  STAFF = 'staff',
+  ACADEMIC = 'academic',
+  NON_ACADEMIC = 'non_academic',
 }
 
 /** Role for school owner in school_members table */
@@ -83,9 +81,25 @@ export enum PermissionKeyEnum {
   REPORTS_VIEW = 'reports:view',
 
   // School Users (manage staff)
-  SCHOOL_USERS_VIEW   = 'school_users:view',
-  SCHOOL_USERS_CREATE = 'school_users:create',
   SCHOOL_USERS_UPDATE = 'school_users:update',
+
+  // Platform Administration
+  PLATFORM_SCHOOLS_VIEW   = 'platform:schools:view',
+  PLATFORM_SCHOOLS_UPDATE = 'platform:schools:update',
+  PLATFORM_SCHOOLS_DELETE = 'platform:schools:delete',
+
+  PLATFORM_OWNERS_VIEW   = 'platform:owners:view',
+  PLATFORM_OWNERS_UPDATE = 'platform:owners:update',
+  PLATFORM_OWNERS_DELETE = 'platform:owners:delete',
+
+  PLATFORM_STUDENTS_VIEW = 'platform:students:view',
+  PLATFORM_STAFF_VIEW    = 'platform:staff:view',
+
+  PLATFORM_FEATURES_VIEW = 'platform:features:view',
+  PLATFORM_FEATURES_MANAGE = 'platform:features:manage',
+
+  PLATFORM_MODULES_VIEW = 'platform:modules:view',
+  PLATFORM_MODULES_MANAGE = 'platform:modules:manage',
 }
 
 

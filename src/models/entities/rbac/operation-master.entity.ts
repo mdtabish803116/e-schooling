@@ -13,18 +13,18 @@ export class OperationMaster {
   code: string;
 
   @Column({ name: 'description', type: 'text', nullable: true, comment: 'Action perimeter context' })
-  description: string;
+  description?: string;
 
   @Column({ name: 'is_active', type: 'boolean', nullable: false, default: true, comment: 'Active status toggle' })
   isActive: boolean;
 
   @Index()
   @Column({ name: 'created_by_id', type: 'bigint', nullable: true, comment: 'Creator tracking reference' })
-  createdById: string;
+  createdById?: string;
 
   @Index()
   @Column({ name: 'updated_by_id', type: 'bigint', nullable: true, comment: 'Updater tracking reference' })
-  updatedById: string;
+  updatedById?: string;
 
   @Column({ name: 'is_delete', type: 'boolean', nullable: false, default: false, comment: 'Soft delete marker' })
   isDeleted: boolean;

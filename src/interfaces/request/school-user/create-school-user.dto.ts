@@ -25,12 +25,12 @@ export class CreateSchoolUserDto {
   password: string;
 
   @ApiProperty({
-    enum: [UserTypeEnum.TEACHER, UserTypeEnum.ACCOUNTANT, UserTypeEnum.ADMIN, UserTypeEnum.STAFF],
-    example: UserTypeEnum.TEACHER,
+    enum: [UserTypeEnum.ACADEMIC, UserTypeEnum.NON_ACADEMIC],
+    example: UserTypeEnum.ACADEMIC,
     description: 'Primary user type',
   })
   @IsNotEmpty()
-  @IsEnum([UserTypeEnum.TEACHER, UserTypeEnum.ACCOUNTANT, UserTypeEnum.ADMIN, UserTypeEnum.STAFF])
+  @IsEnum([UserTypeEnum.ACADEMIC, UserTypeEnum.NON_ACADEMIC])
   userType: UserTypeEnum;
 
 }

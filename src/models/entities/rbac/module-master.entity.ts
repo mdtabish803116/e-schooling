@@ -13,21 +13,21 @@ export class ModuleMaster {
   code: string;
 
   @Column({ name: 'description', type: 'text', nullable: true, comment: 'Module domain capabilities description' })
-  description: string;
+  description?: string;
 
   @Index()
   @Column({ name: 'platform_feature_id', type: 'bigint', nullable: true, comment: 'Reference to underlying PlatformFeature metered/billed capability' })
-  platformFeatureId: string;
+  platformFeatureId?: string;
 
   @Index()
   @Column({ name: 'parent_module_id', type: 'bigint', nullable: true, comment: 'Self reference for nested menu tree' })
-  parentModuleId: string;
+  parentModuleId?: string;
 
   @Column({ name: 'route_path', type: 'varchar', nullable: true, comment: 'Frontend route path' })
-  routePath: string;
+  routePath?: string;
 
   @Column({ name: 'icon', type: 'varchar', nullable: true, comment: 'Menu icon identifier' })
-  icon: string;
+  icon?: string;
 
   @Column({ name: 'display_order', type: 'int', default: 0, comment: 'Order in sidebar' })
   displayOrder: number;
@@ -46,11 +46,11 @@ export class ModuleMaster {
 
   @Index()
   @Column({ name: 'created_by_id', type: 'bigint', nullable: true, comment: 'Creator tracking reference' })
-  createdById: string;
+  createdById?: string;
 
   @Index()
   @Column({ name: 'updated_by_id', type: 'bigint', nullable: true, comment: 'Updater tracking reference' })
-  updatedById: string;
+  updatedById?: string;
 
   @Column({ name: 'is_delete', type: 'boolean', nullable: false, default: false, comment: 'Soft delete marker' })
   isDeleted: boolean;

@@ -1,5 +1,5 @@
 import { Controller, Post, Get, Patch, Body, Param, UseGuards } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../../../shared/guards/jwt-auth.guard';
 import { CurrentUser } from '../../../../shared/decorators/current-user.decorator';
 import { SchoolsService } from '../../../../services/schools/schools.service';
@@ -15,6 +15,19 @@ export class SchoolsController {
   constructor(private readonly schoolsService: SchoolsService) { }
 
   @ApiOperation({ summary: 'Create a new school (post-login)' })
+  @ApiResponse({ 
+    status: 201, 
+    description: 'School created successfully',
+    schema: {
+      example: {
+        id: '1',
+        schoolName: 'Vidya Jyoti Public School',
+        internalSchoolCode: 'SCH-VIDYA-5542',
+        email: 'school@vidyajyoti.com',
+        isActive: true
+      }
+    }
+  })
   @Post()
   async createSchool(
     @CurrentUser() caller: AuthContext,
@@ -24,12 +37,36 @@ export class SchoolsController {
   }
 
   @ApiOperation({ summary: 'List all schools associated with the logged-in owner account' })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'List of schools retrieved',
+    schema: {
+      example: [
+        { id: '1', schoolName: 'Vidya Jyoti Public School', internalSchoolCode: 'SCH-VIDYA-5542', isActive: true },
+        { id: '2', schoolName: 'St. Xavier High', internalSchoolCode: 'SCH-XAVIER-1123', isActive: false }
+      ]
+    }
+  })
   @Get()
   async listSchools(@CurrentUser() caller: AuthContext) {
     return this.schoolsService.listSchools(caller);
   }
 
   @ApiOperation({ summary: 'Get details of a specific school' })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'School details retrieved',
+    schema: {
+      example: {
+        id: '1',
+        schoolName: 'Vidya Jyoti Public School',
+        internalSchoolCode: 'SCH-VIDYA-5542',
+        addressCity: 'New Delhi',
+        totalTeachers: 45,
+        isActive: true
+      }
+    }
+  })
   @Get(':schoolId')
   async getSchool(
     @CurrentUser() caller: AuthContext,
@@ -39,6 +76,17 @@ export class SchoolsController {
   }
 
   @ApiOperation({ summary: 'Update details of a specific school' })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'School updated successfully',
+    schema: {
+      example: {
+        id: '1',
+        schoolName: 'Vidya Jyoti Global School',
+        updatedAt: '2024-05-15T10:00:00Z'
+      }
+    }
+  })
   @Patch(':schoolId')
   async updateSchool(
     @CurrentUser() caller: AuthContext,

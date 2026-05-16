@@ -15,6 +15,7 @@ import { AuthContext } from '../../interfaces/auth-context.interface';
 import { CreateSchoolUserDto } from '../../interfaces/request/school-user/create-school-user.dto';
 import { AssignRoleDto } from '../../interfaces/request/school-user/assign-role.dto';
 import { UpdateSchoolUserProfileDto } from '../../interfaces/request/school-user/update-school-user-profile.dto';
+import { UserTypeEnum } from '../../models/enums/enums';
 
 @Injectable()
 export class SchoolUsersService {
@@ -117,7 +118,7 @@ export class SchoolUsersService {
       where: { id: userId, schoolId },
     });
     if (!user) throw new NotFoundException('School user not found');
-
+    
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();

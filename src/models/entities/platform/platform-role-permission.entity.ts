@@ -1,21 +1,17 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
-import { PlatformRoleEnum } from '../../enums/enums';
 
-@Entity({ name: 'platform_users', schema: 'e_schooling' })
-export class PlatformUser {
+@Entity({ name: 'platform_role_permissions', schema: 'e_schooling' })
+export class PlatformRolePermission {
   @PrimaryGeneratedColumn('increment', { type: 'bigint', comment: 'Primary key' })
   id: string;
 
-  @Column({ name: 'name', type: 'varchar', nullable: true, comment: 'User full name' })
-  name: string;
+  @Index()
+  @Column({ name: 'platform_role_id', type: 'bigint', nullable: false, comment: 'Reference to PlatformRole' })
+  platformRoleId: string;
 
-  @Index({ unique: true })
-  @Column({ name: 'email', type: 'varchar', nullable: true, comment: 'User email address' })
-  email: string;
-
-  @Column({ name: 'password_hash', type: 'varchar', nullable: true, comment: 'Hashed password' })
-  passwordHash: string;
-
+  @Index()
+  @Column({ name: 'permission_id', type: 'bigint', nullable: false, comment: 'Reference to ModuleOperationPermission' })
+  permissionId: string;
 
   @Column({ name: 'is_active', type: 'boolean', nullable: false, default: true, comment: 'Active status toggle' })
   isActive: boolean;

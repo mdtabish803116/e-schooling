@@ -1,5 +1,6 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Index, ManyToOne, JoinColumn } from 'typeorm';
 import { UserTypeEnum } from '../../enums/enums';
+import { School } from './school.entity';
 
 @Entity({ name: 'school_users', schema: 'e_schooling' })
 export class SchoolUser {
@@ -9,6 +10,10 @@ export class SchoolUser {
   @Index()
   @Column({ name: 'school_id', type: 'bigint', nullable: true, comment: 'Reference to School' })
   schoolId: string;
+
+  @ManyToOne(() => School)
+  @JoinColumn({ name: 'school_id' })
+  school: School;
 
   @Index()
   @Column({ name: 'school_owner_id', type: 'bigint', nullable: true, comment: 'Reference to SchoolOwner' })

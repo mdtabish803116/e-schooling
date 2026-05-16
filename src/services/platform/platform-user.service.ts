@@ -1,0 +1,182 @@
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { DataSource, Like } from 'typeorm';
+import { School } from '../../models/entities/school/school.entity';
+import { SchoolOwner } from '../../models/entities/school/school-owner.entity';
+import { Student } from '../../models/entities/student/student.entity';
+import { SchoolUser } from '../../models/entities/school/school-user.entity';
+import { PaginationDto } from '../../interfaces/request/common/pagination.dto';
+
+@Injectable()
+export class PlatformUserService {
+  constructor(private dataSource: DataSource) {}
+
+  /**
+   * List all schools with pagination and search
+   */
+  async listAllSchools(query: PaginationDto) {
+    const { page = 1, limit = 10, search } = query;
+    const skip = (page - 1) * limit;
+
+    const [items, total] = await this.dataSource.getRepository(School).findAndCount({
+      where: search ? { schoolName: Like(`%${search}%`) } : {},
+      order: { createdAt: 'DESC' },
+      take: limit,
+      skip: skip,
+    });
+
+    return {
+      items,
+      total,
+      page,
+      lastPage: Math.ceil(total / limit),
+    };
+  }
+
+  /**
+   * List all school owners with pagination and search
+   */
+  async listAllOwners(query: PaginationDto) {
+    const { page = 1, limit = 10, search } = query;
+    const skip = (page - 1) * limit;
+
+    const [items, total] = await this.dataSource.getRepository(SchoolOwner).findAndCount({
+      where: search ? [
+        { fullName: Like(`%${search}%`) },
+        { email: Like(`%${search}%`) }
+      ] : {},
+      order: { createdAt: 'DESC' },
+      take: limit,
+      skip: skip,
+    });
+
+    return {
+      items,
+      total,
+      page,
+      lastPage: Math.ceil(total / limit),
+    };
+  }
+
+  /**
+   * Toggle school active status
+   */
+  async toggleSchoolStatus(schoolId: string, isActive: boolean) {
+    const school = await this.dataSource.getRepository(School).findOne({ where: { id: schoolId } });
+    if (!school) throw new NotFoundException('School not found');
+    
+    school.isActive = isActive;
+    return this.dataSource.getRepository(School).save(school);
+  }
+
+  /**
+   * Toggle owner active status
+   */
+  async toggleOwnerStatus(ownerId: string, isActive: boolean) {
+    const owner = await this.dataSource.getRepository(SchoolOwner).findOne({ where: { id: ownerId } });
+    if (!owner) throw new NotFoundException('Owner not found');
+    
+    owner.isActive = isActive;
+    return this.dataSource.getRepository(SchoolOwner).save(owner);
+  }
+
+  /**
+   * Soft delete a school
+   */
+  async deleteSchool(schoolId: string) {
+    const school = await this.dataSource.getRepository(School).findOne({ where: { id: schoolId } });
+    if (!school) throw new NotFoundException('School not found');
+    
+    school.isDeleted = true;
+    return this.dataSource.getRepository(School).save(school);
+  }
+
+  /**
+   * Soft delete an owner
+   */
+  async deleteOwner(ownerId: string) {
+    const owner = await this.dataSource.getRepository(SchoolOwner).findOne({ where: { id: ownerId } });
+    if (!owner) throw new NotFoundException('Owner not found');
+    
+    owner.isDeleted = true;
+    return this.dataSource.getRepository(SchoolOwner).save(owner);
+  }
+
+  /**
+   * List students across all schools with filters
+   */
+  async listAllStudents(query: PaginationDto & { schoolId?: string }) {
+    const { page = 1, limit = 10, search, schoolId } = query;
+    const skip = (page - 1) * limit;
+
+    const where: any = {};
+    if (schoolId) where.schoolId = schoolId;
+    
+    if (search) {
+      return this.dataSource.getRepository(Student).findAndCount({
+        where: [
+          { ...where, firstName: Like(`%${search}%`) },
+          { ...where, lastName: Like(`%${search}%`) },
+          { ...where, studentCode: Like(`%${search}%`) }
+        ],
+        relations: ['school'],
+        order: { createdAt: 'DESC' },
+        take: limit,
+        skip: skip,
+      });
+    }
+
+    const [items, total] = await this.dataSource.getRepository(Student).findAndCount({
+      where,
+      relations: ['school'],
+      order: { createdAt: 'DESC' },
+      take: limit,
+      skip: skip,
+    });
+
+    return {
+      items,
+      total,
+      page,
+      lastPage: Math.ceil(total / limit),
+    };
+  }
+
+  /**
+   * List school users (teachers/staff) across all schools
+   */
+  async listAllStaff(query: PaginationDto & { schoolId?: string }) {
+    const { page = 1, limit = 10, search, schoolId } = query;
+    const skip = (page - 1) * limit;
+
+    const where: any = {};
+    if (schoolId) where.schoolId = schoolId;
+    
+    if (search) {
+      return this.dataSource.getRepository(SchoolUser).findAndCount({
+        where: [
+          { ...where, name: Like(`%${search}%`) },
+          { ...where, username: Like(`%${search}%`) }
+        ],
+        relations: ['school'],
+        order: { createdAt: 'DESC' },
+        take: limit,
+        skip: skip,
+      });
+    }
+
+    const [items, total] = await this.dataSource.getRepository(SchoolUser).findAndCount({
+      where,
+      relations: ['school'],
+      order: { createdAt: 'DESC' },
+      take: limit,
+      skip: skip,
+    });
+
+    return {
+      items,
+      total,
+      page,
+      lastPage: Math.ceil(total / limit),
+    };
+  }
+}

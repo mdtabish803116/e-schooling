@@ -10,9 +10,10 @@ import { GeoModule } from './v1/geo/geo.module';
 import { AcademicModule } from './v1/academic/academic.module';
 import { StudentModule } from './v1/student/student.module';
 import { SystemModule } from './v1/system/system.module';
+import { PlatformModule } from './v1/platform/platform.module';
 
 @Module({
-  imports: [CloudinaryModule, AuthModule, SchoolsModule, SchoolUsersModule, RolesModule, SubscriptionsModule, EntitlementModule, GeoModule, AcademicModule, StudentModule, SystemModule],
+  imports: [CloudinaryModule, AuthModule, SchoolsModule, SchoolUsersModule, RolesModule, SubscriptionsModule, EntitlementModule, GeoModule, AcademicModule, StudentModule, SystemModule, PlatformModule],
   controllers: [],
   providers: [],
 })
