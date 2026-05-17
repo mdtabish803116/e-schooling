@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { ModuleMaster } from '../../models/entities/rbac/module-master.entity';
 import { EntitlementService } from '../entitlement/entitlement.service';
-import { RBACService } from '../roles/rbac.service';
+import { RBACService } from '../school-roles/rbac.service';
 import { PlatformFeature } from '../../models/entities/entitlement/platform-feature.entity';
 
 @Injectable()

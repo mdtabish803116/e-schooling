@@ -12,10 +12,10 @@ import { PlatformFeature } from '../../models/entities/entitlement/platform-feat
 import { SchoolOwnerMember } from '../../models/entities/school/school-owner-member.entity';
 import { EntitlementService } from '../entitlement/entitlement.service';
 import { AuthContext } from '../../interfaces/auth-context.interface';
-import { CreateRoleDto } from '../../interfaces/request/role/create-role.dto';
+import { CreateSchoolRoleDto } from '../../interfaces/request/school-role/create-school-role.dto';
 
 @Injectable()
-export class RolesService {
+export class SchoolRolesService {
   constructor(
     private dataSource: DataSource,
     private entitlementService: EntitlementService,
@@ -32,9 +32,9 @@ export class RolesService {
   }
 
   /**
-   * Step 1: Create a basic Role metadata.
+   * Step 1: Create a basic School Role metadata.
    */
-  async createRole(caller: AuthContext, schoolId: string, dto: CreateRoleDto) {
+  async createSchoolRole(caller: AuthContext, schoolId: string, dto: CreateSchoolRoleDto) {
     await this.assertOwnershipOfSchool(caller.id, schoolId);
 
     const role = new SchoolRole();
@@ -46,55 +46,55 @@ export class RolesService {
     const savedRole = await this.dataSource.getRepository(SchoolRole).save(role);
 
     return {
-      message: 'Role created successfully. You can now assign permissions to it.',
+      message: 'School role created successfully. You can now assign permissions to it.',
       role: { id: savedRole.id, name: savedRole.name }
     };
   }
 
   /**
-   * Update Role metadata.
+   * Update School Role metadata.
    */
-  async updateRole(caller: AuthContext, schoolId: string, roleId: string, dto: { name?: string, description?: string }) {
+  async updateSchoolRole(caller: AuthContext, schoolId: string, schoolRoleId: string, dto: { name?: string, description?: string }) {
     await this.assertOwnershipOfSchool(caller.id, schoolId);
 
     const roleRepo = this.dataSource.getRepository(SchoolRole);
-    const role = await roleRepo.findOne({ where: { id: roleId, schoolId } });
-    if (!role) throw new NotFoundException('Role not found');
+    const role = await roleRepo.findOne({ where: { id: schoolRoleId, schoolId } });
+    if (!role) throw new NotFoundException('School role not found');
 
     if (dto.name !== undefined) role.name = dto.name;
     if (dto.description !== undefined) role.description = dto.description;
     role.updatedById = caller.id;
 
     await roleRepo.save(role);
-    return { message: 'Role updated successfully' };
+    return { message: 'School role updated successfully' };
   }
 
   /**
-   * Soft delete / Deactivate a Role.
+   * Soft delete / Deactivate a School Role.
    */
-  async deactivateRole(caller: AuthContext, schoolId: string, roleId: string) {
+  async deactivateSchoolRole(caller: AuthContext, schoolId: string, schoolRoleId: string) {
     await this.assertOwnershipOfSchool(caller.id, schoolId);
 
     const roleRepo = this.dataSource.getRepository(SchoolRole);
-    const role = await roleRepo.findOne({ where: { id: roleId, schoolId } });
-    if (!role) throw new NotFoundException('Role not found');
+    const role = await roleRepo.findOne({ where: { id: schoolRoleId, schoolId } });
+    if (!role) throw new NotFoundException('School role not found');
 
     role.isDeleted = true;
     role.isActive = false;
     role.updatedById = caller.id;
 
     await roleRepo.save(role);
-    return { message: 'Role deactivated successfully (Soft Deleted)' };
+    return { message: 'School role deactivated successfully (Soft Deleted)' };
   }
 
   /**
-   * Step 2: Assign Granular Permissions to a Role.
+   * Step 2: Assign Granular Permissions to a School Role.
    */
-  async assignPermissionsToRole(caller: AuthContext, schoolId: string, roleId: string, permissionIds: string[]) {
+  async assignPermissionsToSchoolRole(caller: AuthContext, schoolId: string, schoolRoleId: string, permissionIds: string[]) {
     await this.assertOwnershipOfSchool(caller.id, schoolId);
 
-    const role = await this.dataSource.getRepository(SchoolRole).findOne({ where: { id: roleId, schoolId } });
-    if (!role) throw new NotFoundException('Role not found');
+    const role = await this.dataSource.getRepository(SchoolRole).findOne({ where: { id: schoolRoleId, schoolId } });
+    if (!role) throw new NotFoundException('School role not found');
 
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
@@ -104,7 +104,7 @@ export class RolesService {
       for (const pId of permissionIds) {
         // Soft-Upsert: If mapping exists but is deleted/inactive, reactivate it.
         let mapping = await queryRunner.manager.findOne(SchoolRolePermission, {
-          where: { roleId, permissionId: pId }
+          where: { roleId: schoolRoleId, permissionId: pId }
         });
 
         if (mapping) {
@@ -112,7 +112,7 @@ export class RolesService {
           mapping.isActive = true;
         } else {
           mapping = new SchoolRolePermission();
-          mapping.roleId = roleId;
+          mapping.roleId = schoolRoleId;
           mapping.permissionId = pId;
         }
         mapping.createdById = caller.id;
@@ -130,13 +130,13 @@ export class RolesService {
   }
 
   /**
-   * Deactivate/Remove a permission from a Role (Soft Delete).
+   * Deactivate/Remove a permission from a School Role (Soft Delete).
    */
-  async removePermissionFromRole(caller: AuthContext, schoolId: string, roleId: string, permissionId: string) {
+  async removePermissionFromSchoolRole(caller: AuthContext, schoolId: string, schoolRoleId: string, permissionId: string) {
     await this.assertOwnershipOfSchool(caller.id, schoolId);
 
     const mappingRepo = this.dataSource.getRepository(SchoolRolePermission);
-    const mapping = await mappingRepo.findOne({ where: { roleId, permissionId } });
+    const mapping = await mappingRepo.findOne({ where: { roleId: schoolRoleId, permissionId } });
 
     if (mapping) {
       mapping.isDeleted = true;
@@ -144,13 +144,13 @@ export class RolesService {
       await mappingRepo.save(mapping);
     }
 
-    return { message: 'Permission removed from role successfully (Soft Deleted)' };
+    return { message: 'Permission removed from school role successfully (Soft Deleted)' };
   }
 
   /**
-   * List all roles in a school.
+   * List all school roles in a school.
    */
-  async listRoles(caller: AuthContext, schoolId: string) {
+  async listSchoolRoles(caller: AuthContext, schoolId: string) {
     await this.assertOwnershipOfSchool(caller.id, schoolId);
 
     const roles = await this.dataSource.getRepository(SchoolRole).find({

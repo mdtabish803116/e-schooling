@@ -1,6 +1,6 @@
 import { Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { RBACService } from '../../services/roles/rbac.service';
+import { RBACService } from '../../services/school-roles/rbac.service';
 import { PERMISSION_KEY } from '../decorators/permission.decorator';
 
 @Injectable()

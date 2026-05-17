@@ -13,7 +13,7 @@ import { SchoolRole } from '../../models/entities/rbac/school-role.entity';
 import { SchoolUserProfile } from '../../models/entities/school/school-user-profile.entity';
 import { AuthContext } from '../../interfaces/auth-context.interface';
 import { CreateSchoolUserDto } from '../../interfaces/request/school-user/create-school-user.dto';
-import { AssignRoleDto } from '../../interfaces/request/school-user/assign-role.dto';
+import { AssignSchoolRoleDto } from '../../interfaces/request/school-user/assign-school-role.dto';
 import { UpdateSchoolUserProfileDto } from '../../interfaces/request/school-user/update-school-user-profile.dto';
 
 @Injectable()
@@ -76,9 +76,9 @@ export class SchoolUsersService {
   }
 
   /**
-   * Assign Roles to a User (Handles Reactivation for Soft-Deleted records).
+   * Assign School Roles to a User (Handles Reactivation for Soft-Deleted records).
    */
-  async assignRoles(caller: AuthContext, schoolId: string, userId: string, dto: AssignRoleDto) {
+  async assignSchoolRoles(caller: AuthContext, schoolId: string, userId: string, dto: AssignSchoolRoleDto) {
     await this.assertOwnershipOfSchool(caller.id, schoolId);
 
     const user = await this.dataSource.getRepository(SchoolUser).findOne({ where: { id: userId, schoolId } });
@@ -89,11 +89,11 @@ export class SchoolUsersService {
     await queryRunner.startTransaction();
 
     try {
-      for (const roleId of dto.roleIds) {
-        const role = await queryRunner.manager.findOne(SchoolRole, { where: { id: roleId, schoolId } });
-        if (!role) throw new NotFoundException(`Role ${roleId} not found`);
+      for (const schoolRoleId of dto.roleIds) {
+        const role = await queryRunner.manager.findOne(SchoolRole, { where: { id: schoolRoleId, schoolId } });
+        if (!role) throw new NotFoundException(`School role ${schoolRoleId} not found`);
 
-        let mapping = await queryRunner.manager.findOne(SchoolUserRole, { where: { userId, roleId } });
+        let mapping = await queryRunner.manager.findOne(SchoolUserRole, { where: { userId, roleId: schoolRoleId } });
 
         if (mapping) {
           mapping.isDeleted = false;
@@ -101,7 +101,7 @@ export class SchoolUsersService {
         } else {
           mapping = new SchoolUserRole();
           mapping.userId = userId;
-          mapping.roleId = roleId;
+          mapping.roleId = schoolRoleId;
         }
         mapping.createdById = caller.id;
         mapping.updatedById = caller.id;
@@ -109,7 +109,7 @@ export class SchoolUsersService {
       }
 
       await queryRunner.commitTransaction();
-      return { message: 'Roles assigned/reactivated successfully' };
+      return { message: 'School roles assigned/reactivated successfully' };
     } catch (error) {
       await queryRunner.rollbackTransaction();
       throw error;
@@ -119,13 +119,13 @@ export class SchoolUsersService {
   }
 
   /**
-   * De-assign / Deactivate a Role from a User (Soft Delete).
+   * De-assign / Deactivate a School Role from a User (Soft Delete).
    */
-  async deassignRole(caller: AuthContext, schoolId: string, userId: string, roleId: string) {
+  async deassignSchoolRole(caller: AuthContext, schoolId: string, userId: string, schoolRoleId: string) {
     await this.assertOwnershipOfSchool(caller.id, schoolId);
 
     const mappingRepo = this.dataSource.getRepository(SchoolUserRole);
-    const mapping = await mappingRepo.findOne({ where: { userId, roleId } });
+    const mapping = await mappingRepo.findOne({ where: { userId, roleId: schoolRoleId } });
 
     if (mapping) {
       mapping.isDeleted = true;
@@ -134,7 +134,7 @@ export class SchoolUsersService {
       await mappingRepo.save(mapping);
     }
 
-    return { message: 'Role de-assigned successfully (Soft Deleted)' };
+    return { message: 'School role de-assigned successfully (Soft Deleted)' };
   }
 
   async upsertUserProfile(caller: AuthContext, schoolId: string, userId: string, dto: UpdateSchoolUserProfileDto) {

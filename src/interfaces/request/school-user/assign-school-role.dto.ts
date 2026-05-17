@@ -1,10 +1,10 @@
 import { IsArray, IsNotEmpty, IsString } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
-export class AssignRoleDto {
+export class AssignSchoolRoleDto {
   @ApiProperty({
     example: ['1', '3'],
-    description: 'List of Role IDs to assign to the school user',
+    description: 'List of School Role IDs to assign to the school user',
     type: [String],
   })
   @IsNotEmpty()

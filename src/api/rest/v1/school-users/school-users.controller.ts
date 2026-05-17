@@ -5,7 +5,7 @@ import { CurrentUser } from '../../../../shared/decorators/current-user.decorato
 import { SchoolUsersService } from '../../../../services/school-users/school-users.service';
 import type { AuthContext } from '../../../../interfaces/auth-context.interface';
 import { CreateSchoolUserDto } from '../../../../interfaces/request/school-user/create-school-user.dto';
-import { AssignRoleDto } from '../../../../interfaces/request/school-user/assign-role.dto';
+import { AssignSchoolRoleDto } from '../../../../interfaces/request/school-user/assign-school-role.dto';
 import { UpdateSchoolUserProfileDto } from '../../../../interfaces/request/school-user/update-school-user-profile.dto';
 
 @ApiTags('School Users')
@@ -34,26 +34,26 @@ export class SchoolUsersController {
     return this.schoolUsersService.listUsers(caller, schoolId);
   }
 
-  @ApiOperation({ summary: 'Assign one or more roles to a school user' })
-  @Post(':userId/assign-roles')
-  async assignRoles(
+  @ApiOperation({ summary: 'Assign one or more school roles to a school user' })
+  @Post(':userId/assign-school-roles')
+  async assignSchoolRoles(
     @Param('schoolId') schoolId: string,
     @Param('userId') userId: string,
     @CurrentUser() caller: AuthContext,
-    @Body() dto: AssignRoleDto,
+    @Body() dto: AssignSchoolRoleDto,
   ) {
-    return this.schoolUsersService.assignRoles(caller, schoolId, userId, dto);
+    return this.schoolUsersService.assignSchoolRoles(caller, schoolId, userId, dto);
   }
 
-  @ApiOperation({ summary: 'De-assign / Remove a role from a school user (Soft Delete)' })
-  @Delete(':userId/roles/:roleId')
-  async deassignRole(
+  @ApiOperation({ summary: 'De-assign / Remove a school role from a school user (Soft Delete)' })
+  @Delete(':userId/school-roles/:schoolRoleId')
+  async deassignSchoolRole(
     @Param('schoolId') schoolId: string,
     @Param('userId') userId: string,
-    @Param('roleId') roleId: string,
+    @Param('schoolRoleId') schoolRoleId: string,
     @CurrentUser() caller: AuthContext
   ) {
-    return this.schoolUsersService.deassignRole(caller, schoolId, userId, roleId);
+    return this.schoolUsersService.deassignSchoolRole(caller, schoolId, userId, schoolRoleId);
   }
 
   @ApiOperation({ summary: 'Upsert extended profile for a school user' })
@@ -77,4 +77,3 @@ export class SchoolUsersController {
     return this.schoolUsersService.getUserProfile(caller, schoolId, userId);
   }
 }
-

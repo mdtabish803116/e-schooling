@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { RBACService } from '../../../../services/roles/rbac.service';
+import { RBACService } from '../../../../services/school-roles/rbac.service';
 
 @Module({
   providers: [RBACService],

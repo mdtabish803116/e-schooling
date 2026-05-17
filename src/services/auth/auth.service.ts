@@ -11,7 +11,7 @@ import { Student } from '../../models/entities/student/student.entity';
 import { SchoolUserRole } from '../../models/entities/rbac/school-user-role.entity';
 import { SchoolRole } from '../../models/entities/rbac/school-role.entity';
 import { School } from '../../models/entities/school/school.entity';
-import { SchoolOwnerRoleEnum, BillingCycleEnum, FeatureTypeEnum, UsageUnitEnum, PlanCodeEnum } from '../../models/enums/enums';
+import { SchoolOwnerRoleEnum } from '../../models/enums/enums';
 import { SchoolUserLoginDto } from 'src/interfaces/request/auth/school-user-login.dto';
 import { StudentLoginDto } from 'src/interfaces/request/auth/student-login.dto';
 import { PlatformLoginDto } from 'src/interfaces/request/auth/platform-login.dto';
@@ -21,15 +21,6 @@ import { PlatformRole } from '../../models/entities/platform/platform-role.entit
 import { PlatformUserRoleMapping } from '../../models/entities/platform/platform-user-role-mapping.entity';
 import { SchoolOwner } from 'src/models/entities/school/school-owner.entity';
 
-// Seeding Imports
-import { PlatformFeature } from '../../models/entities/entitlement/platform-feature.entity';
-import { FeaturePrice } from '../../models/entities/entitlement/feature-price.entity';
-import { ModuleMaster } from '../../models/entities/rbac/module-master.entity';
-import { OperationMaster } from '../../models/entities/rbac/operation-master.entity';
-import { ModuleOperationPermission } from '../../models/entities/rbac/module-operation-permission.entity';
-import { SubscriptionPlan } from '../../models/entities/subscription/subscription-plan.entity';
-import { SubscriptionPlanPrice } from '../../models/entities/subscription/subscription-plan-price.entity';
-import { SubscriptionPlanPlatformFeatureMapping } from '../../models/entities/entitlement/subscription-plan-platform-feature-mapping.entity';
 
 @Injectable()
 export class AuthService {
