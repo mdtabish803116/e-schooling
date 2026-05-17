@@ -1,8 +1,8 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
-import { State } from '../../models/entities/system/geo/state.entity';
-import { District } from '../../models/entities/system/geo/district.entity';
-import { Place } from '../../models/entities/system/geo/place.entity';
+import { State } from '../../models/entities/geo/state.entity';
+import { District } from '../../models/entities/geo/district.entity';
+import { Place } from '../../models/entities/geo/place.entity';
 import { CreatePlaceDto } from '../../interfaces/request/geo/create-place.dto';
 
 @Injectable()

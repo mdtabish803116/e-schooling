@@ -4,7 +4,7 @@ import { DataSource } from 'typeorm';
 import { Config } from '../../../config/index';
 import { RedisConnectionService } from '../redis/redis-connection.service';
 import { QueueNames } from './queue.constants';
-import { BackGroundJob } from '../../../models/entities/system/background_jobs.entity';
+import { BackGroundJob } from '../../../models/entities/background-job/background_jobs.entity';
 import { JobStatusEnum, JobTypeEnum } from '../../../models/enums/enums';
 import { NotificationProcessor } from '../processors/notification.processor';
 import { ImportExportProcessor } from '../processors/import-export.processor';
@@ -25,7 +25,7 @@ export class QueueConsumerService implements OnModuleInit, OnModuleDestroy {
     private readonly cleanupProcessor: CleanupProcessor,
     private readonly paymentReconciliationProcessor: PaymentReconciliationProcessor,
     private readonly queueProducerService: QueueProducerService,
-  ) {}
+  ) { }
 
   async onModuleInit() {
     const serverMode = Config.getSecret('SERVER_MODE', String) || 'rest';

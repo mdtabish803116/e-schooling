@@ -1,7 +1,7 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { QueueProducerService } from './queues/queue-producer.service';
-import { BackGroundJob } from '../../models/entities/system/background_jobs.entity';
+import { BackGroundJob } from '../../models/entities/background-job/background_jobs.entity';
 import { JobTypeEnum, JobStatusEnum } from '../../models/enums/enums';
 import { Queue } from 'bullmq';
 import { RedisConnectionService } from './redis/redis-connection.service';
@@ -14,7 +14,7 @@ export class BackgroundJobService {
     private readonly dataSource: DataSource,
     private readonly queueProducerService: QueueProducerService,
     private readonly redisConnectionService: RedisConnectionService,
-  ) {}
+  ) { }
 
   /**
    * Adds an immediate execution job
@@ -124,7 +124,7 @@ export class BackgroundJobService {
 
     const connection = this.redisConnectionService.getConnection();
     const queue = new Queue(job.queueName, { connection });
-    
+
     await queue.add(job.jobType, job.payload, {
       jobId: job.jobId,
       attempts: job.maxAttempts,

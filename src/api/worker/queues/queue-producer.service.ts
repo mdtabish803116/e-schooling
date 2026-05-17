@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Queue, JobsOptions } from 'bullmq';
 import { DataSource } from 'typeorm';
 import { RedisConnectionService } from '../redis/redis-connection.service';
-import { BackGroundJob } from '../../../models/entities/system/background_jobs.entity';
+import { BackGroundJob } from '../../../models/entities/background-job/background_jobs.entity';
 import { JobTypeEnum, JobStatusEnum } from '../../../models/enums/enums';
 
 @Injectable()
@@ -13,7 +13,7 @@ export class QueueProducerService {
   constructor(
     private readonly dataSource: DataSource,
     private readonly redisConnectionService: RedisConnectionService,
-  ) {}
+  ) { }
 
   /**
    * Lazy load or fetch cached BullMQ Queue client
