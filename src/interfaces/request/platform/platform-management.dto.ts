@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsOptional, IsBoolean } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsBoolean, IsArray } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreatePlatformFeatureDto {
@@ -7,10 +7,10 @@ export class CreatePlatformFeatureDto {
   @IsNotEmpty()
   name: string;
 
-  @ApiProperty({ example: 'WHATSAPP', description: 'Unique feature code' })
+  @ApiPropertyOptional({ example: 'WHATSAPP', description: 'Unique feature code (internally generated if not provided)' })
   @IsString()
-  @IsNotEmpty()
-  code: string;
+  @IsOptional()
+  code?: string;
 
   @ApiPropertyOptional({ example: 'Enables WhatsApp messaging for attendance and fees', description: 'Detailed description' })
   @IsString()
@@ -24,10 +24,10 @@ export class CreateModuleMasterDto {
   @IsNotEmpty()
   name: string;
 
-  @ApiProperty({ example: 'ATTENDANCE', description: 'Unique module code' })
+  @ApiPropertyOptional({ example: 'ATTENDANCE', description: 'Unique module code (internally generated if not provided)' })
   @IsString()
-  @IsNotEmpty()
-  code: string;
+  @IsOptional()
+  code?: string;
 
   @ApiPropertyOptional({ example: 'Track student and teacher daily attendance', description: 'Description' })
   @IsString()
@@ -71,10 +71,10 @@ export class CreateOperationMasterDto {
   @IsNotEmpty()
   name: string;
 
-  @ApiProperty({ example: 'CREATE', description: 'Unique action code' })
+  @ApiPropertyOptional({ example: 'CREATE', description: 'Unique action code (internally generated if not provided)' })
   @IsString()
-  @IsNotEmpty()
-  code: string;
+  @IsOptional()
+  code?: string;
 
   @ApiPropertyOptional({ example: 'Ability to create new records', description: 'Action description' })
   @IsString()
@@ -88,15 +88,10 @@ export class AssignPermissionDto {
   @IsNotEmpty()
   moduleId: string;
 
-  @ApiProperty({ example: '1', description: 'Operation ID' })
-  @IsString()
+  @ApiProperty({ example: ['1', '2'], description: 'List of Operation IDs', type: [String] })
+  @IsArray()
   @IsNotEmpty()
-  operationId: string;
-
-  @ApiProperty({ example: 'attendance:create', description: 'The unique permission key string' })
-  @IsString()
-  @IsNotEmpty()
-  key: string;
+  operationIds: string[];
 
   @ApiPropertyOptional({ example: 'Can take attendance for students', description: 'Description' })
   @IsString()

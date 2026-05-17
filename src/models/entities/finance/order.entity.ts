@@ -9,6 +9,7 @@ export interface OrderMetadata {
   featureName?: string;
   addonType?: AddonTypeEnum;
   billingCycle?: BillingCycleEnum;
+  activationStrategy?: 'immediate' | 'queue' | 'parallel';
 }
 
 @Entity({ name: 'orders', schema: 'e_schooling' })

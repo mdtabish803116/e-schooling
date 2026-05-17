@@ -70,17 +70,19 @@ export class EntitlementService {
       order: { createdAt: 'DESC' },
     });
 
-    // Check if an unexpired active override governs execution
-    const activeOverride = overrides.find((o) => {
-      const started = !o.startDate || o.startDate <= now;
-      const unexpired = !o.endDate || o.endDate >= now;
-      return started && unexpired;
-    });
-
     // Precedence rule application
     let isEnabled = planFeature?.isEnabled ?? false;
-    let quotaLimitStr = planFeature?.limitValue ?? null;
+    let baseLimit = planFeature?.limitValue ? parseInt(planFeature.limitValue, 10) : null;
     let appliedRuleType = 'GlobalPlanBaseline';
+
+    // Retrieve and evaluate all active overrides
+    const activeLimitOverrides = overrides.filter((o) => {
+      const started = !o.startDate || o.startDate <= now;
+      const unexpired = !o.endDate || o.endDate >= now;
+      return o.isActive && !o.isDeleted && started && unexpired;
+    });
+
+    const activeOverride = activeLimitOverrides.find((o) => o.overrideType === OverrideTypeEnum.DISABLE || o.overrideType === OverrideTypeEnum.ENABLE || o.overrideType === OverrideTypeEnum.CUSTOM_LIMIT);
 
     if (activeOverride) {
       appliedRuleType = `TenantOverride:${activeOverride.overrideType}`;
@@ -89,11 +91,20 @@ export class EntitlementService {
       } else {
         isEnabled = true;
       }
+    }
 
-      // If override provides a specific quota ceiling, apply it
-      if (activeOverride.limitValue !== null) {
-        quotaLimitStr = activeOverride.limitValue;
+    // Accumulate all active booster limit override values
+    let boosterLimitSum = 0;
+    for (const o of activeLimitOverrides) {
+      if (o.overrideType === OverrideTypeEnum.CUSTOM_LIMIT && o.limitValue) {
+        boosterLimitSum += parseInt(o.limitValue, 10);
       }
+    }
+
+    // If there is any purchased active booster capacity, automatically enable access!
+    if (boosterLimitSum > 0) {
+      isEnabled = true;
+      appliedRuleType = 'TenantOverride:CUSTOM_LIMIT_BOOSTER';
     }
 
     if (!isEnabled) {
@@ -105,10 +116,13 @@ export class EntitlementService {
       };
     }
 
-    // If resource is metered and has a strict usage ceiling, calculate cumulative monthly metrics
-    let currentUsageCount = 0;
-    const limitValue = quotaLimitStr ? parseInt(quotaLimitStr, 10) : null;
+    // Determine absolute total limit ceiling (Base Plan Limit + Active Booster Packs)
+    let limitValue: number | null = null;
+    if (baseLimit !== null || boosterLimitSum > 0) {
+      limitValue = (baseLimit ?? 0) + boosterLimitSum;
+    }
 
+    let currentUsageCount = 0;
     if (feature.isMetered && limitValue !== null) {
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 

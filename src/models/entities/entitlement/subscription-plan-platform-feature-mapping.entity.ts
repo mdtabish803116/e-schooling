@@ -39,7 +39,7 @@ export class SubscriptionPlanPlatformFeatureMapping {
   limitValue: string | null;
 
   @Column({ name: 'extra_metadata', type: 'jsonb', nullable: true, comment: 'Extensible plan configuration details' })
-  extraMetadata: Record<string, any>;
+  extraMetadata: Record<string, unknown>;
 
   @Column({ name: 'is_active', type: 'boolean', nullable: false, default: true, comment: 'Active status toggle' })
   isActive: boolean;

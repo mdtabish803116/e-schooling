@@ -137,7 +137,9 @@ export enum PlanCodeEnum {
 
 export enum AddonTypeEnum {
   STUDENT_BOOSTER_50 = 'STUDENT_BOOSTER_50',
-  STUDENT_BOOSTER_100 = 'STUDENT_BOOSTER_100'
+  STUDENT_BOOSTER_100 = 'STUDENT_BOOSTER_100',
+  WHATSAPP_BOOSTER_100 = 'WHATSAPP_BOOSTER_100',
+  WHATSAPP_BOOSTER_1000 = 'WHATSAPP_BOOSTER_1000',
 }
 
 export enum PaymentGatewayEnum {
@@ -247,6 +249,7 @@ export enum OverrideTypeEnum {
 
 export enum FeatureBillingCycleEnum {
   MONTHLY = 'MONTHLY',
+  QUARTERLY = 'QUARTERLY',
   YEARLY = 'YEARLY',
   ONE_TIME = 'ONE_TIME',
 }

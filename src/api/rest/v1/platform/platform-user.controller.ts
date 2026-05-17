@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Patch, Delete, Body, Query, Param, UseGuards } from '@nestjs/common';
+import { Controller, Post, Get, Patch, Delete, Body, Query, Param, UseGuards, Headers } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { PlatformService } from '../../../../services/platform/platform.service';
 import { PlatformUserService } from '../../../../services/platform/platform-user.service';
@@ -75,6 +75,13 @@ export class PlatformUserController {
     return this.platformService.assignPermission(dto);
   }
 
+  @ApiOperation({ summary: 'Soft delete / Deactivate permission mapping' })
+  @Delete('permissions/:id')
+  @Permission(PermissionKeyEnum.PLATFORM_FEATURES_MANAGE)
+  async removePermission(@Param('id') id: string) {
+    return this.platformService.removePermission(id);
+  }
+
   // --- Schools & Owners ---
 
   @ApiOperation({ summary: 'List all schools' })
@@ -135,5 +142,11 @@ export class PlatformUserController {
   @Permission(PermissionKeyEnum.PLATFORM_STAFF_VIEW)
   async listStaff(@Query() query: PaginationDto, @Query('schoolId') schoolId?: string) {
     return this.userService.listAllStaff({ ...query, schoolId });
+  }
+
+  @ApiOperation({ summary: 'Seed initial platform metadata (internal)' })
+  @Post('seed')
+  async platformSeed(@Headers('x-api-key') apiKey: string) {
+    return this.platformService.seedPlatformData(apiKey);
   }
 }

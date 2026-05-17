@@ -34,7 +34,7 @@ export class StudentAdmissionsController {
   })
   @Post()
   @Permission(PermissionKeyEnum.STUDENTS_ADMISSION)
-  @Feature('STUDENTS') 
+  @Feature('STUDENT_MANAGEMENT') 
   async admitStudent(
     @CurrentUser() caller: AuthContext,
     @Param('schoolId') schoolId: string,

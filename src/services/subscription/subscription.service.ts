@@ -7,6 +7,7 @@ import { SchoolOwnerMember } from '../../models/entities/school/school-owner-mem
 import { SchoolFeatureOverride } from '../../models/entities/entitlement/school-feature-override.entity';
 import { PlatformFeature } from '../../models/entities/entitlement/platform-feature.entity';
 import { FeaturePrice } from '../../models/entities/entitlement/feature-price.entity';
+import { SubscriptionPlanPlatformFeatureMapping } from '../../models/entities/entitlement/subscription-plan-platform-feature-mapping.entity';
 import { Order, OrderMetadata } from '../../models/entities/finance/order.entity';
 import { Payment } from '../../models/entities/finance/payment.entity';
 import { Invoice } from '../../models/entities/finance/invoice.entity';
@@ -21,7 +22,8 @@ import {
   OrderStatusEnum,
   PaymentStatusEnum,
   PaymentGatewayEnum,
-  OrderItemTypeEnum
+  OrderItemTypeEnum,
+  PlanCodeEnum
 } from '../../models/enums/enums';
 import { InitiateOrderDto, VerifyPaymentDto } from '../../interfaces/request/subscription/initiate-order.dto';
 import { PaymentService } from '../payment/payment.service';
@@ -150,6 +152,22 @@ export class SubscriptionsService {
   async initiateOrder(caller: AuthContext, dto: InitiateOrderDto) {
     await this.assertOwnership(caller.id, dto.schoolId);
 
+    // Retrieve the active subscription of the school branch
+    const subRepo = this.dataSource.getRepository(SchoolSubscription);
+    const subscription = await subRepo.findOne({
+      where: { schoolId: dto.schoolId, isActive: true },
+      relations: ['subscriptionPlan']
+    });
+
+    // Block booster/feature purchases for Free Trial schools
+    if (!subscription || subscription.subscriptionPlan?.code === PlanCodeEnum.TRIAL) {
+      if (dto.addonType || dto.featureId) {
+        throw new BadRequestException(
+          'Schools on Free Trial are not allowed to purchase boosters/addons. Please upgrade to a paid subscription plan (Basic, Standard, or Premium) first.'
+        );
+      }
+    }
+
     let amount = 0;
     let metadata: OrderMetadata;
 
@@ -165,15 +183,33 @@ export class SubscriptionsService {
         type: OrderItemTypeEnum.PLAN, 
         planId: plan.id, 
         billingCycle: dto.billingCycle, 
-        planName: plan.name 
+        planName: plan.name,
+        activationStrategy: dto.activationStrategy || 'queue'
       };
     } 
     else if (dto.featureId && dto.featureBillingCycle) {
+      // Enforce billing cycle alignment (feature cycle must match parent subscription cycle)
+      if (subscription && dto.featureBillingCycle !== subscription.billingCycle) {
+        throw new BadRequestException(
+          `Your individual feature cycle selection (${dto.featureBillingCycle}) must match your active parent subscription cycle (${subscription.billingCycle}).`
+        );
+      }
+
       const feature = await this.dataSource.getRepository(PlatformFeature).findOne({ where: { id: dto.featureId } });
       const price = await this.dataSource.getRepository(FeaturePrice).findOne({
         where: { platformFeatureId: dto.featureId, billingCycle: dto.featureBillingCycle }
       });
       if (!feature || !price) throw new BadRequestException('Invalid feature or billing cycle selection');
+
+      // Dependency Rule: If buying any individual feature except Academic Management, Academic Management MUST be active!
+      if (feature.code !== 'ACADEMIC_MANAGEMENT') {
+        const isAcademicActive = await this.hasFeatureActive(dto.schoolId, 'ACADEMIC_MANAGEMENT');
+        if (!isAcademicActive) {
+          throw new BadRequestException(
+            `You cannot purchase ${feature.name} individually without having Academic Management active. Please purchase Academic Management first or upgrade to a plan that includes it (Standard/Premium).`
+          );
+        }
+      }
 
       amount = price.price;
       metadata = { 
@@ -184,17 +220,27 @@ export class SubscriptionsService {
       };
     }
     else if (dto.addonType) {
-      if (dto.addonType === AddonTypeEnum.STUDENT_BOOSTER_50) amount = 500;
-      else if (dto.addonType === AddonTypeEnum.STUDENT_BOOSTER_100) amount = 800;
-      else throw new BadRequestException('Invalid addon type');
-      
+      // Dynamically resolve booster pricing based on the parent subscription cycle from the database
+      const feature = await this.dataSource.getRepository(PlatformFeature).findOne({ where: { code: dto.addonType } });
+      if (!feature) throw new BadRequestException('Invalid addon feature.');
+
+      const price = await this.dataSource.getRepository(FeaturePrice).findOne({
+        where: { platformFeatureId: feature.id, billingCycle: subscription!.billingCycle }
+      });
+      if (!price) {
+        throw new BadRequestException(
+          `No booster pricing found for addon ${dto.addonType} under cycle ${subscription!.billingCycle}.`
+        );
+      }
+
+      amount = price.price;
       metadata = { 
         type: OrderItemTypeEnum.ADDON, 
         addonType: dto.addonType 
       };
     } 
     else {
-      throw new BadRequestException('Either planId or addonType must be provided');
+      throw new BadRequestException('Either planId, featureId, or addonType must be provided');
     }
 
     // Create Local Order
@@ -280,7 +326,9 @@ export class SubscriptionsService {
       const now = new Date();
 
       if (type === OrderItemTypeEnum.PLAN) {
-        const { planId, billingCycle } = order.metadata;
+        const { planId, billingCycle, activationStrategy } = order.metadata;
+        const strategy = activationStrategy || 'queue';
+
         let subscription = await queryRunner.manager.findOne(SchoolSubscription, {
           where: { schoolId: order.schoolId }
         });
@@ -292,20 +340,46 @@ export class SubscriptionsService {
         if (!subscription) {
           subscription = new SchoolSubscription();
           subscription.schoolId = order.schoolId;
+          subscription.subscriptionPlanId = planId!;
+          subscription.subscriptionState = SubscriptionStatusEnum.ACTIVE;
+          subscription.billingCycle = billingCycle!;
+          subscription.currentPeriodStart = now;
+          subscription.currentPeriodEnd = expiresAt;
+          subscription.isActive = true;
+          await queryRunner.manager.save(subscription);
+        } else {
+          const isOngoing = subscription.isActive && subscription.subscriptionState === SubscriptionStatusEnum.ACTIVE && subscription.currentPeriodEnd > now;
+
+          if (isOngoing && strategy === 'queue') {
+            // Queue transition: Extends the school's period end by the new plan duration
+            const nextStart = new Date(subscription.currentPeriodEnd);
+            const nextEnd = new Date(nextStart);
+            nextEnd.setMonth(nextStart.getMonth() + months);
+
+            subscription.subscriptionPlanId = planId!;
+            subscription.billingCycle = billingCycle!;
+            subscription.currentPeriodEnd = nextEnd;
+          } else if (isOngoing && strategy === 'parallel') {
+            // Parallel/Concurrent transition: Upgrades base limits immediately
+            subscription.subscriptionPlanId = planId!;
+            subscription.subscriptionState = SubscriptionStatusEnum.ACTIVE;
+            subscription.billingCycle = billingCycle!;
+            subscription.currentPeriodStart = now;
+            subscription.currentPeriodEnd = expiresAt;
+          } else {
+            // Immediate transition: Starts right now, overwriting previous period
+            subscription.subscriptionPlanId = planId!;
+            subscription.subscriptionState = SubscriptionStatusEnum.ACTIVE;
+            subscription.billingCycle = billingCycle!;
+            subscription.currentPeriodStart = now;
+            subscription.currentPeriodEnd = expiresAt;
+          }
+          await queryRunner.manager.save(subscription);
         }
-
-        subscription.subscriptionPlanId = planId!;
-        subscription.subscriptionState = SubscriptionStatusEnum.ACTIVE;
-        subscription.billingCycle = billingCycle!;
-        subscription.currentPeriodStart = now;
-        subscription.currentPeriodEnd = expiresAt;
-        subscription.isActive = true;
-
-        await queryRunner.manager.save(subscription);
       } 
       else if (type === OrderItemTypeEnum.FEATURE) {
         const { featureId, billingCycle } = order.metadata;
-        const months = billingCycle === BillingCycleEnum.YEARLY ? 12 : 1;
+        const months = billingCycle === BillingCycleEnum.YEARLY ? 12 : (billingCycle === BillingCycleEnum.QUARTERLY ? 3 : 1);
         const expiresAt = new Date(now);
         expiresAt.setMonth(now.getMonth() + months);
 
@@ -315,30 +389,70 @@ export class SubscriptionsService {
         override.overrideType = OverrideTypeEnum.ENABLE;
         override.startDate = now;
         override.endDate = expiresAt;
-        override.billingCycle = billingCycle === BillingCycleEnum.YEARLY ? FeatureBillingCycleEnum.YEARLY : FeatureBillingCycleEnum.MONTHLY;
+
+        if (billingCycle === BillingCycleEnum.YEARLY) {
+          override.billingCycle = FeatureBillingCycleEnum.YEARLY;
+        } else if (billingCycle === BillingCycleEnum.QUARTERLY) {
+          override.billingCycle = FeatureBillingCycleEnum.QUARTERLY;
+        } else {
+          override.billingCycle = FeatureBillingCycleEnum.MONTHLY;
+        }
         override.isActive = true;
+
+        // If the platform feature is metered, set the appropriate limit value for the billing cycle length
+        const feature = await queryRunner.manager.findOne(PlatformFeature, { where: { id: featureId } });
+        if (feature && feature.isMetered) {
+          if (feature.code === 'WHATSAPP_REMINDERS') {
+            const baseLimit = 1000; // 1,000 free messages per month
+            override.limitValue = (baseLimit * months).toString();
+          } else {
+            override.limitValue = '1000'; // Default limit
+          }
+          override.overrideType = OverrideTypeEnum.CUSTOM_LIMIT; // Evaluates with limit limits inside evaluateFeatureAccess
+        }
 
         await queryRunner.manager.save(override);
       }
       else if (type === OrderItemTypeEnum.ADDON) {
         const { addonType } = order.metadata;
-        let quota = addonType === AddonTypeEnum.STUDENT_BOOSTER_50 ? 50 : 100;
-
-        const studentFeature = await queryRunner.manager.findOne(PlatformFeature, { where: { code: 'STUDENTS' } });
-        if (studentFeature) {
-          const override = new SchoolFeatureOverride();
-          override.schoolId = order.schoolId;
-          override.platformFeatureId = studentFeature.id;
-          override.overrideType = OverrideTypeEnum.CUSTOM_LIMIT;
-          override.limitValue = quota.toString();
-          override.customPrice = order.amount;
-          override.billingCycle = FeatureBillingCycleEnum.ONE_TIME;
-          override.startDate = now;
-          const expiry = new Date(now);
-          expiry.setMonth(expiry.getMonth() + 1);
-          override.endDate = expiry;
-          override.isActive = true;
-          await queryRunner.manager.save(override);
+        
+        if (addonType === AddonTypeEnum.STUDENT_BOOSTER_50 || addonType === AddonTypeEnum.STUDENT_BOOSTER_100) {
+          let quota = addonType === AddonTypeEnum.STUDENT_BOOSTER_50 ? 50 : 100;
+          const studentFeature = await queryRunner.manager.findOne(PlatformFeature, { where: { code: 'STUDENT_MANAGEMENT' } });
+          if (studentFeature) {
+            const override = new SchoolFeatureOverride();
+            override.schoolId = order.schoolId;
+            override.platformFeatureId = studentFeature.id;
+            override.overrideType = OverrideTypeEnum.CUSTOM_LIMIT;
+            override.limitValue = quota.toString();
+            override.customPrice = order.amount;
+            override.billingCycle = FeatureBillingCycleEnum.ONE_TIME;
+            override.startDate = now;
+            const expiry = new Date(now);
+            expiry.setMonth(expiry.getMonth() + 1);
+            override.endDate = expiry;
+            override.isActive = true;
+            await queryRunner.manager.save(override);
+          }
+        }
+        else if (addonType === AddonTypeEnum.WHATSAPP_BOOSTER_100 || addonType === AddonTypeEnum.WHATSAPP_BOOSTER_1000) {
+          let quota = addonType === AddonTypeEnum.WHATSAPP_BOOSTER_100 ? 100 : 1000;
+          const whatsappFeature = await queryRunner.manager.findOne(PlatformFeature, { where: { code: 'WHATSAPP_REMINDERS' } });
+          if (whatsappFeature) {
+            const override = new SchoolFeatureOverride();
+            override.schoolId = order.schoolId;
+            override.platformFeatureId = whatsappFeature.id;
+            override.overrideType = OverrideTypeEnum.CUSTOM_LIMIT;
+            override.limitValue = quota.toString();
+            override.customPrice = order.amount;
+            override.billingCycle = FeatureBillingCycleEnum.ONE_TIME;
+            override.startDate = now;
+            const expiry = new Date(now);
+            expiry.setMonth(expiry.getMonth() + 1);
+            override.endDate = expiry;
+            override.isActive = true;
+            await queryRunner.manager.save(override);
+          }
         }
       }
 
@@ -414,11 +528,32 @@ export class SubscriptionsService {
       where: { schoolId, isActive: true }
     });
 
-    // 2. Fetch Base Limit from Plan + Boosters
-    const baseLimit = sub.studentLimit || 0;
-    
-    // 3. Fetch specific metered features usage from EntitlementService if needed
-    // For now, focusing on the core student booster limit
+    // 2. Fetch Active Student Booster Overrides
+    const overridesRepo = this.dataSource.getRepository(SchoolFeatureOverride);
+    const now = new Date();
+    const activeStudentOverrides = await overridesRepo.find({
+      where: { schoolId, isActive: true },
+    });
+
+    const activeLimitOverrides = activeStudentOverrides.filter((o) => {
+      const started = !o.startDate || o.startDate <= now;
+      const unexpired = !o.endDate || o.endDate >= now;
+      return !o.isDeleted && started && unexpired;
+    });
+
+    const studentFeature = await this.dataSource.getRepository(PlatformFeature).findOne({ where: { code: 'STUDENT_MANAGEMENT' } });
+    let studentBoosterSum = 0;
+    if (studentFeature) {
+      const studentLimitOverrides = activeLimitOverrides.filter(o => o.platformFeatureId === studentFeature.id && o.overrideType === OverrideTypeEnum.CUSTOM_LIMIT);
+      for (const o of studentLimitOverrides) {
+        if (o.limitValue) {
+          studentBoosterSum += parseInt(o.limitValue, 10);
+        }
+      }
+    }
+
+    const baseLimit = sub.studentLimit || sub.subscriptionPlan?.maxStudents || 0;
+    const totalStudentLimit = baseLimit + studentBoosterSum;
 
     return {
       subscription: {
@@ -429,11 +564,41 @@ export class SubscriptionsService {
       usage: {
         students: {
           used: studentCount,
-          limit: baseLimit,
-          remaining: Math.max(0, baseLimit - studentCount),
-          utilizationPercentage: baseLimit > 0 ? (studentCount / baseLimit) * 100 : 0
+          limit: totalStudentLimit,
+          remaining: Math.max(0, totalStudentLimit - studentCount),
+          utilizationPercentage: totalStudentLimit > 0 ? (studentCount / totalStudentLimit) * 100 : 0
         }
       }
     };
+  }
+
+  private async hasFeatureActive(schoolId: string, featureCode: string): Promise<boolean> {
+    const feature = await this.dataSource.getRepository(PlatformFeature).findOne({ where: { code: featureCode } });
+    if (!feature) return false;
+
+    // 1. Check active overrides
+    const override = await this.dataSource.getRepository(SchoolFeatureOverride).findOne({
+      where: { schoolId, platformFeatureId: feature.id, isActive: true }
+    });
+    const now = new Date();
+    if (override) {
+      const started = !override.startDate || override.startDate <= now;
+      const unexpired = !override.endDate || override.endDate >= now;
+      if (started && unexpired) {
+        return override.overrideType !== OverrideTypeEnum.DISABLE && override.isEnabled;
+      }
+    }
+
+    // 2. Check Plan Baseline
+    const sub = await this.dataSource.getRepository(SchoolSubscription).findOne({
+      where: { schoolId: schoolId, isActive: true },
+      relations: ['subscriptionPlan']
+    });
+    if (!sub) return false;
+
+    const mapping = await this.dataSource.getRepository(SubscriptionPlanPlatformFeatureMapping).findOne({
+      where: { subscriptionPlanId: sub.subscriptionPlanId, platformFeatureId: feature.id, isActive: true }
+    });
+    return mapping?.isEnabled ?? false;
   }
 }

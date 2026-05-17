@@ -113,5 +113,6 @@ export class AuthController {
   ) {
     return this.authService.platformRegister(registerDto, apiKey);
   }
+
 }
 

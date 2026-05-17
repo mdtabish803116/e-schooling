@@ -32,6 +32,11 @@ export class InitiateOrderDto {
   @IsOptional()
   @IsEnum(BillingCycleEnum)
   featureBillingCycle?: BillingCycleEnum;
+
+  @ApiProperty({ example: 'queue', description: 'Activation strategy: "immediate" (start now) or "queue" (wait for current plan to end, default)' })
+  @IsOptional()
+  @IsString()
+  activationStrategy?: 'immediate' | 'queue' | 'parallel';
 }
 
 export class VerifyPaymentDto {

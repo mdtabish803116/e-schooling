@@ -11,8 +11,11 @@ import { AcademicSession } from '../../models/entities/academic/academic-session
 import { SchoolUserRole } from '../../models/entities/rbac/school-user-role.entity';
 import { StudentAdmissionDto } from '../../interfaces/request/student/student-admission.dto';
 import { AuthContext } from '../../interfaces/auth-context.interface';
-import { EnrollmentStatusEnum, EnrollmentTypeEnum } from '../../models/enums/enums';
-import { SchoolRole } from 'src/models/entities/rbac/school-role.entity';
+import { EnrollmentStatusEnum, EnrollmentTypeEnum, OverrideTypeEnum } from '../../models/enums/enums';
+import { SchoolRole } from '../../models/entities/rbac/school-role.entity';
+import { SchoolSubscription } from '../../models/entities/subscription/school-subscription.entity';
+import { SchoolFeatureOverride } from '../../models/entities/entitlement/school-feature-override.entity';
+import { PlatformFeature } from '../../models/entities/entitlement/platform-feature.entity';
 
 @Injectable()
 export class StudentAdmissionsService {
@@ -46,6 +49,58 @@ export class StudentAdmissionsService {
 
   async admitStudent(caller: AuthContext, schoolId: string, dto: StudentAdmissionDto) {
     const school = await this.assertOwnership(caller.id, schoolId);
+
+    // Validate Student Capacity Quota (Plan + Booster Overrides)
+    const subRepo = this.dataSource.getRepository(SchoolSubscription);
+    const subscription = await subRepo.findOne({
+      where: { schoolId },
+      relations: ['subscriptionPlan']
+    });
+
+    if (!subscription) {
+      throw new BadRequestException('No active subscription found for this school branch.');
+    }
+
+    let allowedLimit: number | null = subscription.studentLimit || subscription.subscriptionPlan?.maxStudents || null;
+    if (allowedLimit !== null) {
+      const overrideRepo = this.dataSource.getRepository(SchoolFeatureOverride);
+      const studentFeature = await this.dataSource.getRepository(PlatformFeature).findOne({
+        where: { code: 'STUDENT_MANAGEMENT' }
+      });
+
+      if (studentFeature) {
+        const now = new Date();
+        const activeOverrides = await overrideRepo.find({
+          where: {
+            schoolId,
+            platformFeatureId: studentFeature.id,
+            overrideType: OverrideTypeEnum.CUSTOM_LIMIT,
+            isActive: true,
+            isDeleted: false
+          }
+        });
+
+        for (const o of activeOverrides) {
+          const started = !o.startDate || o.startDate <= now;
+          const unexpired = !o.endDate || o.endDate >= now;
+          if (started && unexpired && o.limitValue) {
+            allowedLimit += parseInt(o.limitValue, 10);
+          }
+        }
+      }
+    }
+
+    if (allowedLimit !== null) {
+      const studentCount = await this.dataSource.getRepository(Student).count({
+        where: { schoolId, isDeleted: false }
+      });
+
+      if (studentCount >= allowedLimit) {
+        throw new BadRequestException(
+          `Student admission capacity exceeded (${studentCount}/${allowedLimit}). Please upgrade your subscription plan or purchase student capacity boosters.`
+        );
+      }
+    }
 
     // Validate class, section, session
     const targetClass = await this.dataSource.getRepository(Class).findOne({ where: { id: dto.classId, schoolId } });
