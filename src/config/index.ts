@@ -76,4 +76,12 @@ export class Config {
     }
     return key;
   }
+
+  static getRedisConfig() {
+    return {
+      host: this.getSecret('REDIS_HOST', String) || '127.0.0.1',
+      port: Number(this.getSecret('REDIS_PORT', String) || '6379'),
+      password: this.getSecret('REDIS_PASSWORD', String) || undefined
+    };
+  }
 }

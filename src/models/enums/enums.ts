@@ -206,14 +206,22 @@ export enum JobTypeEnum {
   DEMOTION = 'demotion',
   SECTION_TRANSFER = 'section_transfer',
   PAYMENT_RECONCILIATION = 'payment_reconciliation',
-  SUBSCRIPTION_EXPIRY_CHECK = 'subscription_expiry_check'
+  SUBSCRIPTION_EXPIRY_CHECK = 'subscription_expiry_check',
+  SEND_WHATSAPP = 'send_whatsapp',
+  SEND_EMAIL = 'send_email',
+  DAILY_CLEANUP = 'daily_cleanup',
+  EXPORT_EXCEL = 'export_excel'
 }
 
 export enum JobStatusEnum {
   PENDING = 'pending',
-  PROCESSING = 'processing',
+  WAITING = 'waiting',
+  ACTIVE = 'active',
   COMPLETED = 'completed',
-  FAILED = 'failed'
+  FAILED = 'failed',
+  DELAYED = 'delayed',
+  CANCELLED = 'cancelled',
+  RETRYING = 'retrying'
 }
 
 export enum AttendanceStatusEnum {
