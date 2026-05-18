@@ -9,6 +9,10 @@ import { Permission } from '../../../../shared/decorators/permission.decorator';
 import { AcademicService } from '../../../../services/academic/academic.service';
 import type { AuthContext } from '../../../../interfaces/auth-context.interface';
 import { PermissionKeyEnum } from '../../../../models/enums/enums';
+import { CreateClassDto } from '../../../../interfaces/request/academic/create-class.dto';
+import { UpdateClassDto } from '../../../../interfaces/request/academic/update-class.dto';
+import { CreateSectionDto } from '../../../../interfaces/request/academic/create-section.dto';
+import { TransferStudentsDto } from '../../../../interfaces/request/academic/transfer-students.dto';
 
 @ApiTags('Academic Management')
 @ApiBearerAuth('JWT-auth')
@@ -22,7 +26,7 @@ export class AcademicController {
   @ApiOperation({ summary: 'Create a new class' })
   @Permission(PermissionKeyEnum.CLASSES_CREATE)
   @Post('classes')
-  async createClass(@CurrentUser() user: AuthContext, @Body() dto: any) {
+  async createClass(@CurrentUser() user: AuthContext, @Body() dto: CreateClassDto) {
     return this.academicService.createClass(user.schoolId!, dto, user.id);
   }
 
@@ -36,7 +40,7 @@ export class AcademicController {
   @ApiOperation({ summary: 'Update a class' })
   @Permission(PermissionKeyEnum.CLASSES_UPDATE)
   @Patch('classes/:id')
-  async updateClass(@CurrentUser() user: AuthContext, @Param('id') id: string, @Body() dto: any) {
+  async updateClass(@CurrentUser() user: AuthContext, @Param('id') id: string, @Body() dto: UpdateClassDto) {
     return this.academicService.updateClass(user.schoolId!, id, dto, user.id);
   }
 
@@ -51,7 +55,7 @@ export class AcademicController {
   @ApiOperation({ summary: 'Create a new section' })
   @Permission(PermissionKeyEnum.SECTIONS_CREATE)
   @Post('sections')
-  async createSection(@CurrentUser() user: AuthContext, @Body() dto: any) {
+  async createSection(@CurrentUser() user: AuthContext, @Body() dto: CreateSectionDto) {
     return this.academicService.createSection(user.schoolId!, dto, user.id);
   }
 
@@ -60,6 +64,13 @@ export class AcademicController {
   @Get('sections')
   async getSections(@CurrentUser() user: AuthContext, @Query('classId') classId?: string) {
     return this.academicService.getSections(user.schoolId!, classId);
+  }
+
+  @ApiOperation({ summary: 'Bulk transfer students to a section' })
+  @Permission(PermissionKeyEnum.SECTIONS_UPDATE)
+  @Patch('sections/transfer-students')
+  async transferStudents(@CurrentUser() user: AuthContext, @Body() dto: TransferStudentsDto) {
+    return this.academicService.transferStudents(user.schoolId!, dto, user.id);
   }
 
   // SUBJECTS

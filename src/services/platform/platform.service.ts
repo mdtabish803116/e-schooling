@@ -9,7 +9,7 @@ import { AuthContext } from '../../interfaces/auth-context.interface';
 import { Config } from '../../config/index';
 
 // Seeding Imports
-import { FeaturePrice } from '../../models/entities/entitlement/feature-price.entity';
+import { PlatformFeaturePrice } from '../../models/entities/entitlement/plaform-feature-price.entity';
 import { SubscriptionPlan } from '../../models/entities/subscription/subscription-plan.entity';
 import { SubscriptionPlanPrice } from '../../models/entities/subscription/subscription-plan-price.entity';
 import { SubscriptionPlanPlatformFeatureMapping } from '../../models/entities/entitlement/subscription-plan-platform-feature-mapping.entity';
@@ -17,7 +17,7 @@ import { BillingCycleEnum, FeatureTypeEnum, UsageUnitEnum, PlanCodeEnum } from '
 
 @Injectable()
 export class PlatformService {
-  constructor(private dataSource: DataSource) {}
+  constructor(private dataSource: DataSource) { }
 
   private generateCodeFromName(name: string): string {
     return name
@@ -213,7 +213,7 @@ export class PlatformService {
 
     try {
       const featRepo = queryRunner.manager.getRepository(PlatformFeature);
-      const priceRepo = queryRunner.manager.getRepository(FeaturePrice);
+      const priceRepo = queryRunner.manager.getRepository(PlatformFeaturePrice);
       const modRepo = queryRunner.manager.getRepository(ModuleMaster);
       const opRepo = queryRunner.manager.getRepository(OperationMaster);
       const permRepo = queryRunner.manager.getRepository(ModuleOperationPermission);
@@ -230,6 +230,7 @@ export class PlatformService {
         { name: 'Timetable Management', desc: 'Create and assign class/section schedules', type: FeatureTypeEnum.CORE, usageUnit: UsageUnitEnum.NONE, isMetered: false, prices: [{ cycle: BillingCycleEnum.MONTHLY, price: 120.00 }, { cycle: BillingCycleEnum.QUARTERLY, price: 320.00 }, { cycle: BillingCycleEnum.YEARLY, price: 1200.00 }] },
         { name: 'Exam Management', desc: 'Conduct online/offline exams and produce grade-sheets', type: FeatureTypeEnum.CORE, usageUnit: UsageUnitEnum.NONE, isMetered: false, prices: [{ cycle: BillingCycleEnum.MONTHLY, price: 180.00 }, { cycle: BillingCycleEnum.QUARTERLY, price: 500.00 }, { cycle: BillingCycleEnum.YEARLY, price: 1800.00 }] },
         { name: 'Report Management', desc: 'View comprehensive visual analytics and reports', type: FeatureTypeEnum.CORE, usageUnit: UsageUnitEnum.NONE, isMetered: false, prices: [{ cycle: BillingCycleEnum.MONTHLY, price: 150.00 }, { cycle: BillingCycleEnum.QUARTERLY, price: 400.00 }, { cycle: BillingCycleEnum.YEARLY, price: 1500.00 }] },
+        { name: 'Dashboard Analytics', desc: 'Interactive charts and summary indicators of school stats', type: FeatureTypeEnum.CORE, usageUnit: UsageUnitEnum.NONE, isMetered: false, prices: [{ cycle: BillingCycleEnum.MONTHLY, price: 100.00 }, { cycle: BillingCycleEnum.QUARTERLY, price: 280.00 }, { cycle: BillingCycleEnum.YEARLY, price: 1000.00 }] },
         { name: 'Whatsapp Reminders', desc: 'Send automated student attendance & fee reminders via WhatsApp', type: FeatureTypeEnum.CORE, usageUnit: UsageUnitEnum.MESSAGES, isMetered: true, prices: [{ cycle: BillingCycleEnum.MONTHLY, price: 300.00 }, { cycle: BillingCycleEnum.QUARTERLY, price: 800.00 }, { cycle: BillingCycleEnum.YEARLY, price: 3000.00 }] }
       ];
 
@@ -254,7 +255,7 @@ export class PlatformService {
         for (const fpData of fd.prices) {
           let fp = await priceRepo.findOne({ where: { platformFeatureId: f.id, billingCycle: fpData.cycle } });
           if (!fp) {
-            fp = new FeaturePrice();
+            fp = new PlatformFeaturePrice();
             fp.platformFeatureId = f.id;
             fp.billingCycle = fpData.cycle;
             fp.price = fpData.price;
@@ -290,7 +291,7 @@ export class PlatformService {
         for (const fpData of afd.prices) {
           let fp = await priceRepo.findOne({ where: { platformFeatureId: f.id, billingCycle: fpData.cycle } });
           if (!fp) {
-            fp = new FeaturePrice();
+            fp = new PlatformFeaturePrice();
             fp.platformFeatureId = f.id;
             fp.billingCycle = fpData.cycle;
             fp.price = fpData.price;
@@ -302,13 +303,13 @@ export class PlatformService {
 
       // 3. Module Masters (Sidebar navigation with nesting)
       const modulesData = [
-        { name: 'Dashboard', route: '/dashboard', icon: 'dashboard', displayOrder: 1, isMenuGroup: false, featureCode: null, parentName: null },
+        { name: 'Dashboard', route: '/dashboard', icon: 'dashboard', displayOrder: 1, isMenuGroup: false, featureCode: 'DASHBOARD_ANALYTICS', parentName: null },
         { name: 'Academics', route: '/academics', icon: 'school', displayOrder: 2, isMenuGroup: true, featureCode: 'ACADEMIC_MANAGEMENT', parentName: null },
         { name: 'Class', route: '/academics/classes', icon: 'class', displayOrder: 3, isMenuGroup: false, featureCode: 'ACADEMIC_MANAGEMENT', parentName: 'Academics' },
         { name: 'Subject', route: '/academics/subjects', icon: 'book', displayOrder: 4, isMenuGroup: false, featureCode: 'ACADEMIC_MANAGEMENT', parentName: 'Academics' },
         { name: 'Section', route: '/academics/sections', icon: 'view_list', displayOrder: 5, isMenuGroup: false, featureCode: 'ACADEMIC_MANAGEMENT', parentName: 'Academics' },
         { name: 'Class Section Subject', route: '/academics/class-section-subject', icon: 'assignment_turned_in', displayOrder: 6, isMenuGroup: false, featureCode: 'ACADEMIC_MANAGEMENT', parentName: 'Academics' },
-        
+
         { name: 'Students', route: '/students', icon: 'people', displayOrder: 7, isMenuGroup: false, featureCode: 'STUDENT_MANAGEMENT', parentName: null },
         { name: 'Attendance', route: '/attendance', icon: 'check_circle', displayOrder: 8, isMenuGroup: false, featureCode: 'ATTENDANCE_MANAGEMENT', parentName: null },
         { name: 'Fees', route: '/fees', icon: 'attach_money', displayOrder: 9, isMenuGroup: false, featureCode: 'FEE_MANAGEMENT', parentName: null },
@@ -324,25 +325,29 @@ export class PlatformService {
         if (!m) {
           m = new ModuleMaster();
           m.code = generatedCode;
-          m.name = md.name;
-          m.routePath = md.route;
-          m.icon = md.icon;
-          m.displayOrder = md.displayOrder;
-          m.showInSidebar = true;
-          m.isMenuGroup = md.isMenuGroup;
           m.isActive = true;
-          if (md.featureCode && seededFeatures[md.featureCode]) {
-            m.platformFeatureId = seededFeatures[md.featureCode].id;
-          }
-          if (md.parentName) {
-            const parentCode = this.generateCodeFromName(md.parentName);
-            const parentMod = seededModules[parentCode];
-            if (parentMod) {
-              m.parentModuleId = parentMod.id;
-            }
-          }
-          m = await modRepo.save(m);
         }
+        m.name = md.name;
+        m.routePath = md.route;
+        m.icon = md.icon;
+        m.displayOrder = md.displayOrder;
+        m.showInSidebar = true;
+        m.isMenuGroup = md.isMenuGroup;
+        if (md.featureCode && seededFeatures[md.featureCode]) {
+          m.platformFeatureId = seededFeatures[md.featureCode].id;
+        } else {
+          m.platformFeatureId = undefined;
+        }
+        if (md.parentName) {
+          const parentCode = this.generateCodeFromName(md.parentName);
+          const parentMod = seededModules[parentCode];
+          if (parentMod) {
+            m.parentModuleId = parentMod.id;
+          }
+        } else {
+          m.parentModuleId = undefined;
+        }
+        m = await modRepo.save(m);
         seededModules[generatedCode] = m;
       }
 
@@ -370,11 +375,13 @@ export class PlatformService {
 
       // 5. Module Operation Permissions (Linking PermissionKeys)
       const permsMap = [
+        { modCode: 'DASHBOARD', opCode: 'VIEW', key: 'dashboard:view' },
+
         { modCode: 'ATTENDANCE', opCode: 'VIEW', key: 'attendance:view' },
         { modCode: 'ATTENDANCE', opCode: 'CREATE', key: 'attendance:create' },
         { modCode: 'ATTENDANCE', opCode: 'UPDATE', key: 'attendance:update' },
         { modCode: 'ATTENDANCE', opCode: 'DELETE', key: 'attendance:delete' },
-        
+
         { modCode: 'CLASS', opCode: 'VIEW', key: 'classes:view' },
         { modCode: 'CLASS', opCode: 'CREATE', key: 'classes:create' },
         { modCode: 'CLASS', opCode: 'UPDATE', key: 'classes:update' },
@@ -402,7 +409,7 @@ export class PlatformService {
         { modCode: 'FEES', opCode: 'VIEW', key: 'fees:view' },
         { modCode: 'FEES', opCode: 'CREATE', key: 'fees:create' },
         { modCode: 'FEES', opCode: 'UPDATE', key: 'fees:update' },
-        
+
         { modCode: 'TIMETABLE', opCode: 'VIEW', key: 'timetable:view' },
         { modCode: 'TIMETABLE', opCode: 'UPDATE', key: 'timetable:manage' },
 
@@ -487,6 +494,7 @@ export class PlatformService {
             { code: 'ATTENDANCE_MANAGEMENT', limit: null },
             { code: 'FEE_MANAGEMENT', limit: null },
             { code: 'TIMETABLE_MANAGEMENT', limit: null },
+            { code: 'DASHBOARD_ANALYTICS', limit: null },
             { code: 'WHATSAPP_REMINDERS', limit: '1000' } // 1,000 free monthly messages
           );
         } else if (pd.code === PlanCodeEnum.PREMIUM) {
@@ -498,6 +506,7 @@ export class PlatformService {
             { code: 'TIMETABLE_MANAGEMENT', limit: null },
             { code: 'EXAM_MANAGEMENT', limit: null },
             { code: 'REPORT_MANAGEMENT', limit: null },
+            { code: 'DASHBOARD_ANALYTICS', limit: null },
             { code: 'WHATSAPP_REMINDERS', limit: '5000' } // 5,000 free monthly messages
           );
         }
@@ -510,11 +519,11 @@ export class PlatformService {
               mapping = new SubscriptionPlanPlatformFeatureMapping();
               mapping.subscriptionPlanId = plan.id;
               mapping.platformFeatureId = f.id;
-              mapping.isEnabled = true;
-              mapping.limitValue = item.limit;
-              mapping.isActive = true;
-              await planMappingRepo.save(mapping);
             }
+            mapping.isEnabled = true;
+            mapping.limitValue = item.limit;
+            mapping.isActive = true;
+            await planMappingRepo.save(mapping);
           }
         }
       }

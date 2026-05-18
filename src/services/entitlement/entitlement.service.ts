@@ -7,7 +7,7 @@ import { DataSource } from 'typeorm';
 import { PlatformFeature } from '../../models/entities/entitlement/platform-feature.entity';
 import { SubscriptionPlanPlatformFeatureMapping } from '../../models/entities/entitlement/subscription-plan-platform-feature-mapping.entity';
 import { SchoolFeatureOverride } from '../../models/entities/entitlement/school-feature-override.entity';
-import { FeatureUsageLog } from '../../models/entities/entitlement/feature-usage-log.entity';
+import { PlatformFeatureUsageLog } from '../../models/entities/entitlement/platform-feature-usage-log.entity';
 import { SchoolSubscription } from '../../models/entities/subscription/school-subscription.entity';
 import { OverrideTypeEnum } from '../../models/enums/enums';
 
@@ -127,7 +127,7 @@ export class EntitlementService {
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
       const usageAgg = await this.dataSource
-        .getRepository(FeatureUsageLog)
+        .getRepository(PlatformFeatureUsageLog)
         .createQueryBuilder('log')
         .select('SUM(CAST(log.usageCount AS BIGINT))', 'total')
         .where('log.schoolId = :schoolId', { schoolId })
@@ -177,14 +177,14 @@ export class EntitlementService {
       throw new NotFoundException(`Target feature code '${featureCode}' is missing`);
     }
 
-    const log = new FeatureUsageLog();
+    const log = new PlatformFeatureUsageLog();
     log.schoolId = schoolId;
     log.platformFeatureId = feature.id;
     log.usageCount = unitsConsumed.toString();
     log.usageDate = new Date();
     log.metadata = telemetryPayload || {};
 
-    const savedLog = await this.dataSource.getRepository(FeatureUsageLog).save(log);
+    const savedLog = await this.dataSource.getRepository(PlatformFeatureUsageLog).save(log);
 
     return {
       message: 'Usage metrics seamlessly ingested into telemetry log',

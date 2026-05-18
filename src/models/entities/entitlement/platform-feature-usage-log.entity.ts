@@ -6,8 +6,8 @@ import {
   Index,
 } from 'typeorm';
 
-@Entity({ name: 'feature_usage_logs', schema: 'e_schooling' })
-export class FeatureUsageLog {
+@Entity({ name: 'platform_feature_usage_logs', schema: 'e_schooling' })
+export class PlatformFeatureUsageLog {
   @PrimaryGeneratedColumn('increment', { type: 'bigint', comment: 'Primary key' })
   id: string;
 

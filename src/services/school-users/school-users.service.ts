@@ -20,15 +20,23 @@ import { UpdateSchoolUserProfileDto } from '../../interfaces/request/school-user
 export class SchoolUsersService {
   constructor(private dataSource: DataSource) { }
 
-  private async assertOwnershipOfSchool(ownerId: string, schoolId: string): Promise<void> {
-    const membership = await this.dataSource
-      .getRepository(SchoolOwnerMember)
-      .findOne({ where: { schoolOwnerId: ownerId, schoolId } });
-    if (!membership) throw new ForbiddenException('You do not have access to this school');
+  private async assertAccessToSchool(caller: AuthContext, schoolId: string): Promise<void> {
+    if (caller.actorType === 'school_owner') {
+      const membership = await this.dataSource
+        .getRepository(SchoolOwnerMember)
+        .findOne({ where: { schoolOwnerId: caller.id, schoolId } });
+      if (!membership) throw new ForbiddenException('You do not have access to this school');
+    } else if (caller.actorType === 'school_user') {
+      if (caller.schoolId !== schoolId) {
+        throw new ForbiddenException('You do not belong to this school');
+      }
+    } else {
+      throw new ForbiddenException('Access denied');
+    }
   }
 
   async createUser(caller: AuthContext, schoolId: string, dto: CreateSchoolUserDto) {
-    await this.assertOwnershipOfSchool(caller.id, schoolId);
+    await this.assertAccessToSchool(caller, schoolId);
 
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
@@ -67,7 +75,7 @@ export class SchoolUsersService {
   }
 
   async listUsers(caller: AuthContext, schoolId: string) {
-    await this.assertOwnershipOfSchool(caller.id, schoolId);
+    await this.assertAccessToSchool(caller, schoolId);
     const users = await this.dataSource.getRepository(SchoolUser).find({
       where: { schoolId, isActive: true },
       order: { createdAt: 'DESC' },
@@ -79,10 +87,13 @@ export class SchoolUsersService {
    * Assign School Roles to a User (Handles Reactivation for Soft-Deleted records).
    */
   async assignSchoolRoles(caller: AuthContext, schoolId: string, userId: string, dto: AssignSchoolRoleDto) {
-    await this.assertOwnershipOfSchool(caller.id, schoolId);
+    await this.assertAccessToSchool(caller, schoolId);
 
     const user = await this.dataSource.getRepository(SchoolUser).findOne({ where: { id: userId, schoolId } });
-    if (!user) throw new NotFoundException('School user not found');
+    if (!user || user.isDeleted) throw new NotFoundException('This user does not exist');
+    if (!user.isActive) {
+      throw new BadRequestException('This user is inactive. Please activate it first before assigning roles.');
+    }
 
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
@@ -91,7 +102,10 @@ export class SchoolUsersService {
     try {
       for (const schoolRoleId of dto.roleIds) {
         const role = await queryRunner.manager.findOne(SchoolRole, { where: { id: schoolRoleId, schoolId } });
-        if (!role) throw new NotFoundException(`School role ${schoolRoleId} not found`);
+        if (!role || role.isDeleted) throw new NotFoundException('This role does not exist');
+        if (!role.isActive) {
+          throw new BadRequestException('This role is inactive. Please activate it first before assigning roles.');
+        }
 
         let mapping = await queryRunner.manager.findOne(SchoolUserRole, { where: { userId, roleId: schoolRoleId } });
 
@@ -122,7 +136,10 @@ export class SchoolUsersService {
    * De-assign / Deactivate a School Role from a User (Soft Delete).
    */
   async deassignSchoolRole(caller: AuthContext, schoolId: string, userId: string, schoolRoleId: string) {
-    await this.assertOwnershipOfSchool(caller.id, schoolId);
+    await this.assertAccessToSchool(caller, schoolId);
+
+    const user = await this.dataSource.getRepository(SchoolUser).findOne({ where: { id: userId, schoolId } });
+    if (!user || user.isDeleted) throw new NotFoundException('This user does not exist');
 
     const mappingRepo = this.dataSource.getRepository(SchoolUserRole);
     const mapping = await mappingRepo.findOne({ where: { userId, roleId: schoolRoleId } });
@@ -138,9 +155,9 @@ export class SchoolUsersService {
   }
 
   async upsertUserProfile(caller: AuthContext, schoolId: string, userId: string, dto: UpdateSchoolUserProfileDto) {
-    await this.assertOwnershipOfSchool(caller.id, schoolId);
+    await this.assertAccessToSchool(caller, schoolId);
     const user = await this.dataSource.getRepository(SchoolUser).findOne({ where: { id: userId, schoolId } });
-    if (!user) throw new NotFoundException('School user not found');
+    if (!user || user.isDeleted) throw new NotFoundException('This user does not exist');
 
     const profileRepo = this.dataSource.getRepository(SchoolUserProfile);
     let profile = await profileRepo.findOne({ where: { schoolUserId: userId } });
@@ -156,9 +173,9 @@ export class SchoolUsersService {
   }
 
   async getUserProfile(caller: AuthContext, schoolId: string, userId: string) {
-    await this.assertOwnershipOfSchool(caller.id, schoolId);
+    await this.assertAccessToSchool(caller, schoolId);
     const user = await this.dataSource.getRepository(SchoolUser).findOne({ where: { id: userId, schoolId } });
-    if (!user) throw new NotFoundException('School user not found');
+    if (!user || user.isDeleted) throw new NotFoundException('This user does not exist');
 
     const profile = await this.dataSource.getRepository(SchoolUserProfile).findOne({ where: { schoolUserId: userId } });
     return { user, profile: profile || null };

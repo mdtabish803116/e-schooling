@@ -1,21 +1,25 @@
 import { Controller, Post, Get, Patch, Delete, Body, Param, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../../../shared/guards/jwt-auth.guard';
+import { PermissionGuard } from '../../../../shared/guards/permission.guard';
 import { CurrentUser } from '../../../../shared/decorators/current-user.decorator';
+import { Permission } from '../../../../shared/decorators/permission.decorator';
 import { SchoolUsersService } from '../../../../services/school-users/school-users.service';
 import type { AuthContext } from '../../../../interfaces/auth-context.interface';
 import { CreateSchoolUserDto } from '../../../../interfaces/request/school-user/create-school-user.dto';
 import { AssignSchoolRoleDto } from '../../../../interfaces/request/school-user/assign-school-role.dto';
 import { UpdateSchoolUserProfileDto } from '../../../../interfaces/request/school-user/update-school-user-profile.dto';
+import { PermissionKeyEnum } from '../../../../models/enums/enums';
 
 @ApiTags('School Users')
 @ApiBearerAuth('JWT-auth')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, PermissionGuard)
 @Controller('schools/:schoolId/users')
 export class SchoolUsersController {
   constructor(private readonly schoolUsersService: SchoolUsersService) {}
 
   @ApiOperation({ summary: 'Create a school user (teacher / accountant / admin / staff) and optionally assign a role' })
+  @Permission(PermissionKeyEnum.SCHOOL_USERS_UPDATE)
   @Post()
   async createUser(
     @Param('schoolId') schoolId: string,
@@ -26,6 +30,7 @@ export class SchoolUsersController {
   }
 
   @ApiOperation({ summary: 'List all users in a school' })
+  @Permission(PermissionKeyEnum.SCHOOL_USERS_UPDATE)
   @Get()
   async listUsers(
     @Param('schoolId') schoolId: string,
@@ -35,6 +40,7 @@ export class SchoolUsersController {
   }
 
   @ApiOperation({ summary: 'Assign one or more school roles to a school user' })
+  @Permission(PermissionKeyEnum.SCHOOL_USERS_UPDATE)
   @Post(':userId/assign-school-roles')
   async assignSchoolRoles(
     @Param('schoolId') schoolId: string,
@@ -46,6 +52,7 @@ export class SchoolUsersController {
   }
 
   @ApiOperation({ summary: 'De-assign / Remove a school role from a school user (Soft Delete)' })
+  @Permission(PermissionKeyEnum.SCHOOL_USERS_UPDATE)
   @Delete(':userId/school-roles/:schoolRoleId')
   async deassignSchoolRole(
     @Param('schoolId') schoolId: string,
@@ -57,6 +64,7 @@ export class SchoolUsersController {
   }
 
   @ApiOperation({ summary: 'Upsert extended profile for a school user' })
+  @Permission(PermissionKeyEnum.SCHOOL_USERS_UPDATE)
   @Patch(':userId/profile')
   async upsertUserProfile(
     @Param('schoolId') schoolId: string,
@@ -68,6 +76,7 @@ export class SchoolUsersController {
   }
 
   @ApiOperation({ summary: 'Get school user profile' })
+  @Permission(PermissionKeyEnum.SCHOOL_USERS_UPDATE)
   @Get(':userId/profile')
   async getUserProfile(
     @Param('schoolId') schoolId: string,

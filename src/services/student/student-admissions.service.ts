@@ -61,7 +61,7 @@ export class StudentAdmissionsService {
       throw new BadRequestException('No active subscription found for this school branch.');
     }
 
-    let allowedLimit: number | null = subscription.studentLimit || subscription.subscriptionPlan?.maxStudents || null;
+    let allowedLimit: number | null = subscription.subscriptionPlan?.maxStudents || null;
     if (allowedLimit !== null) {
       const overrideRepo = this.dataSource.getRepository(SchoolFeatureOverride);
       const studentFeature = await this.dataSource.getRepository(PlatformFeature).findOne({

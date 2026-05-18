@@ -15,6 +15,9 @@ export class Class {
   @Column({ name: 'has_sections', type: 'boolean', nullable: true, comment: 'Whether class has multiple sections' })
   hasSections: boolean;
 
+  @Column({ name: 'daily_attendance_limit', type: 'integer', nullable: false, default: 1, comment: 'Max attendance sessions per day' })
+  dailyAttendanceLimit: number;
+
   @Column({ name: 'is_active', type: 'boolean', nullable: false, default: true, comment: 'Active status toggle' })
   isActive: boolean;
 

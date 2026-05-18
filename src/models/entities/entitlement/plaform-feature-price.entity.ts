@@ -1,10 +1,9 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Index, ManyToOne, JoinColumn } from 'typeorm';
-import { BillingCycleEnum } from '../../enums/enums';
 import { PlatformFeature } from './platform-feature.entity';
 
-@Entity({ name: 'feature_prices', schema: 'e_schooling' })
+@Entity({ name: 'plaform_feature_prices', schema: 'e_schooling' })
 @Index(['platformFeatureId', 'billingCycle'], { unique: true })
-export class FeaturePrice {
+export class PlatformFeaturePrice {
   @PrimaryGeneratedColumn('increment', { type: 'bigint', comment: 'Primary key' })
   id: string;
 

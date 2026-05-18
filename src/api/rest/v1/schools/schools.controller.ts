@@ -58,6 +58,15 @@ export class SchoolsController {
     return this.schoolsService.getOwnerMasterContext(caller);
   }
 
+  @ApiOperation({ summary: 'Get a full snapshot specifically for a single school under the owner context' })
+  @Get(':schoolId/context/master')
+  async getSingleSchoolMasterContext(
+    @Param('schoolId') schoolId: string,
+    @CurrentUser() caller: AuthContext
+  ) {
+    return this.schoolsService.getSingleSchoolMasterContext(caller, schoolId);
+  }
+
   @ApiOperation({ summary: 'Get details of a specific school' })
   @ApiResponse({ 
     status: 200, 

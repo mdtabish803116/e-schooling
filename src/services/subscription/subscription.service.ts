@@ -6,17 +6,17 @@ import { SchoolSubscription } from '../../models/entities/subscription/school-su
 import { SchoolOwnerMember } from '../../models/entities/school/school-owner-member.entity';
 import { SchoolFeatureOverride } from '../../models/entities/entitlement/school-feature-override.entity';
 import { PlatformFeature } from '../../models/entities/entitlement/platform-feature.entity';
-import { FeaturePrice } from '../../models/entities/entitlement/feature-price.entity';
+import { PlatformFeaturePrice } from '../../models/entities/entitlement/plaform-feature-price.entity';
 import { SubscriptionPlanPlatformFeatureMapping } from '../../models/entities/entitlement/subscription-plan-platform-feature-mapping.entity';
 import { Order, OrderMetadata } from '../../models/entities/finance/order.entity';
 import { Payment } from '../../models/entities/finance/payment.entity';
 import { Invoice } from '../../models/entities/finance/invoice.entity';
 import { Student } from '../../models/entities/student/student.entity';
 import { AuthContext } from '../../interfaces/auth-context.interface';
-import { 
-  SubscriptionStatusEnum, 
-  BillingCycleEnum, 
-  OverrideTypeEnum, 
+import {
+  SubscriptionStatusEnum,
+  BillingCycleEnum,
+  OverrideTypeEnum,
   FeatureBillingCycleEnum,
   AddonTypeEnum,
   OrderStatusEnum,
@@ -33,7 +33,7 @@ export class SubscriptionsService {
   constructor(
     private dataSource: DataSource,
     private paymentService: PaymentService
-  ) {}
+  ) { }
 
   /**
    * Reusable helper to ensure caller manages the target school.
@@ -48,11 +48,23 @@ export class SubscriptionsService {
   /**
    * Lists all master plans with their prices and features for the frontend selection popup.
    */
-  async listAvailablePlans() {
-    const plans = await this.dataSource.getRepository(SubscriptionPlan).find({
+  async listAvailablePlans(caller: AuthContext, schoolId: string) {
+    if (!schoolId) {
+      throw new BadRequestException('schoolId is required');
+    }
+
+    let plans = await this.dataSource.getRepository(SubscriptionPlan).find({
       where: { isActive: true, isDeleted: false },
       relations: ['prices', 'featureMappings', 'featureMappings.platformFeature'],
     });
+
+    await this.assertOwnership(caller.id, schoolId);
+    const existingSub = await this.dataSource.getRepository(SchoolSubscription).findOne({
+      where: { schoolId }
+    });
+    if (existingSub) {
+      plans = plans.filter(p => p.code !== PlanCodeEnum.TRIAL);
+    }
 
     return {
       plans: plans.map(p => ({
@@ -125,7 +137,7 @@ export class SubscriptionsService {
         billingCycle: subscription.billingCycle,
         currentPeriodStart: subscription.currentPeriodStart,
         currentPeriodEnd: subscription.currentPeriodEnd,
-        isTrialExpired: subscription.subscriptionState === SubscriptionStatusEnum.TRIAL && now > subscription.trialEndAt,
+        isTrialExpired: subscription.subscriptionState === SubscriptionStatusEnum.TRIAL && !!subscription.trialEndAt && now > subscription.trialEndAt,
         planDetails: {
           name: plan.name,
           code: plan.code,
@@ -152,6 +164,14 @@ export class SubscriptionsService {
   async initiateOrder(caller: AuthContext, dto: InitiateOrderDto) {
     await this.assertOwnership(caller.id, dto.schoolId);
 
+    // Auto-default Free Trial billing cycle if omitted
+    if (dto.planId && !dto.billingCycle) {
+      const plan = await this.dataSource.getRepository(SubscriptionPlan).findOne({ where: { id: dto.planId } });
+      if (plan && plan.code === PlanCodeEnum.TRIAL) {
+        dto.billingCycle = BillingCycleEnum.MONTHLY;
+      }
+    }
+
     // Retrieve the active subscription of the school branch
     const subRepo = this.dataSource.getRepository(SchoolSubscription);
     const subscription = await subRepo.findOne({
@@ -173,20 +193,32 @@ export class SubscriptionsService {
 
     if (dto.planId && dto.billingCycle) {
       const plan = await this.dataSource.getRepository(SubscriptionPlan).findOne({ where: { id: dto.planId } });
-      const price = await this.dataSource.getRepository(SubscriptionPlanPrice).findOne({
-        where: { subscriptionPlanId: dto.planId, billingCycle: dto.billingCycle }
-      });
-      if (!plan || !price) throw new BadRequestException('Invalid plan or billing cycle selection');
-      
-      amount = price.price;
-      metadata = { 
-        type: OrderItemTypeEnum.PLAN, 
-        planId: plan.id, 
-        billingCycle: dto.billingCycle, 
+      if (!plan) throw new BadRequestException('Invalid plan selection');
+
+      const isTrial = plan.code === PlanCodeEnum.TRIAL;
+
+      if (isTrial) {
+        const existingSub = await subRepo.findOne({ where: { schoolId: dto.schoolId } });
+        if (existingSub) {
+          throw new BadRequestException('Your school has already used or initiated a Free Trial. You cannot request a Free Trial again.');
+        }
+        amount = 0;
+      } else {
+        const price = await this.dataSource.getRepository(SubscriptionPlanPrice).findOne({
+          where: { subscriptionPlanId: dto.planId, billingCycle: dto.billingCycle }
+        });
+        if (!price) throw new BadRequestException('Invalid plan or billing cycle selection');
+        amount = price.price;
+      }
+
+      metadata = {
+        type: OrderItemTypeEnum.PLAN,
+        planId: plan.id,
+        billingCycle: dto.billingCycle,
         planName: plan.name,
-        activationStrategy: dto.activationStrategy || 'queue'
+        activationStrategy: 'queue'
       };
-    } 
+    }
     else if (dto.featureId && dto.featureBillingCycle) {
       // Enforce billing cycle alignment (feature cycle must match parent subscription cycle)
       if (subscription && dto.featureBillingCycle !== subscription.billingCycle) {
@@ -196,7 +228,7 @@ export class SubscriptionsService {
       }
 
       const feature = await this.dataSource.getRepository(PlatformFeature).findOne({ where: { id: dto.featureId } });
-      const price = await this.dataSource.getRepository(FeaturePrice).findOne({
+      const price = await this.dataSource.getRepository(PlatformFeaturePrice).findOne({
         where: { platformFeatureId: dto.featureId, billingCycle: dto.featureBillingCycle }
       });
       if (!feature || !price) throw new BadRequestException('Invalid feature or billing cycle selection');
@@ -212,11 +244,11 @@ export class SubscriptionsService {
       }
 
       amount = price.price;
-      metadata = { 
-        type: OrderItemTypeEnum.FEATURE, 
-        featureId: feature.id, 
-        billingCycle: dto.featureBillingCycle, 
-        featureName: feature.name 
+      metadata = {
+        type: OrderItemTypeEnum.FEATURE,
+        featureId: feature.id,
+        billingCycle: dto.featureBillingCycle,
+        featureName: feature.name
       };
     }
     else if (dto.addonType) {
@@ -224,7 +256,7 @@ export class SubscriptionsService {
       const feature = await this.dataSource.getRepository(PlatformFeature).findOne({ where: { code: dto.addonType } });
       if (!feature) throw new BadRequestException('Invalid addon feature.');
 
-      const price = await this.dataSource.getRepository(FeaturePrice).findOne({
+      const price = await this.dataSource.getRepository(PlatformFeaturePrice).findOne({
         where: { platformFeatureId: feature.id, billingCycle: subscription!.billingCycle }
       });
       if (!price) {
@@ -234,11 +266,11 @@ export class SubscriptionsService {
       }
 
       amount = price.price;
-      metadata = { 
-        type: OrderItemTypeEnum.ADDON, 
-        addonType: dto.addonType 
+      metadata = {
+        type: OrderItemTypeEnum.ADDON,
+        addonType: dto.addonType
       };
-    } 
+    }
     else {
       throw new BadRequestException('Either planId, featureId, or addonType must be provided');
     }
@@ -261,7 +293,7 @@ export class SubscriptionsService {
 
     // Create Razorpay Order
     const rpOrder = await this.paymentService.createRazorpayOrder(amount, savedOrder.id);
-    
+
     savedOrder.razorpayOrderId = rpOrder.id;
     await this.dataSource.getRepository(Order).save(savedOrder);
 
@@ -329,11 +361,15 @@ export class SubscriptionsService {
         const { planId, billingCycle, activationStrategy } = order.metadata;
         const strategy = activationStrategy || 'queue';
 
+        const plan = await queryRunner.manager.findOne(SubscriptionPlan, { where: { id: planId } });
+        if (!plan) throw new BadRequestException('Subscription Plan not found');
+
         let subscription = await queryRunner.manager.findOne(SchoolSubscription, {
           where: { schoolId: order.schoolId }
         });
 
-        const months = billingCycle === BillingCycleEnum.YEARLY ? 12 : (billingCycle === BillingCycleEnum.QUARTERLY ? 3 : 1);
+        const isTrialPlan = plan.code === PlanCodeEnum.TRIAL;
+        const months = isTrialPlan ? 1 : (billingCycle === BillingCycleEnum.YEARLY ? 12 : (billingCycle === BillingCycleEnum.QUARTERLY ? 3 : 1));
         const expiresAt = new Date(now);
         expiresAt.setMonth(now.getMonth() + months);
 
@@ -341,42 +377,55 @@ export class SubscriptionsService {
           subscription = new SchoolSubscription();
           subscription.schoolId = order.schoolId;
           subscription.subscriptionPlanId = planId!;
-          subscription.subscriptionState = SubscriptionStatusEnum.ACTIVE;
+          subscription.subscriptionState = isTrialPlan ? SubscriptionStatusEnum.TRIAL : SubscriptionStatusEnum.ACTIVE;
           subscription.billingCycle = billingCycle!;
-          subscription.currentPeriodStart = now;
-          subscription.currentPeriodEnd = expiresAt;
-          subscription.isActive = true;
-          await queryRunner.manager.save(subscription);
-        } else {
-          const isOngoing = subscription.isActive && subscription.subscriptionState === SubscriptionStatusEnum.ACTIVE && subscription.currentPeriodEnd > now;
-
-          if (isOngoing && strategy === 'queue') {
-            // Queue transition: Extends the school's period end by the new plan duration
-            const nextStart = new Date(subscription.currentPeriodEnd);
-            const nextEnd = new Date(nextStart);
-            nextEnd.setMonth(nextStart.getMonth() + months);
-
-            subscription.subscriptionPlanId = planId!;
-            subscription.billingCycle = billingCycle!;
-            subscription.currentPeriodEnd = nextEnd;
-          } else if (isOngoing && strategy === 'parallel') {
-            // Parallel/Concurrent transition: Upgrades base limits immediately
-            subscription.subscriptionPlanId = planId!;
-            subscription.subscriptionState = SubscriptionStatusEnum.ACTIVE;
-            subscription.billingCycle = billingCycle!;
-            subscription.currentPeriodStart = now;
-            subscription.currentPeriodEnd = expiresAt;
+          if (isTrialPlan) {
+            subscription.trialStartAt = now;
+            subscription.trialEndAt = expiresAt;
           } else {
-            // Immediate transition: Starts right now, overwriting previous period
-            subscription.subscriptionPlanId = planId!;
-            subscription.subscriptionState = SubscriptionStatusEnum.ACTIVE;
-            subscription.billingCycle = billingCycle!;
             subscription.currentPeriodStart = now;
             subscription.currentPeriodEnd = expiresAt;
           }
+          subscription.isActive = true;
+          await queryRunner.manager.save(subscription);
+        } else {
+          const isOngoing = subscription.isActive && subscription.subscriptionState === SubscriptionStatusEnum.ACTIVE && !!subscription.currentPeriodEnd && subscription.currentPeriodEnd > now;
+
+          if (isOngoing && strategy === 'queue') {
+            const nextStart = new Date(subscription.currentPeriodEnd || now);
+            const nextEnd = new Date(nextStart);
+            nextEnd.setMonth(nextStart.getMonth() + months);
+
+            subscription.queuedSubscriptionPlanId = planId!;
+            subscription.queuedBillingCycle = billingCycle!;
+            subscription.queuedStartDate = nextStart;
+            subscription.queuedEndDate = nextEnd;
+            subscription.activationStrategy = 'queue';
+          } else {
+            subscription.subscriptionPlanId = planId!;
+            subscription.subscriptionState = isTrialPlan ? SubscriptionStatusEnum.TRIAL : SubscriptionStatusEnum.ACTIVE;
+            subscription.billingCycle = billingCycle!;
+            if (isTrialPlan) {
+              subscription.trialStartAt = now;
+              subscription.trialEndAt = expiresAt;
+            } else {
+              subscription.currentPeriodStart = now;
+              subscription.currentPeriodEnd = expiresAt;
+              subscription.trialStartAt = null;
+              subscription.trialEndAt = null;
+            }
+            subscription.isActive = true;
+
+            // Clear any old queued state
+            subscription.queuedSubscriptionPlanId = null;
+            subscription.queuedBillingCycle = null;
+            subscription.queuedStartDate = null;
+            subscription.queuedEndDate = null;
+            subscription.activationStrategy = null;
+          }
           await queryRunner.manager.save(subscription);
         }
-      } 
+      }
       else if (type === OrderItemTypeEnum.FEATURE) {
         const { featureId, billingCycle } = order.metadata;
         const months = billingCycle === BillingCycleEnum.YEARLY ? 12 : (billingCycle === BillingCycleEnum.QUARTERLY ? 3 : 1);
@@ -415,7 +464,7 @@ export class SubscriptionsService {
       }
       else if (type === OrderItemTypeEnum.ADDON) {
         const { addonType } = order.metadata;
-        
+
         if (addonType === AddonTypeEnum.STUDENT_BOOSTER_50 || addonType === AddonTypeEnum.STUDENT_BOOSTER_100) {
           let quota = addonType === AddonTypeEnum.STUDENT_BOOSTER_50 ? 50 : 100;
           const studentFeature = await queryRunner.manager.findOne(PlatformFeature, { where: { code: 'STUDENT_MANAGEMENT' } });
@@ -478,7 +527,7 @@ export class SubscriptionsService {
 
     // Fetch order status from Razorpay
     const rpOrder = await this.paymentService.getRazorpayOrder(order.razorpayOrderId);
-    
+
     // In Razorpay, 'paid' status on order means fulfillment can happen
     if (rpOrder.status === 'paid') {
       return this.fulfillOrder(order, 'RAZORPAY_RECONCILIATION');
@@ -552,7 +601,7 @@ export class SubscriptionsService {
       }
     }
 
-    const baseLimit = sub.studentLimit || sub.subscriptionPlan?.maxStudents || 0;
+    const baseLimit = sub.subscriptionPlan?.maxStudents || 0;
     const totalStudentLimit = baseLimit + studentBoosterSum;
 
     return {
@@ -596,9 +645,194 @@ export class SubscriptionsService {
     });
     if (!sub) return false;
 
+    await this.promoteQueuedPlanIfApplicable(sub);
+
     const mapping = await this.dataSource.getRepository(SubscriptionPlanPlatformFeatureMapping).findOne({
       where: { subscriptionPlanId: sub.subscriptionPlanId, platformFeatureId: feature.id, isActive: true }
     });
     return mapping?.isEnabled ?? false;
+  }
+
+  /**
+   * Get the active plan, feature-wise purchases, and boosters status with remaining days.
+   */
+  async getActiveItemsStatus(caller: AuthContext, schoolId: string) {
+    await this.assertOwnership(caller.id, schoolId);
+
+    const now = new Date();
+
+    // 1. Fetch Subscription
+    const subscription = await this.dataSource.getRepository(SchoolSubscription).findOne({
+      where: { schoolId },
+      relations: ['subscriptionPlan'],
+    });
+
+    if (subscription) {
+      await this.promoteQueuedPlanIfApplicable(subscription);
+    }
+
+    // 2. Fetch Active Overrides (Features & Boosters)
+    const overrides = await this.dataSource.getRepository(SchoolFeatureOverride).find({
+      where: { schoolId, isActive: true, isDeleted: false },
+    });
+
+    // 3. Fetch Platform Features to map names and codes in memory
+    const platformFeatures = await this.dataSource.getRepository(PlatformFeature).find({
+      where: { isActive: true },
+    });
+    const featureMap = new Map(platformFeatures.map(f => [f.id, f]));
+
+    let activePlan: any = null;
+    if (subscription) {
+      const expiresAt = subscription.subscriptionState === SubscriptionStatusEnum.TRIAL ? subscription.trialEndAt : subscription.currentPeriodEnd;
+      const isExpired = expiresAt ? expiresAt < now : false;
+      const timeDiff = expiresAt ? expiresAt.getTime() - now.getTime() : 0;
+      const daysRemaining = expiresAt ? Math.max(0, Math.ceil(timeDiff / (1000 * 60 * 60 * 24))) : 0;
+      const hoursRemaining = expiresAt ? Math.max(0, Math.ceil(timeDiff / (1000 * 60 * 60))) : 0;
+
+      activePlan = {
+        name: subscription.subscriptionPlan?.name || 'Custom Plan',
+        code: subscription.subscriptionPlan?.code || 'CUSTOM',
+        status: subscription.subscriptionState,
+        expiresAt,
+        daysRemaining: isExpired ? 0 : daysRemaining,
+        hoursRemaining: isExpired ? 0 : hoursRemaining,
+        isExpired,
+      };
+    }
+
+    const activeFeatures: any[] = [];
+    const activeBoosters: any[] = [];
+
+    overrides.forEach(o => {
+      // Check if override is active (within valid date range)
+      const isWithinDate = (!o.startDate || o.startDate <= now) && (!o.endDate || o.endDate >= now);
+      if (!isWithinDate) return;
+
+      const feature = featureMap.get(o.platformFeatureId);
+      const expiresAt = o.endDate;
+      const timeDiff = expiresAt ? expiresAt.getTime() - now.getTime() : 0;
+      const daysRemaining = expiresAt ? Math.max(0, Math.ceil(timeDiff / (1000 * 60 * 60 * 24))) : 0;
+      const hoursRemaining = expiresAt ? Math.max(0, Math.ceil(timeDiff / (1000 * 60 * 60))) : 0;
+
+      // Classify as dynamic feature purchase or capacity booster addon
+      const isBooster = o.billingCycle === 'ONE_TIME' || (o.overrideType === OverrideTypeEnum.CUSTOM_LIMIT && (feature?.code?.includes('BOOSTER') || o.limitValue));
+
+      const itemDetails = {
+        id: o.id,
+        name: feature?.name || 'Custom Feature',
+        code: feature?.code || 'CUSTOM',
+        expiresAt,
+        daysRemaining,
+        hoursRemaining,
+        isExpired: false,
+      };
+
+      if (isBooster) {
+        activeBoosters.push({
+          ...itemDetails,
+          limitQuota: o.limitValue || '0',
+        });
+      } else {
+        activeFeatures.push({
+          ...itemDetails,
+          billingCycle: o.billingCycle,
+        });
+      }
+    });
+
+    return {
+      activePlan,
+      activeFeatures,
+      activeBoosters,
+    };
+  }
+
+  /**
+   * JIT activation promotion logic.
+   * If the queued plan start date has arrived, it automatically elevates the queued plan to active.
+   */
+  private async promoteQueuedPlanIfApplicable(subscription: SchoolSubscription) {
+    if (subscription.queuedSubscriptionPlanId && subscription.queuedStartDate) {
+      const now = new Date();
+      if (now >= subscription.queuedStartDate) {
+        subscription.subscriptionPlanId = subscription.queuedSubscriptionPlanId;
+        subscription.subscriptionState = SubscriptionStatusEnum.ACTIVE;
+        subscription.billingCycle = subscription.queuedBillingCycle!;
+        subscription.currentPeriodStart = subscription.queuedStartDate;
+        subscription.currentPeriodEnd = subscription.queuedEndDate!;
+
+        subscription.trialStartAt = null;
+        subscription.trialEndAt = null;
+
+        subscription.queuedSubscriptionPlanId = null;
+        subscription.queuedBillingCycle = null;
+        subscription.queuedStartDate = null;
+        subscription.queuedEndDate = null;
+        subscription.activationStrategy = null;
+
+        await this.dataSource.getRepository(SchoolSubscription).save(subscription);
+      }
+    }
+  }
+
+  /**
+   * Update the activation strategy of a queued subscription plan.
+   */
+  async updateQueuedActivationStrategy(caller: AuthContext, schoolId: string, strategy: 'immediate' | 'parallel') {
+    await this.assertOwnership(caller.id, schoolId);
+
+    const subscription = await this.dataSource.getRepository(SchoolSubscription).findOne({
+      where: { schoolId },
+      relations: ['subscriptionPlan']
+    });
+
+    if (!subscription || !subscription.queuedSubscriptionPlanId) {
+      throw new BadRequestException('No queued subscription plan found for this school context. Once a plan has started, its strategy cannot be changed.');
+    }
+
+    const now = new Date();
+
+    if (strategy === 'immediate' || strategy === 'parallel') {
+      const queuedPlan = await this.dataSource.getRepository(SubscriptionPlan).findOne({
+        where: { id: subscription.queuedSubscriptionPlanId }
+      });
+      if (!queuedPlan) throw new NotFoundException('Queued plan not found');
+
+      const isTrialPlan = queuedPlan.code === PlanCodeEnum.TRIAL;
+      const months = isTrialPlan ? 1 : (subscription.queuedBillingCycle === BillingCycleEnum.YEARLY ? 12 : (subscription.queuedBillingCycle === BillingCycleEnum.QUARTERLY ? 3 : 1));
+      const expiresAt = new Date(now);
+      expiresAt.setMonth(now.getMonth() + months);
+
+      subscription.subscriptionPlanId = subscription.queuedSubscriptionPlanId;
+      subscription.subscriptionState = isTrialPlan ? SubscriptionStatusEnum.TRIAL : SubscriptionStatusEnum.ACTIVE;
+      subscription.billingCycle = subscription.queuedBillingCycle!;
+      if (isTrialPlan) {
+        subscription.trialStartAt = now;
+        subscription.trialEndAt = expiresAt;
+      } else {
+        subscription.currentPeriodStart = now;
+        subscription.currentPeriodEnd = expiresAt;
+        subscription.trialStartAt = null;
+        subscription.trialEndAt = null;
+      }
+
+      // Clear the queue
+      subscription.queuedSubscriptionPlanId = null;
+      subscription.queuedBillingCycle = null;
+      subscription.queuedStartDate = null;
+      subscription.queuedEndDate = null;
+      subscription.activationStrategy = null;
+
+      await this.dataSource.getRepository(SchoolSubscription).save(subscription);
+
+      return {
+        message: `Subscription activated ${strategy === 'parallel' ? 'concurrently in parallel' : 'immediately'}!`,
+        activePlanName: queuedPlan.name,
+        expiresAt,
+      };
+    } else {
+      throw new BadRequestException('Invalid activation strategy transition. Must be immediate or parallel.');
+    }
   }
 }

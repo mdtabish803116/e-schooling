@@ -1,4 +1,4 @@
-import { IsArray, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import { IsNotEmpty, IsOptional, IsString } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateSchoolRoleDto {
@@ -7,13 +7,8 @@ export class CreateSchoolRoleDto {
   @IsString()
   name: string;
 
-  @ApiPropertyOptional({
-    example: ['1', '2', '5'],
-    description: 'Optional list of Permission IDs to attach to this school role',
-    type: [String],
-  })
+  @ApiPropertyOptional({ example: 'Handles classroom activities and student attendance records', description: 'Optional description of the school role' })
   @IsOptional()
-  @IsArray()
-  @IsString({ each: true })
-  permissionIds?: string[];
+  @IsString()
+  description?: string;
 }

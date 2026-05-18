@@ -149,4 +149,15 @@ export class PlatformUserController {
   async platformSeed(@Headers('x-api-key') apiKey: string) {
     return this.platformService.seedPlatformData(apiKey);
   }
+
+  @ApiOperation({ summary: 'Admin manually extends school subscription or trial duration by specified days' })
+  @Patch('schools/:schoolId/extend-duration')
+  @Permission(PermissionKeyEnum.PLATFORM_SCHOOLS_UPDATE)
+  async extendDuration(
+    @CurrentUser() caller: AuthContext,
+    @Param('schoolId') schoolId: string,
+    @Body('daysToExtend') daysToExtend: number,
+  ) {
+    return this.userService.extendSubscriptionDuration(caller, schoolId, daysToExtend);
+  }
 }

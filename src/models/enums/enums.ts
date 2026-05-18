@@ -27,6 +27,9 @@ export enum PlatformRoleEnum {
  * School users get permissions via their assigned roles.
  */
 export enum PermissionKeyEnum {
+  // Dashboard
+  DASHBOARD_VIEW = 'dashboard:view',
+
   // Attendance
   ATTENDANCE_VIEW    = 'attendance:view',
   ATTENDANCE_CREATE  = 'attendance:create',
@@ -82,6 +85,10 @@ export enum PermissionKeyEnum {
 
   // School Users (manage staff)
   SCHOOL_USERS_UPDATE = 'school_users:update',
+
+  // School Roles & Permissions
+  SCHOOL_ROLES_VIEW = 'school_roles:view',
+  SCHOOL_ROLES_MANAGE = 'school_roles:manage',
 
   // Platform Administration
   PLATFORM_SCHOOLS_VIEW   = 'platform:schools:view',
@@ -228,7 +235,8 @@ export enum AttendanceStatusEnum {
   PRESENT = 'present',
   ABSENT = 'absent',
   LEAVE = 'leave',
-  HALF_DAY = 'half_day'
+  HALF_DAY = 'half_day',
+  LATE = 'late'
 }
 
 /** Feature Entitlement & Billing Add-ons mapping */

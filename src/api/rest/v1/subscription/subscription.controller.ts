@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Body, Param, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../../../shared/guards/jwt-auth.guard';
 import { PermissionGuard } from '../../../../shared/guards/permission.guard';
@@ -6,7 +6,7 @@ import { Permission } from '../../../../shared/decorators/permission.decorator';
 import { CurrentUser } from '../../../../shared/decorators/current-user.decorator';
 import { SubscriptionsService } from '../../../../services/subscription/subscription.service';
 import type { AuthContext } from '../../../../interfaces/auth-context.interface';
-import { BillingCycleEnum, PermissionKeyEnum } from '../../../../models/enums/enums';
+import { PermissionKeyEnum } from '../../../../models/enums/enums';
 import { InitiateOrderDto, VerifyPaymentDto } from '../../../../interfaces/request/subscription/initiate-order.dto';
 
 @ApiTags('Subscriptions')
@@ -18,8 +18,11 @@ export class SubscriptionsController {
 
   @ApiOperation({ summary: 'List all available subscription plans with prices and features' })
   @Get('plans')
-  async listPlans() {
-    return this.subscriptionsService.listAvailablePlans();
+  async listPlans(
+    @CurrentUser() caller: AuthContext,
+    @Query('schoolId') schoolId: string
+  ) {
+    return this.subscriptionsService.listAvailablePlans(caller, schoolId);
   }
 
   @ApiOperation({ summary: 'Get current subscription snapshot for a school' })
@@ -74,5 +77,24 @@ export class SubscriptionsController {
     @Param('schoolId') schoolId: string,
   ) {
     return this.subscriptionsService.getUsageStats(schoolId);
+  }
+
+  @ApiOperation({ summary: 'Get active plan, features, and boosters with remaining days and status' })
+  @Get(':schoolId/active-items-status')
+  async getActiveItemsStatus(
+    @CurrentUser() caller: AuthContext,
+    @Param('schoolId') schoolId: string,
+  ) {
+    return this.subscriptionsService.getActiveItemsStatus(caller, schoolId);
+  }
+
+  @ApiOperation({ summary: 'Update the activation strategy of a queued subscription plan' })
+  @Patch(':schoolId/queued-strategy')
+  async updateQueuedStrategy(
+    @CurrentUser() caller: AuthContext,
+    @Param('schoolId') schoolId: string,
+    @Body('strategy') strategy: 'immediate' | 'parallel',
+  ) {
+    return this.subscriptionsService.updateQueuedActivationStrategy(caller, schoolId, strategy);
   }
 }

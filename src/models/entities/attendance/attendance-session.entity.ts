@@ -24,6 +24,9 @@ export class AttendanceSession {
   @Column({ name: 'date', type: 'date', nullable: true, comment: 'Attendance date' })
   date: string;
 
+  @Column({ name: 'session_slot', type: 'integer', nullable: false, default: 1, comment: 'Attendance session slot/slot number' })
+  sessionSlot: number;
+
   @Index()
   @Column({ name: 'taken_by', type: 'bigint', nullable: true, comment: 'Reference to SchoolUser' })
   takenBy: string;

@@ -22,23 +22,35 @@ export class SchoolSubscription {
   @Column({ name: 'subscription_state', type: 'varchar', nullable: false, default: SubscriptionStatusEnum.TRIAL, comment: 'trial | active | expired | cancelled | suspended' })
   subscriptionState: SubscriptionStatusEnum;
 
-  @Column({ name: 'student_limit', type: 'integer', nullable: true, default: 0, comment: 'Current total allowed students (Plan + Boosters)' })
-  studentLimit: number;
-
   @Column({ name: 'billing_cycle', type: 'varchar', nullable: true, comment: 'Active billing cycle tier' })
   billingCycle: BillingCycleEnum;
 
   @Column({ name: 'trial_start_at', type: 'timestamp', nullable: true, comment: 'Trial start timestamp' })
-  trialStartAt: Date;
+  trialStartAt: Date | null;
 
   @Column({ name: 'trial_end_at', type: 'timestamp', nullable: true, comment: 'Trial expiration timestamp' })
-  trialEndAt: Date;
+  trialEndAt: Date | null;
 
   @Column({ name: 'current_period_start', type: 'timestamp', nullable: true, comment: 'Current billing period start' })
-  currentPeriodStart: Date;
+  currentPeriodStart: Date | null;
 
   @Column({ name: 'current_period_end', type: 'timestamp', nullable: true, comment: 'Current billing period expiration' })
-  currentPeriodEnd: Date;
+  currentPeriodEnd: Date | null;
+
+  @Column({ name: 'queued_subscription_plan_id', type: 'bigint', nullable: true, comment: 'Queued SubscriptionPlan ID' })
+  queuedSubscriptionPlanId: string | null;
+
+  @Column({ name: 'queued_billing_cycle', type: 'varchar', nullable: true, comment: 'Queued billing cycle tier' })
+  queuedBillingCycle: BillingCycleEnum | null;
+
+  @Column({ name: 'queued_start_date', type: 'timestamp', nullable: true, comment: 'When the queued plan starts' })
+  queuedStartDate: Date | null;
+
+  @Column({ name: 'queued_end_date', type: 'timestamp', nullable: true, comment: 'When the queued plan ends' })
+  queuedEndDate: Date | null;
+
+  @Column({ name: 'activation_strategy', type: 'varchar', nullable: true, default: 'queue', comment: 'queue | immediate | parallel' })
+  activationStrategy: string | null;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamp', comment: 'Creation timestamp' })
   createdAt: Date;

@@ -1,20 +1,25 @@
 import { Controller, Post, Get, Patch, Delete, Body, Param, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../../../shared/guards/jwt-auth.guard';
+import { PermissionGuard } from '../../../../shared/guards/permission.guard';
 import { CurrentUser } from '../../../../shared/decorators/current-user.decorator';
+import { Permission } from '../../../../shared/decorators/permission.decorator';
 import { SchoolRolesService } from '../../../../services/school-roles/school-roles.service';
 import type { AuthContext } from '../../../../interfaces/auth-context.interface';
 import { CreateSchoolRoleDto } from '../../../../interfaces/request/school-role/create-school-role.dto';
+import { UpdateSchoolRoleDto } from '../../../../interfaces/request/school-role/update-school-role.dto';
 import { AssignSchoolPermissionsDto } from '../../../../interfaces/request/school-role/assign-school-permissions.dto';
+import { PermissionKeyEnum } from '../../../../models/enums/enums';
 
 @ApiTags('School Roles & Permissions')
 @ApiBearerAuth('JWT-auth')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, PermissionGuard)
 @Controller('schools/:schoolId/school-roles')
 export class SchoolRolesController {
   constructor(private readonly schoolRolesService: SchoolRolesService) {}
 
   @ApiOperation({ summary: 'Step 1: Create a basic custom school role' })
+  @Permission(PermissionKeyEnum.SCHOOL_ROLES_MANAGE)
   @Post()
   async createSchoolRole(
     @Param('schoolId') schoolId: string,
@@ -25,17 +30,19 @@ export class SchoolRolesController {
   }
 
   @ApiOperation({ summary: 'Update school role metadata (name/description)' })
+  @Permission(PermissionKeyEnum.SCHOOL_ROLES_MANAGE)
   @Patch(':schoolRoleId')
   async updateSchoolRole(
     @Param('schoolId') schoolId: string,
     @Param('schoolRoleId') schoolRoleId: string,
     @CurrentUser() caller: AuthContext,
-    @Body() dto: { name?: string, description?: string }
+    @Body() dto: UpdateSchoolRoleDto
   ) {
     return this.schoolRolesService.updateSchoolRole(caller, schoolId, schoolRoleId, dto);
   }
 
   @ApiOperation({ summary: 'Deactivate / Soft Delete a school role' })
+  @Permission(PermissionKeyEnum.SCHOOL_ROLES_MANAGE)
   @Delete(':schoolRoleId')
   async deactivateSchoolRole(
     @Param('schoolId') schoolId: string,
@@ -45,7 +52,42 @@ export class SchoolRolesController {
     return this.schoolRolesService.deactivateSchoolRole(caller, schoolId, schoolRoleId);
   }
 
+  @ApiOperation({ summary: 'Activate / Deactivate a school role active status' })
+  @Permission(PermissionKeyEnum.SCHOOL_ROLES_MANAGE)
+  @Patch(':schoolRoleId/status')
+  async updateSchoolRoleStatus(
+    @Param('schoolId') schoolId: string,
+    @Param('schoolRoleId') schoolRoleId: string,
+    @CurrentUser() caller: AuthContext,
+    @Body() dto: { isActive: boolean }
+  ) {
+    return this.schoolRolesService.updateSchoolRoleStatus(caller, schoolId, schoolRoleId, dto.isActive);
+  }
+
+  @ApiOperation({ summary: 'Permanently remove a school role and its permissions' })
+  @Permission(PermissionKeyEnum.SCHOOL_ROLES_MANAGE)
+  @Delete(':schoolRoleId/remove')
+  async removeSchoolRole(
+    @Param('schoolId') schoolId: string,
+    @Param('schoolRoleId') schoolRoleId: string,
+    @CurrentUser() caller: AuthContext
+  ) {
+    return this.schoolRolesService.removeSchoolRole(caller, schoolId, schoolRoleId);
+  }
+
+  @ApiOperation({ summary: 'Get all active permissions currently assigned to a school role' })
+  @Permission(PermissionKeyEnum.SCHOOL_ROLES_VIEW)
+  @Get(':schoolRoleId/permissions')
+  async getPermissionsForSchoolRole(
+    @Param('schoolId') schoolId: string,
+    @Param('schoolRoleId') schoolRoleId: string,
+    @CurrentUser() caller: AuthContext,
+  ) {
+    return this.schoolRolesService.getPermissionsForSchoolRole(caller, schoolId, schoolRoleId);
+  }
+
   @ApiOperation({ summary: 'Step 2: Assign granular permissions to a school role' })
+  @Permission(PermissionKeyEnum.SCHOOL_ROLES_MANAGE)
   @Post(':schoolRoleId/permissions')
   async assignPermissionsToSchoolRole(
     @Param('schoolId') schoolId: string,
@@ -57,6 +99,7 @@ export class SchoolRolesController {
   }
 
   @ApiOperation({ summary: 'Remove a specific permission from a school role (Soft Delete)' })
+  @Permission(PermissionKeyEnum.SCHOOL_ROLES_MANAGE)
   @Delete(':schoolRoleId/permissions/:permissionId')
   async removePermissionFromSchoolRole(
     @Param('schoolId') schoolId: string,
@@ -68,6 +111,7 @@ export class SchoolRolesController {
   }
 
   @ApiOperation({ summary: 'List all active school roles in a school' })
+  @Permission(PermissionKeyEnum.SCHOOL_ROLES_VIEW)
   @Get()
   async listSchoolRoles(
     @Param('schoolId') schoolId: string,
@@ -77,6 +121,7 @@ export class SchoolRolesController {
   }
 
   @ApiOperation({ summary: 'List all accordion-ready permissions available to this school tier' })
+  @Permission(PermissionKeyEnum.SCHOOL_ROLES_VIEW)
   @Get('permissions')
   async listSchoolPermissions(
     @Param('schoolId') schoolId: string,

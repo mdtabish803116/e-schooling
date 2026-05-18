@@ -13,7 +13,10 @@ import { ModuleMaster } from '../../models/entities/rbac/module-master.entity';
 import { SchoolRole } from '../../models/entities/rbac/school-role.entity';
 import { SchoolRolePermission } from '../../models/entities/rbac/school-role-permission.entity';
 import { ModuleOperationPermission } from '../../models/entities/rbac/module-operation-permission.entity';
-import { SchoolOwnerRoleEnum } from '../../models/enums/enums';
+import { PlatformFeature } from '../../models/entities/entitlement/platform-feature.entity';
+import { SubscriptionPlanPlatformFeatureMapping } from '../../models/entities/entitlement/subscription-plan-platform-feature-mapping.entity';
+import { SchoolFeatureOverride } from '../../models/entities/entitlement/school-feature-override.entity';
+import { SchoolOwnerRoleEnum, SubscriptionStatusEnum, OverrideTypeEnum, PlanCodeEnum } from '../../models/enums/enums';
 import { AuthContext } from '../../interfaces/auth-context.interface';
 import { CreateSchoolDto } from '../../interfaces/request/school/create-school.dto';
 import { UpdateSchoolDto } from '../../interfaces/request/school/update-school.dto';
@@ -149,12 +152,15 @@ export class SchoolsService {
 
     const schoolIds = memberships.map(m => m.schoolId);
 
-    // 1. Bulk fetch all primary school assets
-    const [schools, subscriptions, roles, modules] = await Promise.all([
+    // 1. Bulk fetch all primary school assets and platform features in parallel
+    const [schools, subscriptions, roles, modules, features, planFeatureMappings, overrides] = await Promise.all([
       this.dataSource.getRepository(School).find({ where: { id: In(schoolIds) } }),
       this.dataSource.getRepository(SchoolSubscription).find({ where: { schoolId: In(schoolIds) }, relations: ['subscriptionPlan'] }),
       this.dataSource.getRepository(SchoolRole).find({ where: { schoolId: In(schoolIds), isActive: true, isDeleted: false } }),
       this.dataSource.getRepository(ModuleMaster).find({ where: { isActive: true }, order: { displayOrder: 'ASC' } }),
+      this.dataSource.getRepository(PlatformFeature).find({ where: { isActive: true } }),
+      this.dataSource.getRepository(SubscriptionPlanPlatformFeatureMapping).find({ where: { isActive: true, isEnabled: true } }),
+      this.dataSource.getRepository(SchoolFeatureOverride).find({ where: { schoolId: In(schoolIds), isActive: true, isDeleted: false } }),
     ]);
 
     // 2. Bulk fetch all role permissions
@@ -175,10 +181,67 @@ export class SchoolsService {
       });
     }
 
-    // 3. Aggregate results in memory
+    // 3. Aggregate results in memory with dynamic entitlement checks and real-time expiry validation
     const results = schools.map(school => {
       const schoolSub = subscriptions.find(s => s.schoolId === school.id);
       const schoolRoles = roles.filter(r => r.schoolId === school.id);
+
+      let isExpired = true;
+      let isTrialExpired = false;
+      let canAccessTrial = true;
+
+      const now = new Date();
+
+      if (schoolSub) {
+        canAccessTrial = false; // Already utilized their trial or subscription choice
+        if (schoolSub.subscriptionState === SubscriptionStatusEnum.TRIAL) {
+          const hasExpired = schoolSub.trialEndAt && schoolSub.trialEndAt < now;
+          isExpired = !!hasExpired;
+          isTrialExpired = !!hasExpired;
+        } else if (schoolSub.subscriptionState === SubscriptionStatusEnum.ACTIVE) {
+          const hasExpired = schoolSub.currentPeriodEnd && schoolSub.currentPeriodEnd < now;
+          isExpired = !!hasExpired;
+        } else {
+          isExpired = true; // EXPIRED, CANCELLED, etc.
+        }
+      }
+
+      // Compute which PlatformFeatures are allowed for this school branch
+      const allowedFeatureIds = new Set<string>();
+
+      if (!isExpired && schoolSub) {
+        // Find baseline features for this plan
+        const planMappings = planFeatureMappings.filter(m => m.subscriptionPlanId === schoolSub.subscriptionPlanId);
+        const planFeatureIds = new Set(planMappings.map(m => m.platformFeatureId));
+
+        // Filter overrides for this school
+        const schoolOverrides = overrides.filter(o => o.schoolId === school.id);
+
+        features.forEach(f => {
+          // Find if there is an active override for this feature code
+          const activeOverride = schoolOverrides
+            .filter(o => o.platformFeatureId === f.id && (!o.startDate || o.startDate <= now) && (!o.endDate || o.endDate >= now))
+            .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
+
+          if (activeOverride) {
+            if (activeOverride.overrideType !== OverrideTypeEnum.DISABLE && activeOverride.isEnabled) {
+              allowedFeatureIds.add(f.id);
+            }
+          } else {
+            if (planFeatureIds.has(f.id)) {
+              allowedFeatureIds.add(f.id);
+            }
+          }
+        });
+      }
+
+      // Filter sidebarModules based on calculated allowed feature IDs
+      const filteredModules = isExpired ? [] : modules.filter(module => {
+        if (!module.platformFeatureId) {
+          return true; // Free module (e.g. Dashboard)
+        }
+        return allowedFeatureIds.has(module.platformFeatureId);
+      });
 
       return {
         id: school.id,
@@ -192,17 +255,49 @@ export class SchoolsService {
           planName: schoolSub.subscriptionPlan?.name,
           planCode: schoolSub.subscriptionPlan?.code,
           status: schoolSub.subscriptionState,
-          expiryDate: schoolSub.currentPeriodEnd,
-        } : null,
+          expiryDate: schoolSub.subscriptionState === SubscriptionStatusEnum.TRIAL ? schoolSub.trialEndAt : schoolSub.currentPeriodEnd,
+          isExpired,
+          isTrialExpired,
+          canAccessTrial,
+        } : {
+          planId: null,
+          planName: null,
+          planCode: null,
+          status: null,
+          expiryDate: null,
+          isExpired: true,
+          isTrialExpired: false,
+          canAccessTrial: true,
+        },
         roles: schoolRoles.map(r => ({
           id: r.id,
           name: r.name,
           permissions: rolePermissionMap[r.id] || [],
         })),
-        sidebarModules: modules,
+        sidebarModules: filteredModules,
       };
     });
 
     return { schools: results };
+  }
+
+  /**
+   * Get single school master context details.
+   */
+  async getSingleSchoolMasterContext(caller: AuthContext, schoolId: string) {
+    // Explicitly verify that this school actually belongs to the caller
+    const member = await this.dataSource.getRepository(SchoolOwnerMember).findOne({
+      where: { schoolOwnerId: caller.id, schoolId, isActive: true },
+    });
+    if (!member) {
+      throw new ForbiddenException('School context not found or access denied');
+    }
+
+    const context = await this.getOwnerMasterContext(caller);
+    const schoolContext = context.schools.find(s => s.id === schoolId);
+    if (!schoolContext) {
+      throw new NotFoundException('School context details not found');
+    }
+    return schoolContext;
   }
 }

@@ -1,10 +1,13 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { DataSource, Like } from 'typeorm';
 import { School } from '../../models/entities/school/school.entity';
 import { Student } from '../../models/entities/student/student.entity';
 import { SchoolUser } from '../../models/entities/school/school-user.entity';
 import { PaginationDto } from '../../interfaces/request/common/pagination.dto';
 import { SchoolOwner } from 'src/models/entities/school/school-owner.entity';
+import { SchoolSubscription } from '../../models/entities/subscription/school-subscription.entity';
+import { SubscriptionStatusEnum } from '../../models/enums/enums';
+import { AuthContext } from '../../interfaces/auth-context.interface';
 
 @Injectable()
 export class PlatformUserService {
@@ -177,6 +180,35 @@ export class PlatformUserService {
       total,
       page,
       lastPage: Math.ceil(total / limit),
+    };
+  }
+
+  /**
+   * Admin capability to manually extend a school's trial or subscription duration.
+   */
+  async extendSubscriptionDuration(caller: AuthContext, schoolId: string, daysToExtend: number) {
+  
+    const sub = await this.dataSource.getRepository(SchoolSubscription).findOne({
+      where: { schoolId },
+    });
+    if (!sub) throw new NotFoundException('No active subscription found for this school');
+
+    const now = new Date();
+    if (sub.subscriptionState === SubscriptionStatusEnum.TRIAL) {
+      const currentEnd = sub.trialEndAt && sub.trialEndAt > now ? new Date(sub.trialEndAt) : new Date(now);
+      currentEnd.setDate(currentEnd.getDate() + daysToExtend);
+      sub.trialEndAt = currentEnd;
+    } else {
+      const currentEnd = sub.currentPeriodEnd && sub.currentPeriodEnd > now ? new Date(sub.currentPeriodEnd) : new Date(now);
+      currentEnd.setDate(currentEnd.getDate() + daysToExtend);
+      sub.currentPeriodEnd = currentEnd;
+    }
+
+    await this.dataSource.getRepository(SchoolSubscription).save(sub);
+
+    return {
+      message: `Successfully extended subscription by ${daysToExtend} days.`,
+      newExpiryDate: sub.subscriptionState === SubscriptionStatusEnum.TRIAL ? sub.trialEndAt : sub.currentPeriodEnd,
     };
   }
 }
