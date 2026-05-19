@@ -12,13 +12,15 @@ import { PermissionKeyEnum } from '../../../../models/enums/enums';
 import { CreateClassDto } from '../../../../interfaces/request/academic/create-class.dto';
 import { UpdateClassDto } from '../../../../interfaces/request/academic/update-class.dto';
 import { CreateSectionDto } from '../../../../interfaces/request/academic/create-section.dto';
+import { UpdateSectionDto } from '../../../../interfaces/request/academic/update-section.dto';
+import { UpdateSubjectDto } from '../../../../interfaces/request/academic/update-subject.dto';
 import { TransferStudentsDto } from '../../../../interfaces/request/academic/transfer-students.dto';
 
 @ApiTags('Academic Management')
 @ApiBearerAuth('JWT-auth')
 @UseGuards(JwtAuthGuard, FeatureGuard, PermissionGuard)
 @Feature('ACADEMIC_MANAGEMENT')
-@Controller('academic')
+@Controller('schools/:schoolId/academic')
 export class AcademicController {
   constructor(private readonly academicService: AcademicService) {}
 
@@ -26,84 +28,140 @@ export class AcademicController {
   @ApiOperation({ summary: 'Create a new class' })
   @Permission(PermissionKeyEnum.CLASSES_CREATE)
   @Post('classes')
-  async createClass(@CurrentUser() user: AuthContext, @Body() dto: CreateClassDto) {
-    return this.academicService.createClass(user.schoolId!, dto, user.id);
+  async createClass(
+    @Param('schoolId') schoolId: string,
+    @CurrentUser() user: AuthContext,
+    @Body() dto: CreateClassDto
+  ) {
+    return this.academicService.createClass(schoolId, dto, user.id);
   }
 
   @ApiOperation({ summary: 'Get all classes' })
   @Permission(PermissionKeyEnum.CLASSES_VIEW)
   @Get('classes')
-  async getClasses(@CurrentUser() user: AuthContext) {
-    return this.academicService.getClasses(user.schoolId!);
+  async getClasses(@Param('schoolId') schoolId: string) {
+    return this.academicService.getClasses(schoolId);
   }
 
   @ApiOperation({ summary: 'Update a class' })
   @Permission(PermissionKeyEnum.CLASSES_UPDATE)
   @Patch('classes/:id')
-  async updateClass(@CurrentUser() user: AuthContext, @Param('id') id: string, @Body() dto: UpdateClassDto) {
-    return this.academicService.updateClass(user.schoolId!, id, dto, user.id);
+  async updateClass(
+    @Param('schoolId') schoolId: string,
+    @Param('id') id: string,
+    @CurrentUser() user: AuthContext,
+    @Body() dto: UpdateClassDto
+  ) {
+    return this.academicService.updateClass(schoolId, id, dto, user.id);
   }
 
   @ApiOperation({ summary: 'Delete a class' })
   @Permission(PermissionKeyEnum.CLASSES_DELETE)
   @Delete('classes/:id')
-  async deleteClass(@CurrentUser() user: AuthContext, @Param('id') id: string) {
-    return this.academicService.deleteClass(user.schoolId!, id, user.id);
+  async deleteClass(
+    @Param('schoolId') schoolId: string,
+    @Param('id') id: string,
+    @CurrentUser() user: AuthContext
+  ) {
+    return this.academicService.deleteClass(schoolId, id, user.id);
   }
 
   // SECTIONS
   @ApiOperation({ summary: 'Create a new section' })
   @Permission(PermissionKeyEnum.SECTIONS_CREATE)
   @Post('sections')
-  async createSection(@CurrentUser() user: AuthContext, @Body() dto: CreateSectionDto) {
-    return this.academicService.createSection(user.schoolId!, dto, user.id);
+  async createSection(
+    @Param('schoolId') schoolId: string,
+    @CurrentUser() user: AuthContext,
+    @Body() dto: CreateSectionDto
+  ) {
+    return this.academicService.createSection(schoolId, dto, user.id);
   }
 
   @ApiOperation({ summary: 'Get all sections' })
   @Permission(PermissionKeyEnum.SECTIONS_VIEW)
   @Get('sections')
-  async getSections(@CurrentUser() user: AuthContext, @Query('classId') classId?: string) {
-    return this.academicService.getSections(user.schoolId!, classId);
+  async getSections(
+    @Param('schoolId') schoolId: string,
+    @Query('classId') classId?: string
+  ) {
+    return this.academicService.getSections(schoolId, classId);
+  }
+
+  @ApiOperation({ summary: 'Update a section' })
+  @Permission(PermissionKeyEnum.SECTIONS_UPDATE)
+  @Patch('sections/:id')
+  async updateSection(
+    @Param('schoolId') schoolId: string,
+    @Param('id') id: string,
+    @CurrentUser() user: AuthContext,
+    @Body() dto: UpdateSectionDto
+  ) {
+    return this.academicService.updateSection(schoolId, id, dto, user.id);
   }
 
   @ApiOperation({ summary: 'Bulk transfer students to a section' })
   @Permission(PermissionKeyEnum.SECTIONS_UPDATE)
   @Patch('sections/transfer-students')
-  async transferStudents(@CurrentUser() user: AuthContext, @Body() dto: TransferStudentsDto) {
-    return this.academicService.transferStudents(user.schoolId!, dto, user.id);
+  async transferStudents(
+    @Param('schoolId') schoolId: string,
+    @CurrentUser() user: AuthContext,
+    @Body() dto: TransferStudentsDto
+  ) {
+    return this.academicService.transferStudents(schoolId, dto, user.id);
   }
 
   // SUBJECTS
   @ApiOperation({ summary: 'Create a new subject' })
   @Permission(PermissionKeyEnum.SUBJECTS_CREATE)
   @Post('subjects')
-  async createSubject(@CurrentUser() user: AuthContext, @Body() dto: any) {
-    return this.academicService.createSubject(user.schoolId!, dto, user.id);
+  async createSubject(
+    @Param('schoolId') schoolId: string,
+    @CurrentUser() user: AuthContext,
+    @Body() dto: any
+  ) {
+    return this.academicService.createSubject(schoolId, dto, user.id);
   }
 
   @ApiOperation({ summary: 'Get all subjects' })
   @Permission(PermissionKeyEnum.SUBJECTS_VIEW)
   @Get('subjects')
-  async getSubjects(@CurrentUser() user: AuthContext) {
-    return this.academicService.getSubjects(user.schoolId!);
+  async getSubjects(@Param('schoolId') schoolId: string) {
+    return this.academicService.getSubjects(schoolId);
+  }
+
+  @ApiOperation({ summary: 'Update a subject' })
+  @Permission(PermissionKeyEnum.SUBJECTS_UPDATE)
+  @Patch('subjects/:id')
+  async updateSubject(
+    @Param('schoolId') schoolId: string,
+    @Param('id') id: string,
+    @CurrentUser() user: AuthContext,
+    @Body() dto: UpdateSubjectDto
+  ) {
+    return this.academicService.updateSubject(schoolId, id, dto, user.id);
   }
 
   // MAPPINGS
   @ApiOperation({ summary: 'Map subject to class and section' })
   @Permission(PermissionKeyEnum.ACADEMIC_MAPPING_MANAGE)
   @Post('mappings')
-  async assignMapping(@CurrentUser() user: AuthContext, @Body() dto: any) {
-    return this.academicService.assignSubjectToClassSection(user.schoolId!, dto, user.id);
+  async assignMapping(
+    @Param('schoolId') schoolId: string,
+    @CurrentUser() user: AuthContext,
+    @Body() dto: any
+  ) {
+    return this.academicService.assignSubjectToClassSection(schoolId, dto, user.id);
   }
 
   @ApiOperation({ summary: 'Get academic mappings' })
   @Permission(PermissionKeyEnum.ACADEMIC_MAPPING_VIEW)
   @Get('mappings')
   async getMappings(
-    @CurrentUser() user: AuthContext,
+    @Param('schoolId') schoolId: string,
     @Query('classId') classId?: string,
     @Query('sectionId') sectionId?: string,
   ) {
-    return this.academicService.getMappings(user.schoolId!, classId, sectionId);
+    return this.academicService.getMappings(schoolId, classId, sectionId);
   }
 }

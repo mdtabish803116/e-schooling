@@ -1,4 +1,5 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Index, ManyToOne, JoinColumn } from 'typeorm';
+import { Class } from './class.entity';
 
 @Entity({ name: 'sections', schema: 'e_schooling' })
 export class Section {
@@ -12,6 +13,10 @@ export class Section {
   @Index()
   @Column({ name: 'class_id', type: 'bigint', nullable: true, comment: 'Reference to Class' })
   classId: string;
+
+  @ManyToOne(() => Class)
+  @JoinColumn({ name: 'class_id' })
+  class: Class;
 
   @Column({ name: 'name', type: 'varchar', nullable: true, comment: 'Section name' })
   name: string;

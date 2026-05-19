@@ -344,6 +344,7 @@ export class SubscriptionsService {
       // 2. Create Payment Record
       const payment = new Payment();
       payment.schoolId = order.schoolId;
+      payment.orderId = order.id;
       payment.amount = order.amount;
       payment.currency = order.currency;
       payment.paymentGateway = PaymentGatewayEnum.RAZORPAY;

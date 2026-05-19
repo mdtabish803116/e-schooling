@@ -1,5 +1,6 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Index, OneToMany } from 'typeorm';
 import { OrderStatusEnum, OrderItemTypeEnum, BillingCycleEnum, AddonTypeEnum } from '../../enums/enums';
+import { Payment } from './payment.entity';
 
 export interface OrderMetadata {
   type: OrderItemTypeEnum;
@@ -46,4 +47,7 @@ export class Order {
 
   @UpdateDateColumn({ name: 'updated_at', type: 'timestamp' })
   updatedAt: Date;
+
+  @OneToMany(() => Payment, (payment) => payment.order)
+  payments: Payment[];
 }

@@ -316,6 +316,10 @@ export class PlatformService {
         { name: 'Timetable', route: '/timetable', icon: 'schedule', displayOrder: 10, isMenuGroup: false, featureCode: 'TIMETABLE_MANAGEMENT', parentName: null },
         { name: 'Exams', route: '/exams', icon: 'assignment', displayOrder: 11, isMenuGroup: false, featureCode: 'EXAM_MANAGEMENT', parentName: null },
         { name: 'Reports', route: '/reports', icon: 'bar_chart', displayOrder: 12, isMenuGroup: false, featureCode: 'REPORT_MANAGEMENT', parentName: null },
+
+        { name: 'Administration', route: '/administration', icon: 'settings', displayOrder: 90, isMenuGroup: true, featureCode: null, parentName: null },
+        { name: 'School Users', route: '/administration/users', icon: 'manage_accounts', displayOrder: 91, isMenuGroup: false, featureCode: null, parentName: 'Administration' },
+        { name: 'School Roles', route: '/administration/roles', icon: 'admin_panel_settings', displayOrder: 92, isMenuGroup: false, featureCode: null, parentName: 'Administration' },
       ];
 
       const seededModules: Record<string, ModuleMaster> = {};
@@ -417,7 +421,11 @@ export class PlatformService {
         { modCode: 'EXAMS', opCode: 'CREATE', key: 'exams:create' },
         { modCode: 'EXAMS', opCode: 'UPDATE', key: 'exams:update' },
 
-        { modCode: 'REPORTS', opCode: 'VIEW', key: 'reports:view' }
+        { modCode: 'REPORTS', opCode: 'VIEW', key: 'reports:view' },
+
+        { modCode: 'SCHOOL_ROLES', opCode: 'VIEW', key: 'school_roles:view' },
+        { modCode: 'SCHOOL_ROLES', opCode: 'UPDATE', key: 'school_roles:manage' },
+        { modCode: 'SCHOOL_USERS', opCode: 'UPDATE', key: 'school_users:update' }
       ];
 
       for (const pm of permsMap) {

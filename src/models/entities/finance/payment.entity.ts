@@ -1,10 +1,19 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Index, ManyToOne, JoinColumn } from 'typeorm';
 import { PaymentGatewayEnum, PaymentStatusEnum } from '../../enums/enums';
+import { Order } from './order.entity';
 
 @Entity({ name: 'payments', schema: 'e_schooling' })
 export class Payment {
   @PrimaryGeneratedColumn('increment', { type: 'bigint', comment: 'Primary key' })
   id: string;
+
+  @Index()
+  @Column({ name: 'order_id', type: 'bigint', nullable: true, comment: 'Reference to Order' })
+  orderId: string;
+
+  @ManyToOne(() => Order, (order) => order.payments)
+  @JoinColumn({ name: 'order_id' })
+  order: Order;
 
   @Index()
   @Column({ name: 'school_subscription_id', type: 'bigint', nullable: true, comment: 'Reference to SchoolSubscription' })

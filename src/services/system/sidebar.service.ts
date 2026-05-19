@@ -1,9 +1,11 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, ForbiddenException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { ModuleMaster } from '../../models/entities/rbac/module-master.entity';
 import { EntitlementService } from '../entitlement/entitlement.service';
 import { RBACService } from '../school-roles/rbac.service';
 import { PlatformFeature } from '../../models/entities/entitlement/platform-feature.entity';
+import { SchoolOwnerMember } from '../../models/entities/school/school-owner-member.entity';
+import type { AuthContext } from '../../interfaces/auth-context.interface';
 
 @Injectable()
 export class SidebarService {
@@ -13,7 +15,24 @@ export class SidebarService {
     private rbacService: RBACService,
   ) {}
 
-  async getDynamicSidebar(schoolId: string, userId: string) {
+  async getDynamicSidebar(caller: AuthContext, querySchoolId?: string) {
+    const schoolId = querySchoolId || caller.schoolId;
+    if (!schoolId) {
+      return [];
+    }
+
+    const isOwner = caller.actorType === 'school_owner';
+
+    // Verify ownership if caller is owner
+    if (isOwner) {
+      const membership = await this.dataSource.getRepository(SchoolOwnerMember).findOne({
+        where: { schoolOwnerId: caller.id, schoolId, isActive: true },
+      });
+      if (!membership) {
+        throw new ForbiddenException('Unauthorized access to this school');
+      }
+    }
+
     // 1. Fetch all platform features to check entitlements
     const features = await this.dataSource.getRepository(PlatformFeature).find({ where: { isActive: true } });
     const enabledFeatureIds: string[] = [];
@@ -32,12 +51,16 @@ export class SidebarService {
     });
 
     // 3. Filter modules by entitlement and user permissions
-    const userPermissions = await this.rbacService.getAllUserPermissions(userId);
+    const userPermissions = isOwner ? [] : await this.rbacService.getAllUserPermissions(caller.id);
     
     // Modules that are either not linked to a specific feature (global) or linked to an enabled one
     const allowedModules = allModules.filter(module => {
       const isFeatureEnabled = !module.platformFeatureId || enabledFeatureIds.includes(module.platformFeatureId);
       if (!isFeatureEnabled) return false;
+
+      if (isOwner) {
+        return true; // School owners see all modules enabled on the plan
+      }
 
       // Basic permission check: does user have "view" permission for this module?
       // Convention: module.code + ':view'
@@ -66,6 +89,11 @@ export class SidebarService {
       const subChildren = this.buildTree(modules, child.id);
       if (subChildren.length > 0) {
         node.children = subChildren;
+      }
+
+      // If it is a menu group but has no children allowed, skip showing it to prevent empty groups on sidebar
+      if (child.isMenuGroup && (!node.children || node.children.length === 0)) {
+        continue;
       }
 
       tree.push(node);

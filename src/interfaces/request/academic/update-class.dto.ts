@@ -1,4 +1,4 @@
-import { IsInt, IsOptional, IsString, Min } from 'class-validator';
+import { IsInt, IsOptional, IsString, Min, IsBoolean } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 
 export class UpdateClassDto {
@@ -12,4 +12,9 @@ export class UpdateClassDto {
   @IsInt()
   @Min(1)
   dailyAttendanceLimit?: number;
+
+  @ApiPropertyOptional({ example: true, description: 'Updated active status' })
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
 }

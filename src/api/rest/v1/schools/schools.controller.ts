@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Patch, Body, Param, UseGuards } from '@nestjs/common';
+import { Controller, Post, Get, Patch, Body, Param, UseGuards, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../../../shared/guards/jwt-auth.guard';
 import { CurrentUser } from '../../../../shared/decorators/current-user.decorator';
@@ -6,6 +6,7 @@ import { SchoolsService } from '../../../../services/schools/schools.service';
 import type { AuthContext } from '../../../../interfaces/auth-context.interface';
 import { CreateSchoolDto } from '../../../../interfaces/request/school/create-school.dto';
 import { UpdateSchoolDto } from '../../../../interfaces/request/school/update-school.dto';
+import { SchoolAnalyticsQueryDto } from '../../../../interfaces/request/school/school-analytics.dto';
 
 @ApiTags('Schools Management')
 @ApiBearerAuth('JWT-auth')
@@ -56,6 +57,25 @@ export class SchoolsController {
   @Get('context/master')
   async getMasterContext(@CurrentUser() caller: AuthContext) {
     return this.schoolsService.getOwnerMasterContext(caller);
+  }
+
+  @ApiOperation({ summary: 'Get global analytics across all owned schools (Owner Dashboard)' })
+  @Get('analytics/global')
+  async getGlobalAnalytics(
+    @CurrentUser() caller: AuthContext,
+    @Query() query: SchoolAnalyticsQueryDto,
+  ) {
+    return this.schoolsService.getGlobalOwnerAnalytics(caller, query);
+  }
+
+  @ApiOperation({ summary: 'Get analytics for a specific school (including student growth/monthly trends)' })
+  @Get(':schoolId/analytics')
+  async getSingleSchoolAnalytics(
+    @Param('schoolId') schoolId: string,
+    @CurrentUser() caller: AuthContext,
+    @Query() query: SchoolAnalyticsQueryDto,
+  ) {
+    return this.schoolsService.getSingleSchoolAnalytics(caller, schoolId, query);
   }
 
   @ApiOperation({ summary: 'Get a full snapshot specifically for a single school under the owner context' })

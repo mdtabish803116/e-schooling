@@ -4,7 +4,7 @@ import {
   ForbiddenException,
   BadRequestException,
 } from '@nestjs/common';
-import { DataSource, In } from 'typeorm';
+import { DataSource, In, MoreThanOrEqual } from 'typeorm';
 import { School } from '../../models/entities/school/school.entity';
 import { SchoolOwnerMember } from '../../models/entities/school/school-owner-member.entity';
 import { validateEmail, validateMobile } from '../../shared/utils/validation.utils';
@@ -20,6 +20,12 @@ import { SchoolOwnerRoleEnum, SubscriptionStatusEnum, OverrideTypeEnum, PlanCode
 import { AuthContext } from '../../interfaces/auth-context.interface';
 import { CreateSchoolDto } from '../../interfaces/request/school/create-school.dto';
 import { UpdateSchoolDto } from '../../interfaces/request/school/update-school.dto';
+import { SchoolAnalyticsQueryDto } from '../../interfaces/request/school/school-analytics.dto';
+import { SchoolUser } from '../../models/entities/school/school-user.entity';
+import { Student } from '../../models/entities/student/student.entity';
+import { StudentEnrollment } from '../../models/entities/student/student-enrollment.entity';
+import { Class } from '../../models/entities/academic/class.entity';
+import { Section } from '../../models/entities/academic/section.entity';
 
 @Injectable()
 export class SchoolsService {
@@ -299,5 +305,277 @@ export class SchoolsService {
       throw new NotFoundException('School context details not found');
     }
     return schoolContext;
+  }
+
+  async getGlobalOwnerAnalytics(caller: AuthContext, query: SchoolAnalyticsQueryDto) {
+    if (caller.actorType !== 'school_owner') {
+      throw new ForbiddenException('Only registered school owners can access global dashboard analytics');
+    }
+
+    const memberships = await this.dataSource.getRepository(SchoolOwnerMember).find({
+      where: { schoolOwnerId: caller.id, isActive: true },
+    });
+    const schoolIds = memberships.map(m => m.schoolId);
+
+    if (schoolIds.length === 0) {
+      return {
+        totalSchools: 0,
+        totalStudents: 0,
+        totalStaff: 0,
+        totalRoles: 0,
+        roleBreakdown: [],
+        staffTypeBreakdown: { academic: 0, non_academic: 0 },
+        totalClasses: 0,
+        totalSections: 0,
+      };
+    }
+
+    const totalSchools = schoolIds.length;
+
+    // Total Students
+    let totalStudents = 0;
+    if (query.academicSessionId) {
+      totalStudents = await this.dataSource.getRepository(StudentEnrollment).count({
+        where: {
+          schoolId: In(schoolIds),
+          academicSessionId: query.academicSessionId,
+          isActive: true,
+          isDeleted: false,
+        },
+      });
+    } else {
+      totalStudents = await this.dataSource.getRepository(Student).count({
+        where: {
+          schoolId: In(schoolIds),
+          isActive: true,
+          isDeleted: false,
+        },
+      });
+    }
+
+    // Total Staff
+    const totalStaff = await this.dataSource.getRepository(SchoolUser).count({
+      where: {
+        schoolId: In(schoolIds),
+        isActive: true,
+        isDeleted: false,
+      },
+    });
+
+    // Total Roles
+    const totalRoles = await this.dataSource.getRepository(SchoolRole).count({
+      where: {
+        schoolId: In(schoolIds),
+        isActive: true,
+        isDeleted: false,
+      },
+    });
+
+    // Role breakdown
+    const rawRoles = await this.dataSource.getRepository(SchoolRole).createQueryBuilder('role')
+      .select('role.name', 'name')
+      .addSelect('COUNT(role.id)', 'count')
+      .where('role.schoolId IN (:...schoolIds)', { schoolIds })
+      .andWhere('role.isActive = true')
+      .andWhere('role.isDeleted = false')
+      .groupBy('role.name')
+      .getRawMany();
+    const roleBreakdown = rawRoles.map(r => ({ name: r.name, count: parseInt(r.count, 10) }));
+
+    // Staff type breakdown
+    const rawStaff = await this.dataSource.getRepository(SchoolUser).createQueryBuilder('user')
+      .select('user.userType', 'userType')
+      .addSelect('COUNT(user.id)', 'count')
+      .where('user.schoolId IN (:...schoolIds)', { schoolIds })
+      .andWhere('user.isActive = true')
+      .andWhere('user.isDeleted = false')
+      .groupBy('user.userType')
+      .getRawMany();
+    
+    const staffTypeBreakdown = { academic: 0, non_academic: 0 };
+    rawStaff.forEach(s => {
+      if (s.userType === 'academic') staffTypeBreakdown.academic = parseInt(s.count, 10);
+      if (s.userType === 'non_academic') staffTypeBreakdown.non_academic = parseInt(s.count, 10);
+    });
+
+    // Total Classes
+    const totalClasses = await this.dataSource.getRepository(Class).count({
+      where: {
+        schoolId: In(schoolIds),
+        isActive: true,
+        isDeleted: false,
+      },
+    });
+
+    // Total Sections
+    const totalSections = await this.dataSource.getRepository(Section).count({
+      where: {
+        schoolId: In(schoolIds),
+        isActive: true,
+        isDeleted: false,
+      },
+    });
+
+    return {
+      totalSchools,
+      totalStudents,
+      totalStaff,
+      totalRoles,
+      roleBreakdown,
+      staffTypeBreakdown,
+      totalClasses,
+      totalSections,
+    };
+  }
+
+  async getSingleSchoolAnalytics(caller: AuthContext, schoolId: string, query: SchoolAnalyticsQueryDto) {
+    const isOwner = caller.actorType === 'school_owner';
+    
+    if (isOwner) {
+      const member = await this.dataSource.getRepository(SchoolOwnerMember).findOne({
+        where: { schoolOwnerId: caller.id, schoolId, isActive: true },
+      });
+      if (!member) {
+        throw new ForbiddenException('School context not found or access denied');
+      }
+    } else {
+      if (caller.schoolId !== schoolId) {
+        throw new ForbiddenException('Access denied to this school\'s analytics');
+      }
+    }
+
+    // Total Students
+    let totalStudents = 0;
+    if (query.academicSessionId) {
+      totalStudents = await this.dataSource.getRepository(StudentEnrollment).count({
+        where: {
+          schoolId,
+          academicSessionId: query.academicSessionId,
+          isActive: true,
+          isDeleted: false,
+        },
+      });
+    } else {
+      totalStudents = await this.dataSource.getRepository(Student).count({
+        where: {
+          schoolId,
+          isActive: true,
+          isDeleted: false,
+        },
+      });
+    }
+
+    // Total Staff
+    const totalStaff = await this.dataSource.getRepository(SchoolUser).count({
+      where: {
+        schoolId,
+        isActive: true,
+        isDeleted: false,
+      },
+    });
+
+    // Total Roles
+    const totalRoles = await this.dataSource.getRepository(SchoolRole).count({
+      where: {
+        schoolId,
+        isActive: true,
+        isDeleted: false,
+      },
+    });
+
+    // Total Classes
+    const totalClasses = await this.dataSource.getRepository(Class).count({
+      where: {
+        schoolId,
+        isActive: true,
+        isDeleted: false,
+      },
+    });
+
+    // Total Sections
+    const totalSections = await this.dataSource.getRepository(Section).count({
+      where: {
+        schoolId,
+        isActive: true,
+        isDeleted: false,
+      },
+    });
+
+    // Student Growth metrics:
+    const now = new Date();
+    const oneWeekAgo = new Date();
+    oneWeekAgo.setDate(now.getDate() - 7);
+    const oneMonthAgo = new Date();
+    oneMonthAgo.setDate(now.getDate() - 30);
+    const oneYearAgo = new Date();
+    oneYearAgo.setDate(now.getDate() - 365);
+
+    const weekly = await this.dataSource.getRepository(Student).count({
+      where: {
+        schoolId,
+        isActive: true,
+        isDeleted: false,
+        createdAt: MoreThanOrEqual(oneWeekAgo),
+      },
+    });
+
+    const monthly = await this.dataSource.getRepository(Student).count({
+      where: {
+        schoolId,
+        isActive: true,
+        isDeleted: false,
+        createdAt: MoreThanOrEqual(oneMonthAgo),
+      },
+    });
+
+    const yearly = await this.dataSource.getRepository(Student).count({
+      where: {
+        schoolId,
+        isActive: true,
+        isDeleted: false,
+        createdAt: MoreThanOrEqual(oneYearAgo),
+      },
+    });
+
+    // Monthly trend for the current year
+    const startOfYear = new Date(now.getFullYear(), 0, 1);
+    const rawMonthlyTrend = await this.dataSource.getRepository(Student).createQueryBuilder('student')
+      .select("EXTRACT(MONTH FROM student.createdAt)", 'month')
+      .addSelect('COUNT(student.id)', 'count')
+      .where('student.schoolId = :schoolId', { schoolId })
+      .andWhere('student.isActive = true')
+      .andWhere('student.isDeleted = false')
+      .andWhere('student.createdAt >= :startOfYear', { startOfYear })
+      .groupBy("EXTRACT(MONTH FROM student.createdAt)")
+      .getRawMany();
+
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const trendMap = new Map<number, number>();
+    rawMonthlyTrend.forEach(t => {
+      const m = parseInt(t.month, 10);
+      trendMap.set(m, parseInt(t.count, 10));
+    });
+
+    const monthlyTrend = monthNames.map((name, index) => {
+      const monthNum = index + 1;
+      return {
+        month: name,
+        count: trendMap.get(monthNum) || 0,
+      };
+    });
+
+    return {
+      totalStudents,
+      totalStaff,
+      totalRoles,
+      totalClasses,
+      totalSections,
+      studentGrowth: {
+        weekly,
+        monthly,
+        yearly,
+      },
+      monthlyTrend,
+    };
   }
 }

@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { DataSource, Repository } from 'typeorm';
 import { Class } from '../../models/entities/academic/class.entity';
 import { Section } from '../../models/entities/academic/section.entity';
@@ -7,6 +7,8 @@ import { ClassSectionSubject } from '../../models/entities/academic/class-sectio
 import { CreateClassDto } from '../../interfaces/request/academic/create-class.dto';
 import { UpdateClassDto } from '../../interfaces/request/academic/update-class.dto';
 import { CreateSectionDto } from '../../interfaces/request/academic/create-section.dto';
+import { UpdateSectionDto } from '../../interfaces/request/academic/update-section.dto';
+import { UpdateSubjectDto } from '../../interfaces/request/academic/update-subject.dto';
 import { TransferStudentsDto } from '../../interfaces/request/academic/transfer-students.dto';
 import { StudentEnrollment } from '../../models/entities/student/student-enrollment.entity';
 import { SectionTransferHistory } from '../../models/entities/student/section-transfer-history.entity';
@@ -27,6 +29,54 @@ export class AcademicService {
 
   // CLASSES
   async createClass(schoolId: string, data: CreateClassDto, userId: string) {
+    const normalizedInput = data.name.replace(/\s+/g, '').toLowerCase();
+
+    // Check if class with same normalized name exists in the school
+    const existingClasses = await this.classRepo.find({ where: { schoolId } });
+    const match = existingClasses.find(c => c.name.replace(/\s+/g, '').toLowerCase() === normalizedInput);
+
+    if (match) {
+      if (match.isDeleted) {
+        // Upsert: restore and make active
+        match.isDeleted = false;
+        match.isActive = true;
+        match.name = data.name; // Keep input casing
+        match.dailyAttendanceLimit = data.dailyAttendanceLimit ?? match.dailyAttendanceLimit;
+        match.updatedById = userId;
+        const saved = await this.classRepo.save(match);
+
+        // Also check/restore the default section for this class
+        const defaultSection = await this.sectionRepo.findOne({
+          where: { classId: saved.id, schoolId, name: 'default', isDefault: true }
+        });
+        if (defaultSection) {
+          defaultSection.isDeleted = false;
+          defaultSection.isActive = true;
+          defaultSection.updatedById = userId;
+          await this.sectionRepo.save(defaultSection);
+        } else {
+          const newDefaultSection = this.sectionRepo.create({
+            schoolId,
+            classId: saved.id,
+            name: 'default',
+            isDefault: true,
+            isActive: true,
+            createdById: userId,
+            updatedById: userId,
+          });
+          await this.sectionRepo.save(newDefaultSection);
+        }
+
+        return saved;
+      }
+
+      if (!match.isActive) {
+        throw new BadRequestException('This class already exists with inactive status');
+      }
+
+      throw new BadRequestException('This class already exists');
+    }
+
     const newClass = this.classRepo.create({
       ...data,
       schoolId,
@@ -58,6 +108,60 @@ export class AcademicService {
   async updateClass(schoolId: string, id: string, data: UpdateClassDto, userId: string) {
     const existing = await this.classRepo.findOne({ where: { id, schoolId, isDeleted: false } });
     if (!existing) throw new NotFoundException('Class not found');
+
+    if (data.name) {
+      const normalizedInput = data.name.replace(/\s+/g, '').toLowerCase();
+      const existingClasses = await this.classRepo.find({ where: { schoolId } });
+      const match = existingClasses.find(c => c.id !== id && c.name.replace(/\s+/g, '').toLowerCase() === normalizedInput);
+
+      if (match) {
+        if (match.isDeleted) {
+          // Soft-delete the class being updated (renamed)
+          existing.isDeleted = true;
+          existing.updatedById = userId;
+          await this.classRepo.save(existing);
+
+          // Restore the matching deleted class
+          match.isDeleted = false;
+          match.isActive = true;
+          match.name = data.name; // Keep input casing
+          match.dailyAttendanceLimit = data.dailyAttendanceLimit ?? match.dailyAttendanceLimit;
+          match.updatedById = userId;
+          const saved = await this.classRepo.save(match);
+
+          // Restore default section if needed
+          const defaultSection = await this.sectionRepo.findOne({
+            where: { classId: saved.id, schoolId, name: 'default', isDefault: true }
+          });
+          if (defaultSection) {
+            defaultSection.isDeleted = false;
+            defaultSection.isActive = true;
+            defaultSection.updatedById = userId;
+            await this.sectionRepo.save(defaultSection);
+          } else {
+            const newDefaultSection = this.sectionRepo.create({
+              schoolId,
+              classId: saved.id,
+              name: 'default',
+              isDefault: true,
+              isActive: true,
+              createdById: userId,
+              updatedById: userId,
+            });
+            await this.sectionRepo.save(newDefaultSection);
+          }
+
+          return saved;
+        }
+
+        if (!match.isActive) {
+          throw new BadRequestException('This class already exists with inactive status');
+        }
+
+        throw new BadRequestException('This class already exists');
+      }
+    }
+
     Object.assign(existing, { ...data, updatedById: userId });
     return await this.classRepo.save(existing);
   }
@@ -72,6 +176,58 @@ export class AcademicService {
 
   // SECTIONS
   async createSection(schoolId: string, data: CreateSectionDto, userId: string) {
+    // 1. Validate that the class exists and belongs to the same school
+    const parentClass = await this.classRepo.findOne({
+      where: { id: data.classId, schoolId, isDeleted: false },
+    });
+    if (!parentClass) {
+      throw new NotFoundException('Class not found');
+    }
+
+    const normalizedInput = data.name.replace(/\s+/g, '').toLowerCase();
+
+    // 2. Validate section name uniqueness in the same class and school
+    const existingSections = await this.sectionRepo.find({
+      where: { schoolId, classId: data.classId },
+    });
+    const match = existingSections.find(s => s.name.replace(/\s+/g, '').toLowerCase() === normalizedInput);
+
+    if (match) {
+      if (match.isDeleted) {
+        // Upsert: restore and make active
+        match.isDeleted = false;
+        match.isActive = true;
+        match.name = data.name;
+        match.updatedById = userId;
+
+        // If the class didn't have sections marked, mark it
+        if (!parentClass.hasSections) {
+          parentClass.hasSections = true;
+          parentClass.updatedById = userId;
+          await this.classRepo.save(parentClass);
+        }
+
+        // Check if there was a default section and soft-delete/deactivate it if restoring a custom one
+        const defaultSection = await this.sectionRepo.findOne({
+          where: { classId: data.classId, schoolId, name: 'default', isDefault: true, isDeleted: false }
+        });
+        if (defaultSection) {
+          defaultSection.isDeleted = true;
+          defaultSection.isActive = false;
+          defaultSection.updatedById = userId;
+          await this.sectionRepo.save(defaultSection);
+        }
+
+        return await this.sectionRepo.save(match);
+      }
+
+      if (!match.isActive) {
+        throw new BadRequestException('This section already exists with inactive status');
+      }
+
+      throw new BadRequestException('This section already exists in this class');
+    }
+
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -90,10 +246,7 @@ export class AcademicService {
       });
 
       // Mark the Class as having multiple sections
-      const parentClass = await queryRunner.manager.findOne(Class, {
-        where: { id: data.classId, schoolId, isDeleted: false },
-      });
-      if (parentClass && !parentClass.hasSections) {
+      if (!parentClass.hasSections) {
         parentClass.hasSections = true;
         parentClass.updatedById = userId;
         await queryRunner.manager.save(Class, parentClass);
@@ -186,6 +339,42 @@ export class AcademicService {
     return await this.sectionRepo.find({ where });
   }
 
+  async updateSection(schoolId: string, id: string, data: UpdateSectionDto, userId: string) {
+    const existing = await this.sectionRepo.findOne({ where: { id, schoolId, isDeleted: false } });
+    if (!existing) throw new NotFoundException('Section not found');
+
+    if (data.name) {
+      const normalizedInput = data.name.replace(/\s+/g, '').toLowerCase();
+      const existingSections = await this.sectionRepo.find({ where: { schoolId, classId: existing.classId } });
+      const match = existingSections.find(s => s.id !== id && s.name.replace(/\s+/g, '').toLowerCase() === normalizedInput);
+
+      if (match) {
+        if (match.isDeleted) {
+          // Soft-delete the section being updated
+          existing.isDeleted = true;
+          existing.updatedById = userId;
+          await this.sectionRepo.save(existing);
+
+          // Restore matching deleted section
+          match.isDeleted = false;
+          match.isActive = true;
+          match.name = data.name;
+          match.updatedById = userId;
+          return await this.sectionRepo.save(match);
+        }
+
+        if (!match.isActive) {
+          throw new BadRequestException('This section already exists with inactive status');
+        }
+
+        throw new BadRequestException('This section already exists in this class');
+      }
+    }
+
+    Object.assign(existing, { ...data, updatedById: userId });
+    return await this.sectionRepo.save(existing);
+  }
+
   async transferStudents(schoolId: string, dto: TransferStudentsDto, userId: string) {
     const { studentEnrollmentIds, targetSectionId, reason } = dto;
 
@@ -247,6 +436,32 @@ export class AcademicService {
 
   // SUBJECTS
   async createSubject(schoolId: string, data: Partial<Subject>, userId: string) {
+    if (!data.name) {
+      throw new BadRequestException('Subject name is required');
+    }
+
+    const normalizedInput = data.name.replace(/\s+/g, '').toLowerCase();
+
+    // Check if subject with same normalized name exists in the school
+    const existingSubjects = await this.subjectRepo.find({ where: { schoolId } });
+    const match = existingSubjects.find(s => s.name.replace(/\s+/g, '').toLowerCase() === normalizedInput);
+
+    if (match) {
+      if (match.isDeleted) {
+        match.isDeleted = false;
+        match.isActive = true;
+        match.name = data.name;
+        match.updatedById = userId;
+        return await this.subjectRepo.save(match);
+      }
+
+      if (!match.isActive) {
+        throw new BadRequestException('This subject already exists with inactive status');
+      }
+
+      throw new BadRequestException('This subject already exists');
+    }
+
     const subject = this.subjectRepo.create({
       ...data,
       schoolId,
@@ -260,8 +475,81 @@ export class AcademicService {
     return await this.subjectRepo.find({ where: { schoolId, isDeleted: false } });
   }
 
+  async updateSubject(schoolId: string, id: string, data: UpdateSubjectDto, userId: string) {
+    const existing = await this.subjectRepo.findOne({ where: { id, schoolId, isDeleted: false } });
+    if (!existing) throw new NotFoundException('Subject not found');
+
+    if (data.name) {
+      const normalizedInput = data.name.replace(/\s+/g, '').toLowerCase();
+      const existingSubjects = await this.subjectRepo.find({ where: { schoolId } });
+      const match = existingSubjects.find(s => s.id !== id && s.name.replace(/\s+/g, '').toLowerCase() === normalizedInput);
+
+      if (match) {
+        if (match.isDeleted) {
+          // Soft-delete the subject being updated
+          existing.isDeleted = true;
+          existing.updatedById = userId;
+          await this.subjectRepo.save(existing);
+
+          // Restore matching deleted subject
+          match.isDeleted = false;
+          match.isActive = true;
+          match.name = data.name;
+          match.updatedById = userId;
+          return await this.subjectRepo.save(match);
+        }
+
+        if (!match.isActive) {
+          throw new BadRequestException('This subject already exists with inactive status');
+        }
+
+        throw new BadRequestException('This subject already exists');
+      }
+    }
+
+    Object.assign(existing, { ...data, updatedById: userId });
+    return await this.subjectRepo.save(existing);
+  }
+
   // MAPPINGS
   async assignSubjectToClassSection(schoolId: string, data: Partial<ClassSectionSubject>, userId: string) {
+    const { classId, sectionId, subjectId } = data;
+
+    if (!classId || !sectionId || !subjectId) {
+      throw new BadRequestException('classId, sectionId, and subjectId are required');
+    }
+
+    // 1. Validate existence of class, section, subject in the school
+    const cls = await this.classRepo.findOne({ where: { id: classId, schoolId, isDeleted: false } });
+    if (!cls) throw new NotFoundException('Class not found');
+
+    const sec = await this.sectionRepo.findOne({ where: { id: sectionId, classId, schoolId, isDeleted: false } });
+    if (!sec) throw new NotFoundException('Section not found');
+
+    const sub = await this.subjectRepo.findOne({ where: { id: subjectId, schoolId, isDeleted: false } });
+    if (!sub) throw new NotFoundException('Subject not found');
+
+    // 2. Validate uniqueness of the mapping
+    const existing = await this.mappingRepo.findOne({
+      where: { schoolId, classId, sectionId, subjectId }
+    });
+
+    if (existing) {
+      if (existing.isDeleted) {
+        existing.isDeleted = false;
+        existing.isActive = true;
+        existing.teacherId = data.teacherId ?? existing.teacherId;
+        existing.updatedById = userId;
+        return await this.mappingRepo.save(existing);
+      }
+
+      if (!existing.isActive) {
+        throw new BadRequestException('This subject mapping already exists with inactive status');
+      }
+
+      throw new BadRequestException('This subject is already mapped to this class and section');
+    }
+
     const mapping = this.mappingRepo.create({
       ...data,
       schoolId,
