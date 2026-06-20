@@ -14,4 +14,4 @@ import { StorageService } from '../../shared/storage/storage.service';
   ],
   exports: [CloudinaryProvider, StorageService],
 })
-export class CloudinaryModule {}
+export class StorageModule {}

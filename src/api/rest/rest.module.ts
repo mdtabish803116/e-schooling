@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { CloudinaryModule } from '../../modules/cloudinary/cloudinary.module';
+import { StorageModule } from '../../modules/storage/storage.module';
 import { AuthModule } from './v1/auth/auth.module';
 import { SchoolsModule } from './v1/schools/schools.module';
 import { SchoolUsersModule } from './v1/school-users/school-users.module';
@@ -14,7 +14,7 @@ import { PlatformModule } from './v1/platform/platform.module';
 import { AttendanceModule } from './v1/attendance/attendance.module';
 
 @Module({
-  imports: [CloudinaryModule, AuthModule, SchoolsModule, SchoolUsersModule, SchoolRolesModule, SubscriptionModule, EntitlementModule, GeoModule, AcademicModule, StudentModule, SystemModule, PlatformModule, AttendanceModule],
+  imports: [StorageModule, AuthModule, SchoolsModule, SchoolUsersModule, SchoolRolesModule, SubscriptionModule, EntitlementModule, GeoModule, AcademicModule, StudentModule, SystemModule, PlatformModule, AttendanceModule],
   controllers: [],
   providers: [],
 })
