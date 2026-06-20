@@ -15,7 +15,7 @@ export const createOrmConfig = (): DataSourceOptions => {
     username,
     password,
     database,
-    synchronize: true, // Migrations will handle DB schema changes
+    synchronize: false, // Migrations will handle DB schema changes
     logging: false,
     entities: entities(),
     migrations: migrations(),

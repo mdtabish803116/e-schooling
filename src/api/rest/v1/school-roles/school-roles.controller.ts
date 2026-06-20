@@ -129,4 +129,16 @@ export class SchoolRolesController {
   ) {
     return this.schoolRolesService.listAccessiblePermissionsForSchool(caller, schoolId);
   }
+
+  @ApiOperation({ summary: 'Get details of a school role by its ID' })
+  @Permission(PermissionKeyEnum.SCHOOL_ROLES_VIEW)
+  @Get(':schoolRoleId')
+  async getSchoolRole(
+    @Param('schoolId') schoolId: string,
+    @Param('schoolRoleId') schoolRoleId: string,
+    @CurrentUser() caller: AuthContext,
+  ) {
+    return this.schoolRolesService.getSchoolRole(caller, schoolId, schoolRoleId);
+  }
 }
+

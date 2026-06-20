@@ -51,6 +51,9 @@ export class Student {
   @Column({ name: 'address', type: 'text', nullable: true, comment: 'Physical address' })
   address: string;
 
+  @Column({ name: 'profile_pic_url', type: 'varchar', nullable: true, comment: 'URL of the student profile picture' })
+  profilePicUrl: string;
+
   @Column({ name: 'is_active', type: 'boolean', nullable: false, default: true, comment: 'Active status toggle' })
   isActive: boolean;
 

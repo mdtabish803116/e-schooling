@@ -10,6 +10,7 @@ import { NotificationProcessor } from '../processors/notification.processor';
 import { ImportExportProcessor } from '../processors/import-export.processor';
 import { CleanupProcessor } from '../processors/cleanup.processor';
 import { PaymentReconciliationProcessor } from '../processors/payment-reconciliation.processor';
+import { StudentProgressionProcessor } from '../processors/student-progression.processor';
 import { QueueProducerService } from './queue-producer.service';
 
 @Injectable()
@@ -24,6 +25,7 @@ export class QueueConsumerService implements OnModuleInit, OnModuleDestroy {
     private readonly importExportProcessor: ImportExportProcessor,
     private readonly cleanupProcessor: CleanupProcessor,
     private readonly paymentReconciliationProcessor: PaymentReconciliationProcessor,
+    private readonly studentProgressionProcessor: StudentProgressionProcessor,
     private readonly queueProducerService: QueueProducerService,
   ) { }
 
@@ -55,7 +57,12 @@ export class QueueConsumerService implements OnModuleInit, OnModuleDestroy {
       return this.cleanupProcessor.process(job);
     });
 
-    // 4. Register the Repeatable Payment Reconciliation Cron Task: Runs every 2 hours
+    // 4. Initialize Student Progression Queue Worker
+    this.createWorker(QueueNames.STUDENT_PROGRESSION, async (job) => {
+      return this.studentProgressionProcessor.process(job);
+    });
+
+    // 5. Register the Repeatable Payment Reconciliation Cron Task: Runs every 2 hours
     try {
       this.logger.log('[QueueConsumerService] Scheduling payment reconciliation task to execute every 2 hours...');
       await this.queueProducerService.addJob({

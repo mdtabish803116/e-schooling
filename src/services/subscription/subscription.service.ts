@@ -466,34 +466,35 @@ export class SubscriptionsService {
       else if (type === OrderItemTypeEnum.ADDON) {
         const { addonType } = order.metadata;
 
-        if (addonType === AddonTypeEnum.STUDENT_BOOSTER_50 || addonType === AddonTypeEnum.STUDENT_BOOSTER_100) {
-          let quota = addonType === AddonTypeEnum.STUDENT_BOOSTER_50 ? 50 : 100;
+        const boosterFeature = await queryRunner.manager.findOne(PlatformFeature, { where: { code: addonType } });
+        if (!boosterFeature) throw new NotFoundException(`Booster feature ${addonType} not found`);
+
+        const limitValue = boosterFeature.defaultLimit || '0';
+
+        if (addonType === AddonTypeEnum.STUDENT_BOOSTER_SMALL || addonType === AddonTypeEnum.STUDENT_BOOSTER_MEDIUM) {
           const studentFeature = await queryRunner.manager.findOne(PlatformFeature, { where: { code: 'STUDENT_MANAGEMENT' } });
           if (studentFeature) {
             const override = new SchoolFeatureOverride();
             override.schoolId = order.schoolId;
             override.platformFeatureId = studentFeature.id;
             override.overrideType = OverrideTypeEnum.CUSTOM_LIMIT;
-            override.limitValue = quota.toString();
+            override.limitValue = limitValue;
             override.customPrice = order.amount;
             override.billingCycle = FeatureBillingCycleEnum.ONE_TIME;
             override.startDate = now;
-            const expiry = new Date(now);
-            expiry.setMonth(expiry.getMonth() + 1);
-            override.endDate = expiry;
+            override.endDate = null;
             override.isActive = true;
             await queryRunner.manager.save(override);
           }
         }
-        else if (addonType === AddonTypeEnum.WHATSAPP_BOOSTER_100 || addonType === AddonTypeEnum.WHATSAPP_BOOSTER_1000) {
-          let quota = addonType === AddonTypeEnum.WHATSAPP_BOOSTER_100 ? 100 : 1000;
+        else if (addonType === AddonTypeEnum.WHATSAPP_BOOSTER_SMALL || addonType === AddonTypeEnum.WHATSAPP_BOOSTER_MEDIUM) {
           const whatsappFeature = await queryRunner.manager.findOne(PlatformFeature, { where: { code: 'WHATSAPP_REMINDERS' } });
           if (whatsappFeature) {
             const override = new SchoolFeatureOverride();
             override.schoolId = order.schoolId;
             override.platformFeatureId = whatsappFeature.id;
             override.overrideType = OverrideTypeEnum.CUSTOM_LIMIT;
-            override.limitValue = quota.toString();
+            override.limitValue = limitValue;
             override.customPrice = order.amount;
             override.billingCycle = FeatureBillingCycleEnum.ONE_TIME;
             override.startDate = now;

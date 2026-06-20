@@ -10,12 +10,14 @@ import { Section } from '../../models/entities/academic/section.entity';
 import { AcademicSession } from '../../models/entities/academic/academic-session.entity';
 import { SchoolUserRole } from '../../models/entities/rbac/school-user-role.entity';
 import { StudentAdmissionDto } from '../../interfaces/request/student/student-admission.dto';
+import { BulkProgressionDto } from '../../interfaces/request/student/bulk-progression.dto';
 import { AuthContext } from '../../interfaces/auth-context.interface';
-import { EnrollmentStatusEnum, EnrollmentTypeEnum, OverrideTypeEnum } from '../../models/enums/enums';
+import { EnrollmentStatusEnum, EnrollmentTypeEnum, OverrideTypeEnum, ActionTypeEnum } from '../../models/enums/enums';
 import { SchoolRole } from '../../models/entities/rbac/school-role.entity';
 import { SchoolSubscription } from '../../models/entities/subscription/school-subscription.entity';
 import { SchoolFeatureOverride } from '../../models/entities/entitlement/school-feature-override.entity';
 import { PlatformFeature } from '../../models/entities/entitlement/platform-feature.entity';
+import { PromotionLog } from '../../models/entities/student/promotion-log.entity';
 
 @Injectable()
 export class StudentAdmissionsService {
@@ -137,6 +139,9 @@ export class StudentAdmissionsService {
       student.parentName = dto.parentName;
       student.parentPhone = dto.parentPhone;
       student.address = dto.address;
+      if (dto.profilePicUrl) {
+        student.profilePicUrl = dto.profilePicUrl;
+      }
       student.admissionNumber = dto.admissionNumber;
       student.studentCode = studentCode;
       student.passwordHash = passwordHash;
@@ -184,4 +189,128 @@ export class StudentAdmissionsService {
       await queryRunner.release();
     }
   }
+
+  async bulkProgressStudents(caller: AuthContext, schoolId: string, dto: BulkProgressionDto) {
+    await this.assertOwnership(caller.id, schoolId);
+
+    // Validate target class, section, session
+    const targetClass = await this.dataSource.getRepository(Class).findOne({ where: { id: dto.targetClassId, schoolId } });
+    if (!targetClass) throw new NotFoundException('Target class not found');
+
+    const targetSection = await this.dataSource.getRepository(Section).findOne({ where: { id: dto.targetSectionId, schoolId } });
+    if (!targetSection) throw new NotFoundException('Target section not found');
+
+    const targetSession = await this.dataSource.getRepository(AcademicSession).findOne({ where: { id: dto.targetSessionId, schoolId } });
+    if (!targetSession) throw new NotFoundException('Target academic session not found');
+
+    let enrollmentType: EnrollmentTypeEnum;
+    let oldEnrollmentState: EnrollmentStatusEnum;
+
+    if (dto.actionType === ActionTypeEnum.PROMOTION) {
+      enrollmentType = EnrollmentTypeEnum.PROMOTION;
+      oldEnrollmentState = EnrollmentStatusEnum.PROMOTED;
+    } else if (dto.actionType === ActionTypeEnum.DEMOTION) {
+      enrollmentType = EnrollmentTypeEnum.DEMOTION;
+      oldEnrollmentState = EnrollmentStatusEnum.DEMOTED;
+    } else if (dto.actionType === ActionTypeEnum.REPEAT) {
+      enrollmentType = EnrollmentTypeEnum.REPEAT;
+      oldEnrollmentState = EnrollmentStatusEnum.COMPLETED;
+    } else if (dto.actionType === ActionTypeEnum.SPECIAL_PROMOTION) {
+      enrollmentType = EnrollmentTypeEnum.SPECIAL_PROMOTION;
+      oldEnrollmentState = EnrollmentStatusEnum.PROMOTED;
+    } else if (dto.actionType === ActionTypeEnum.SECTION_TRANSFER) {
+      enrollmentType = EnrollmentTypeEnum.TRANSFER;
+      oldEnrollmentState = EnrollmentStatusEnum.TRANSFERRED;
+    } else {
+      throw new BadRequestException('Invalid action type');
+    }
+
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      const enrollmentRepo = queryRunner.manager.getRepository(StudentEnrollment);
+      const logRepo = queryRunner.manager.getRepository(PromotionLog);
+
+      const processedStudentIds: string[] = [];
+
+      for (const studentId of dto.studentIds) {
+        // Find student's current active enrollment
+        const currentEnrollment = await enrollmentRepo.findOne({
+          where: { studentId, schoolId, isCurrent: true, isDeleted: false }
+        });
+
+        let previousEnrollmentId: string | undefined = undefined;
+        if (currentEnrollment) {
+          previousEnrollmentId = currentEnrollment.id;
+
+          // 1. Deactivate current active enrollment
+          currentEnrollment.isCurrent = false;
+          currentEnrollment.enrollmentState = oldEnrollmentState;
+          currentEnrollment.endDate = new Date().toISOString().split('T')[0];
+          currentEnrollment.updatedById = caller.id;
+          await enrollmentRepo.save(currentEnrollment);
+        }
+
+        // 2. Create new active enrollment
+        const newEnrollment = new StudentEnrollment();
+        newEnrollment.schoolId = schoolId;
+        newEnrollment.studentId = studentId;
+        newEnrollment.academicSessionId = dto.targetSessionId;
+        newEnrollment.classId = dto.targetClassId;
+        newEnrollment.sectionId = dto.targetSectionId;
+        newEnrollment.enrollmentType = enrollmentType;
+        newEnrollment.enrollmentState = EnrollmentStatusEnum.ACTIVE;
+        newEnrollment.isCurrent = true;
+        if (previousEnrollmentId) {
+          newEnrollment.previousEnrollmentId = previousEnrollmentId;
+        }
+        newEnrollment.createdById = caller.id;
+        newEnrollment.startDate = new Date().toISOString().split('T')[0];
+
+        const savedNewEnrollment = await enrollmentRepo.save(newEnrollment);
+
+        // 3. Log to promotion logs
+        const log = new PromotionLog();
+        log.schoolId = schoolId;
+        log.studentId = studentId;
+        if (previousEnrollmentId) {
+          log.fromEnrollmentId = previousEnrollmentId;
+        }
+        log.toEnrollmentId = savedNewEnrollment.id;
+        if (currentEnrollment?.classId) {
+          log.fromClassId = currentEnrollment.classId;
+        }
+        if (currentEnrollment?.sectionId) {
+          log.fromSectionId = currentEnrollment.sectionId;
+        }
+        log.toClassId = dto.targetClassId;
+        log.toSectionId = dto.targetSectionId;
+        log.actionType = dto.actionType;
+        log.remarks = dto.remarks || `Bulk progression of type: ${dto.actionType}`;
+        log.performedBy = caller.id;
+        log.performedAt = new Date();
+        log.isActive = true;
+        log.isDeleted = false;
+
+        await logRepo.save(log);
+
+        processedStudentIds.push(studentId);
+      }
+
+      await queryRunner.commitTransaction();
+
+      return {
+        message: `Successfully processed ${processedStudentIds.length} student(s) for ${dto.actionType}.`,
+        processedStudentIds
+      };
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
+  }
 }
+

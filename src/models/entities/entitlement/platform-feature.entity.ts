@@ -44,6 +44,9 @@ export class PlatformFeature {
   @Column({ name: 'is_metered', type: 'boolean', nullable: false, default: false, comment: 'True if metered consumption applies' })
   isMetered: boolean;
 
+  @Column({ name: 'default_limit', type: 'varchar', nullable: true, comment: 'Default limit/quota value for this feature or booster' })
+  defaultLimit?: string;
+
   @Column({ name: 'is_active', type: 'boolean', nullable: false, default: true, comment: 'Global availability toggle' })
   isActive: boolean;
 
