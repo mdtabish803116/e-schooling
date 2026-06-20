@@ -18,7 +18,7 @@ export class InitiateOrderDto {
   @IsEnum(BillingCycleEnum)
   billingCycle?: BillingCycleEnum;
 
-  @ApiProperty({ enum: AddonTypeEnum, example: AddonTypeEnum.STUDENT_BOOSTER_100, description: 'Optional: Addon/Booster type (Capacity)' })
+  @ApiProperty({ enum: AddonTypeEnum, example: AddonTypeEnum.STUDENT_BOOSTER_MEDIUM, description: 'Optional: Addon/Booster type (Capacity)' })
   @IsOptional()
   @IsEnum(AddonTypeEnum)
   addonType?: AddonTypeEnum;

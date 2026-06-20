@@ -3,11 +3,13 @@ import { StudentAdmissionsService } from '../../../../services/student/student-a
 import { StudentAdmissionsController } from './student-admissions.controller';
 import { EntitlementService } from '../../../../services/entitlement/entitlement.service';
 import { RBACModule } from '../school-roles/rbac.module';
+import { QueueModule } from '../../../worker/queues/queue.module';
 
 @Module({
-  imports: [RBACModule],
+  imports: [RBACModule, QueueModule],
   controllers: [StudentAdmissionsController],
   providers: [StudentAdmissionsService, EntitlementService],
   exports: [StudentAdmissionsService]
 })
 export class StudentModule {}
+

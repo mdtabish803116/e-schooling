@@ -5,7 +5,7 @@ import { AddonTypeEnum } from '../../../models/enums/enums';
 export class PurchaseAddonDto {
   @ApiProperty({
     enum: AddonTypeEnum,
-    example: AddonTypeEnum.STUDENT_BOOSTER_50,
+    example: AddonTypeEnum.STUDENT_BOOSTER_SMALL,
     description: 'Capacity booster package type',
   })
   @IsNotEmpty()

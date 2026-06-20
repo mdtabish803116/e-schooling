@@ -267,10 +267,10 @@ export class PlatformService {
 
       // 2. Addon Features (Boosters / Metered Extras)
       const addonFeaturesData = [
-        { code: 'STUDENT_BOOSTER_50', name: '50 Student Capacity Booster', desc: 'Adds 50 students capacity to your school', type: FeatureTypeEnum.ADDON, usageUnit: UsageUnitEnum.STUDENTS, isMetered: false, prices: [{ cycle: BillingCycleEnum.MONTHLY, price: 500.00 }, { cycle: BillingCycleEnum.QUARTERLY, price: 1350.00 }, { cycle: BillingCycleEnum.YEARLY, price: 5000.00 }] },
-        { code: 'STUDENT_BOOSTER_100', name: '100 Student Capacity Booster', desc: 'Adds 100 students capacity to your school', type: FeatureTypeEnum.ADDON, usageUnit: UsageUnitEnum.STUDENTS, isMetered: false, prices: [{ cycle: BillingCycleEnum.MONTHLY, price: 800.00 }, { cycle: BillingCycleEnum.QUARTERLY, price: 2200.00 }, { cycle: BillingCycleEnum.YEARLY, price: 8000.00 }] },
-        { code: 'WHATSAPP_BOOSTER_100', name: '100 WhatsApp Message Booster', desc: 'Adds 100 messages to your WhatsApp reminders balance', type: FeatureTypeEnum.ADDON, usageUnit: UsageUnitEnum.MESSAGES, isMetered: false, prices: [{ cycle: BillingCycleEnum.MONTHLY, price: 50.00 }, { cycle: BillingCycleEnum.QUARTERLY, price: 135.00 }, { cycle: BillingCycleEnum.YEARLY, price: 500.00 }] },
-        { code: 'WHATSAPP_BOOSTER_1000', name: '1000 WhatsApp Message Booster', desc: 'Adds 1000 messages to your WhatsApp reminders balance', type: FeatureTypeEnum.ADDON, usageUnit: UsageUnitEnum.MESSAGES, isMetered: false, prices: [{ cycle: BillingCycleEnum.MONTHLY, price: 400.00 }, { cycle: BillingCycleEnum.QUARTERLY, price: 1100.00 }, { cycle: BillingCycleEnum.YEARLY, price: 4000.00 }] },
+        { code: 'STUDENT_BOOSTER_SMALL', name: 'Small Student Capacity Booster', desc: 'Adds 50 students capacity to your school', type: FeatureTypeEnum.ADDON, usageUnit: UsageUnitEnum.STUDENTS, isMetered: false, defaultLimit: '50', prices: [{ cycle: BillingCycleEnum.MONTHLY, price: 500.00 }, { cycle: BillingCycleEnum.QUARTERLY, price: 1350.00 }, { cycle: BillingCycleEnum.YEARLY, price: 5000.00 }] },
+        { code: 'STUDENT_BOOSTER_MEDIUM', name: 'Medium Student Capacity Booster', desc: 'Adds 100 students capacity to your school', type: FeatureTypeEnum.ADDON, usageUnit: UsageUnitEnum.STUDENTS, isMetered: false, defaultLimit: '100', prices: [{ cycle: BillingCycleEnum.MONTHLY, price: 800.00 }, { cycle: BillingCycleEnum.QUARTERLY, price: 2200.00 }, { cycle: BillingCycleEnum.YEARLY, price: 8000.00 }] },
+        { code: 'WHATSAPP_BOOSTER_SMALL', name: 'Small WhatsApp Message Booster', desc: 'Adds 100 messages to your WhatsApp reminders balance', type: FeatureTypeEnum.ADDON, usageUnit: UsageUnitEnum.MESSAGES, isMetered: false, defaultLimit: '100', prices: [{ cycle: BillingCycleEnum.MONTHLY, price: 50.00 }, { cycle: BillingCycleEnum.QUARTERLY, price: 135.00 }, { cycle: BillingCycleEnum.YEARLY, price: 500.00 }] },
+        { code: 'WHATSAPP_BOOSTER_MEDIUM', name: 'Medium WhatsApp Message Booster', desc: 'Adds 1000 messages to your WhatsApp reminders balance', type: FeatureTypeEnum.ADDON, usageUnit: UsageUnitEnum.MESSAGES, isMetered: false, defaultLimit: '1000', prices: [{ cycle: BillingCycleEnum.MONTHLY, price: 400.00 }, { cycle: BillingCycleEnum.QUARTERLY, price: 1100.00 }, { cycle: BillingCycleEnum.YEARLY, price: 4000.00 }] },
       ];
       for (const afd of addonFeaturesData) {
         let f = await featRepo.findOne({ where: { code: afd.code } });
@@ -282,7 +282,11 @@ export class PlatformService {
           f.featureType = afd.type;
           f.usageUnit = afd.usageUnit;
           f.isMetered = afd.isMetered;
+          f.defaultLimit = afd.defaultLimit;
           f.isActive = true;
+          f = await featRepo.save(f);
+        } else if (!f.defaultLimit) {
+          f.defaultLimit = afd.defaultLimit;
           f = await featRepo.save(f);
         }
         seededFeatures[afd.code] = f;

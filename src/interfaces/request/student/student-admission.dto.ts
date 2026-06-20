@@ -71,4 +71,9 @@ export class StudentAdmissionDto {
   @IsString()
   @IsNotEmpty()
   roleId: string;
+
+  @ApiProperty({ example: 'https://res.cloudinary.com/.../img.png', description: 'Student profile picture URL', required: false })
+  @IsString()
+  @IsOptional()
+  profilePicUrl?: string;
 }
