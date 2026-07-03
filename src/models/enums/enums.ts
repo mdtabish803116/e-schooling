@@ -17,102 +17,38 @@ export enum PlatformRoleEnum {
   SUPPORT = 'support',
 }
 
-/**
- * All permission keys in the system.
- * Format: "{resource}:{action}"
- *
- * These are the exact string values stored in the permissions.key column.
- * Platform admins seed rows for each of these into the DB.
- * School owners assign these permissions to custom roles.
- * School users get permissions via their assigned roles.
- */
-export enum PermissionKeyEnum {
-  // Dashboard
-  DASHBOARD_VIEW = 'dashboard:view',
-
-  // Attendance
-  ATTENDANCE_VIEW    = 'attendance:view',
-  ATTENDANCE_CREATE  = 'attendance:create',
-  ATTENDANCE_UPDATE  = 'attendance:update',
-  ATTENDANCE_DELETE  = 'attendance:delete',
-
-  // Classes
-  CLASSES_VIEW   = 'classes:view',
-  CLASSES_CREATE = 'classes:create',
-  CLASSES_UPDATE = 'classes:update',
-  CLASSES_DELETE = 'classes:delete',
-
-  // Sections
-  SECTIONS_VIEW   = 'sections:view',
-  SECTIONS_CREATE = 'sections:create',
-  SECTIONS_UPDATE = 'sections:update',
-  SECTIONS_DELETE = 'sections:delete',
-
-  // Subjects
-  SUBJECTS_VIEW   = 'subjects:view',
-  SUBJECTS_CREATE = 'subjects:create',
-  SUBJECTS_UPDATE = 'subjects:update',
-  SUBJECTS_DELETE = 'subjects:delete',
-
-  // Academic Mapping
-  ACADEMIC_MAPPING_VIEW   = 'academic_mapping:view',
-  ACADEMIC_MAPPING_MANAGE = 'academic_mapping:manage',
-
-  // Students
-  STUDENTS_VIEW   = 'students:view',
-  STUDENTS_CREATE = 'students:create',
-  STUDENTS_UPDATE = 'students:update',
-  STUDENTS_DELETE = 'students:delete',
-  STUDENTS_ADMISSION = 'students:admission',
-
-  // Fees
-  FEES_VIEW   = 'fees:view',
-  FEES_CREATE = 'fees:create',
-  FEES_UPDATE = 'fees:update',
-  FEES_MANAGE = 'fees:manage',
-
-  // Timetable
-  TIMETABLE_VIEW   = 'timetable:view',
-  TIMETABLE_MANAGE = 'timetable:manage',
-
-  // Exams
-  EXAMS_VIEW   = 'exams:view',
-  EXAMS_CREATE = 'exams:create',
-  EXAMS_UPDATE = 'exams:update',
-
-  // Reports
-  REPORTS_VIEW = 'reports:view',
-
-  // School Users (manage staff)
-  SCHOOL_USERS_UPDATE = 'school_users:update',
-
-  // School Roles & Permissions
-  SCHOOL_ROLES_VIEW = 'school_roles:view',
-  SCHOOL_ROLES_MANAGE = 'school_roles:manage',
-
-  // Platform Administration
-  PLATFORM_SCHOOLS_VIEW   = 'platform:schools:view',
-  PLATFORM_SCHOOLS_UPDATE = 'platform:schools:update',
-  PLATFORM_SCHOOLS_DELETE = 'platform:schools:delete',
-
-  PLATFORM_OWNERS_VIEW   = 'platform:owners:view',
-  PLATFORM_OWNERS_UPDATE = 'platform:owners:update',
-  PLATFORM_OWNERS_DELETE = 'platform:owners:delete',
-
-  PLATFORM_STUDENTS_VIEW = 'platform:students:view',
-  PLATFORM_STAFF_VIEW    = 'platform:staff:view',
-
-  PLATFORM_FEATURES_VIEW = 'platform:features:view',
-  PLATFORM_FEATURES_MANAGE = 'platform:features:manage',
-
-  PLATFORM_MODULES_VIEW = 'platform:modules:view',
-  PLATFORM_MODULES_MANAGE = 'platform:modules:manage',
-
-  // Finance & Subscription
-  FINANCE_ORDER_VIEW   = 'finance:order:view',
-  FINANCE_INVOICE_VIEW = 'finance:invoice:view',
-  SUBSCRIPTION_VIEW    = 'subscription:view'
+export enum ResourceEnum {
+  DASHBOARD = 'dashboard',
+  ATTENDANCE = 'attendance',
+  CLASSES = 'classes',
+  SECTIONS = 'sections',
+  SUBJECTS = 'subjects',
+  ACADEMIC_MAPPING = 'academic_mapping',
+  STUDENTS = 'students',
+  FEES = 'fees',
+  TIMETABLE = 'timetable',
+  EXAMS = 'exams',
+  REPORTS = 'reports',
+  SCHOOL_USERS = 'school_users',
+  SCHOOL_ROLES = 'school_roles',
+  PLATFORM_SCHOOLS = 'platform:schools',
+  PLATFORM_OWNERS = 'platform:owners',
+  PLATFORM_STUDENTS = 'platform:students',
+  PLATFORM_STAFF = 'platform:staff',
+  PLATFORM_FEATURES = 'platform:features',
+  PLATFORM_MODULES = 'platform:modules',
+  FINANCE_ORDER = 'finance:order',
+  FINANCE_INVOICE = 'finance:invoice',
+  SUBSCRIPTION = 'subscription',
 }
+
+export enum ActionEnum {
+  VIEW = 'view',
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+}
+
 
 
 export enum InvitationStatusEnum {

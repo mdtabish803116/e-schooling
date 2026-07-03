@@ -6,7 +6,7 @@ import { Permission } from '../../../../shared/decorators/permission.decorator';
 import { CurrentUser } from '../../../../shared/decorators/current-user.decorator';
 import { SubscriptionsService } from '../../../../services/subscription/subscription.service';
 import type { AuthContext } from '../../../../interfaces/auth-context.interface';
-import { PermissionKeyEnum } from '../../../../models/enums/enums';
+import { ResourceEnum, ActionEnum } from '../../../../models/enums/enums';
 import { InitiateOrderDto, VerifyPaymentDto } from '../../../../interfaces/request/subscription/initiate-order.dto';
 
 @ApiTags('Subscriptions')
@@ -53,7 +53,7 @@ export class SubscriptionsController {
   }
 
   @ApiOperation({ summary: 'Get billing history (orders & payments)' })
-  @Permission(PermissionKeyEnum.FINANCE_ORDER_VIEW)
+  @Permission(ResourceEnum.FINANCE_ORDER, ActionEnum.VIEW)
   @Get(':schoolId/history')
   async getBillingHistory(
     @Param('schoolId') schoolId: string
@@ -62,7 +62,7 @@ export class SubscriptionsController {
   }
 
   @ApiOperation({ summary: 'Get all invoices for a school' })
-  @Permission(PermissionKeyEnum.FINANCE_INVOICE_VIEW)
+  @Permission(ResourceEnum.FINANCE_INVOICE, ActionEnum.VIEW)
   @Get(':schoolId/invoices')
   async listInvoices(
     @Param('schoolId') schoolId: string,
@@ -71,7 +71,7 @@ export class SubscriptionsController {
   }
 
   @ApiOperation({ summary: 'Get real-time subscription usage and limits' })
-  @Permission(PermissionKeyEnum.SUBSCRIPTION_VIEW)
+  @Permission(ResourceEnum.SUBSCRIPTION, ActionEnum.VIEW)
   @Get(':schoolId/usage')
   async getUsageStats(
     @Param('schoolId') schoolId: string,

@@ -9,7 +9,7 @@ import type { AuthContext } from '../../../../interfaces/auth-context.interface'
 import { CreateSchoolRoleDto } from '../../../../interfaces/request/school-role/create-school-role.dto';
 import { UpdateSchoolRoleDto } from '../../../../interfaces/request/school-role/update-school-role.dto';
 import { AssignSchoolPermissionsDto } from '../../../../interfaces/request/school-role/assign-school-permissions.dto';
-import { PermissionKeyEnum } from '../../../../models/enums/enums';
+import { ResourceEnum, ActionEnum } from '../../../../models/enums/enums';
 
 @ApiTags('School Roles & Permissions')
 @ApiBearerAuth('JWT-auth')
@@ -19,7 +19,7 @@ export class SchoolRolesController {
   constructor(private readonly schoolRolesService: SchoolRolesService) {}
 
   @ApiOperation({ summary: 'Step 1: Create a basic custom school role' })
-  @Permission(PermissionKeyEnum.SCHOOL_ROLES_MANAGE)
+  @Permission(ResourceEnum.SCHOOL_ROLES, ActionEnum.CREATE)
   @Post()
   async createSchoolRole(
     @Param('schoolId') schoolId: string,
@@ -30,7 +30,7 @@ export class SchoolRolesController {
   }
 
   @ApiOperation({ summary: 'Update school role metadata (name/description)' })
-  @Permission(PermissionKeyEnum.SCHOOL_ROLES_MANAGE)
+  @Permission(ResourceEnum.SCHOOL_ROLES, ActionEnum.UPDATE)
   @Patch(':schoolRoleId')
   async updateSchoolRole(
     @Param('schoolId') schoolId: string,
@@ -42,7 +42,7 @@ export class SchoolRolesController {
   }
 
   @ApiOperation({ summary: 'Deactivate / Soft Delete a school role' })
-  @Permission(PermissionKeyEnum.SCHOOL_ROLES_MANAGE)
+  @Permission(ResourceEnum.SCHOOL_ROLES, ActionEnum.DELETE)
   @Delete(':schoolRoleId')
   async deactivateSchoolRole(
     @Param('schoolId') schoolId: string,
@@ -53,7 +53,7 @@ export class SchoolRolesController {
   }
 
   @ApiOperation({ summary: 'Activate / Deactivate a school role active status' })
-  @Permission(PermissionKeyEnum.SCHOOL_ROLES_MANAGE)
+  @Permission(ResourceEnum.SCHOOL_ROLES, ActionEnum.UPDATE)
   @Patch(':schoolRoleId/status')
   async updateSchoolRoleStatus(
     @Param('schoolId') schoolId: string,
@@ -65,7 +65,7 @@ export class SchoolRolesController {
   }
 
   @ApiOperation({ summary: 'Permanently remove a school role and its permissions' })
-  @Permission(PermissionKeyEnum.SCHOOL_ROLES_MANAGE)
+  @Permission(ResourceEnum.SCHOOL_ROLES, ActionEnum.DELETE)
   @Delete(':schoolRoleId/remove')
   async removeSchoolRole(
     @Param('schoolId') schoolId: string,
@@ -76,7 +76,7 @@ export class SchoolRolesController {
   }
 
   @ApiOperation({ summary: 'Get all active permissions currently assigned to a school role' })
-  @Permission(PermissionKeyEnum.SCHOOL_ROLES_VIEW)
+  @Permission(ResourceEnum.SCHOOL_ROLES, ActionEnum.VIEW)
   @Get(':schoolRoleId/permissions')
   async getPermissionsForSchoolRole(
     @Param('schoolId') schoolId: string,
@@ -87,7 +87,7 @@ export class SchoolRolesController {
   }
 
   @ApiOperation({ summary: 'Step 2: Assign granular permissions to a school role' })
-  @Permission(PermissionKeyEnum.SCHOOL_ROLES_MANAGE)
+  @Permission(ResourceEnum.SCHOOL_ROLES, ActionEnum.UPDATE)
   @Post(':schoolRoleId/permissions')
   async assignPermissionsToSchoolRole(
     @Param('schoolId') schoolId: string,
@@ -99,7 +99,7 @@ export class SchoolRolesController {
   }
 
   @ApiOperation({ summary: 'Remove a specific permission from a school role (Soft Delete)' })
-  @Permission(PermissionKeyEnum.SCHOOL_ROLES_MANAGE)
+  @Permission(ResourceEnum.SCHOOL_ROLES, ActionEnum.DELETE)
   @Delete(':schoolRoleId/permissions/:permissionId')
   async removePermissionFromSchoolRole(
     @Param('schoolId') schoolId: string,
@@ -111,7 +111,7 @@ export class SchoolRolesController {
   }
 
   @ApiOperation({ summary: 'List all active school roles in a school' })
-  @Permission(PermissionKeyEnum.SCHOOL_ROLES_VIEW)
+  @Permission(ResourceEnum.SCHOOL_ROLES, ActionEnum.VIEW)
   @Get()
   async listSchoolRoles(
     @Param('schoolId') schoolId: string,
@@ -121,7 +121,7 @@ export class SchoolRolesController {
   }
 
   @ApiOperation({ summary: 'List all accordion-ready permissions available to this school tier' })
-  @Permission(PermissionKeyEnum.SCHOOL_ROLES_VIEW)
+  @Permission(ResourceEnum.SCHOOL_ROLES, ActionEnum.VIEW)
   @Get('permissions')
   async listSchoolPermissions(
     @Param('schoolId') schoolId: string,
@@ -131,7 +131,7 @@ export class SchoolRolesController {
   }
 
   @ApiOperation({ summary: 'Get details of a school role by its ID' })
-  @Permission(PermissionKeyEnum.SCHOOL_ROLES_VIEW)
+  @Permission(ResourceEnum.SCHOOL_ROLES, ActionEnum.VIEW)
   @Get(':schoolRoleId')
   async getSchoolRole(
     @Param('schoolId') schoolId: string,
@@ -141,4 +141,3 @@ export class SchoolRolesController {
     return this.schoolRolesService.getSchoolRole(caller, schoolId, schoolRoleId);
   }
 }
-

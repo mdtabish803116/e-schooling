@@ -9,7 +9,7 @@ import type { AuthContext } from '../../../../interfaces/auth-context.interface'
 import { CreateSchoolUserDto } from '../../../../interfaces/request/school-user/create-school-user.dto';
 import { AssignSchoolRoleDto } from '../../../../interfaces/request/school-user/assign-school-role.dto';
 import { UpdateSchoolUserProfileDto } from '../../../../interfaces/request/school-user/update-school-user-profile.dto';
-import { PermissionKeyEnum } from '../../../../models/enums/enums';
+import { ResourceEnum, ActionEnum } from '../../../../models/enums/enums';
 
 @ApiTags('School Users')
 @ApiBearerAuth('JWT-auth')
@@ -19,7 +19,7 @@ export class SchoolUsersController {
   constructor(private readonly schoolUsersService: SchoolUsersService) {}
 
   @ApiOperation({ summary: 'Create a school user (teacher / accountant / admin / staff) and optionally assign a role' })
-  @Permission(PermissionKeyEnum.SCHOOL_USERS_UPDATE)
+  @Permission(ResourceEnum.SCHOOL_USERS, ActionEnum.CREATE)
   @Post()
   async createUser(
     @Param('schoolId') schoolId: string,
@@ -30,7 +30,7 @@ export class SchoolUsersController {
   }
 
   @ApiOperation({ summary: 'List all users in a school' })
-  @Permission(PermissionKeyEnum.SCHOOL_USERS_UPDATE)
+  @Permission(ResourceEnum.SCHOOL_USERS, ActionEnum.VIEW)
   @Get()
   async listUsers(
     @Param('schoolId') schoolId: string,
@@ -40,7 +40,7 @@ export class SchoolUsersController {
   }
 
   @ApiOperation({ summary: 'Assign one or more school roles to a school user' })
-  @Permission(PermissionKeyEnum.SCHOOL_USERS_UPDATE)
+  @Permission(ResourceEnum.SCHOOL_USERS, ActionEnum.UPDATE)
   @Post(':userId/assign-school-roles')
   async assignSchoolRoles(
     @Param('schoolId') schoolId: string,
@@ -52,7 +52,7 @@ export class SchoolUsersController {
   }
 
   @ApiOperation({ summary: 'De-assign / Remove a school role from a school user (Soft Delete)' })
-  @Permission(PermissionKeyEnum.SCHOOL_USERS_UPDATE)
+  @Permission(ResourceEnum.SCHOOL_USERS, ActionEnum.DELETE)
   @Delete(':userId/school-roles/:schoolRoleId')
   async deassignSchoolRole(
     @Param('schoolId') schoolId: string,
@@ -64,7 +64,7 @@ export class SchoolUsersController {
   }
 
   @ApiOperation({ summary: 'Upsert extended profile for a school user' })
-  @Permission(PermissionKeyEnum.SCHOOL_USERS_UPDATE)
+  @Permission(ResourceEnum.SCHOOL_USERS, ActionEnum.UPDATE)
   @Patch(':userId/profile')
   async upsertUserProfile(
     @Param('schoolId') schoolId: string,
@@ -76,7 +76,7 @@ export class SchoolUsersController {
   }
 
   @ApiOperation({ summary: 'Get school user profile' })
-  @Permission(PermissionKeyEnum.SCHOOL_USERS_UPDATE)
+  @Permission(ResourceEnum.SCHOOL_USERS, ActionEnum.VIEW)
   @Get(':userId/profile')
   async getUserProfile(
     @Param('schoolId') schoolId: string,

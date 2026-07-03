@@ -13,9 +13,7 @@ export class ModuleOperationPermission {
   @Column({ name: 'operation_id', type: 'bigint', nullable: false, comment: 'Reference to OperationMaster' })
   operationId: string;
 
-  @Index({ unique: true })
-  @Column({ name: 'key', type: 'varchar', nullable: false, comment: 'Computed dynamic key e.g. CLASSES_CREATE' })
-  key: string;
+
 
   @Column({ name: 'description', type: 'text', nullable: true, comment: 'Permission description' })
   description: string;

@@ -6,6 +6,9 @@ import { PlatformRole } from '../../models/entities/platform/platform-role.entit
 import { PlatformUserRoleMapping } from '../../models/entities/platform/platform-user-role-mapping.entity';
 import { PlatformRolePermission } from '../../models/entities/platform/platform-role-permission.entity';
 import { ModuleOperationPermission } from '../../models/entities/rbac/module-operation-permission.entity';
+import { PERMISSION_KEY, PermissionMetadata } from '../decorators/permission.decorator';
+import { ModuleMaster } from '../../models/entities/rbac/module-master.entity';
+import { OperationMaster } from '../../models/entities/rbac/operation-master.entity';
 
 @Injectable()
 export class PlatformPermissionGuard implements CanActivate {
@@ -15,7 +18,10 @@ export class PlatformPermissionGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const requiredPermission = this.reflector.get<string>('permission', context.getHandler());
+    const requiredPermission = this.reflector.getAllAndOverride<PermissionMetadata>(PERMISSION_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
     if (!requiredPermission) return true;
 
     const request = context.switchToHttp().getRequest();
@@ -49,14 +55,25 @@ export class PlatformPermissionGuard implements CanActivate {
     const permissionIds = rolePermissions.map(rp => rp.permissionId);
     if (permissionIds.length === 0) return false;
 
-    const permissions = await this.dataSource.getRepository(ModuleOperationPermission).find({
-      where: { id: In(permissionIds), isActive: true, isDeleted: false }
-    });
+    const matchingPermission = await this.dataSource.getRepository(ModuleOperationPermission)
+      .createQueryBuilder('p')
+      .innerJoin(ModuleMaster, 'm', 'm.id = p.moduleId')
+      .innerJoin(OperationMaster, 'o', 'o.id = p.operationId')
+      .where('p.id IN (:...permissionIds)', { permissionIds })
+      .andWhere('LOWER(m.code) = :resource', { resource: requiredPermission.resource.toLowerCase() })
+      .andWhere('LOWER(o.code) = :action', { action: requiredPermission.action.toLowerCase() })
+      .andWhere('p.isActive = true')
+      .andWhere('p.isDeleted = false')
+      .andWhere('m.isActive = true')
+      .andWhere('m.isDeleted = false')
+      .andWhere('o.isActive = true')
+      .andWhere('o.isDeleted = false')
+      .getOne();
 
-    const hasPermission = permissions.some(p => p.key === requiredPermission);
+    const hasPermission = !!matchingPermission;
     
     if (!hasPermission) {
-      throw new ForbiddenException(`Missing required platform permission: ${requiredPermission}`);
+      throw new ForbiddenException(`Missing required platform permission: ${requiredPermission.resource}:${requiredPermission.action}`);
     }
 
     return true;

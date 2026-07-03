@@ -8,7 +8,7 @@ import { FeatureGuard } from '../../../../shared/guards/feature.guard';
 import { PermissionGuard } from '../../../../shared/guards/permission.guard';
 import { Permission } from '../../../../shared/decorators/permission.decorator';
 import { Feature } from '../../../../shared/decorators/feature.decorator';
-import { PermissionKeyEnum, JobTypeEnum, ActionTypeEnum } from '../../../../models/enums/enums';
+import { ResourceEnum, ActionEnum, JobTypeEnum, ActionTypeEnum } from '../../../../models/enums/enums';
 import { CurrentUser } from '../../../../shared/decorators/current-user.decorator';
 import type { AuthContext } from '../../../../interfaces/auth-context.interface';
 import { QueueProducerService } from '../../../../api/worker/queues/queue-producer.service';
@@ -39,7 +39,7 @@ export class StudentAdmissionsController {
     }
   })
   @Post('admissions')
-  @Permission(PermissionKeyEnum.STUDENTS_ADMISSION)
+  @Permission(ResourceEnum.STUDENTS, ActionEnum.CREATE)
   @Feature('STUDENT_MANAGEMENT') 
   async admitStudent(
     @CurrentUser() caller: AuthContext,
@@ -51,7 +51,7 @@ export class StudentAdmissionsController {
 
   @ApiOperation({ summary: 'Bulk promote, demote, or repeat students' })
   @Post('progress')
-  @Permission(PermissionKeyEnum.STUDENTS_UPDATE)
+  @Permission(ResourceEnum.STUDENTS, ActionEnum.UPDATE)
   @Feature('STUDENT_MANAGEMENT')
   async bulkProgress(
     @CurrentUser() caller: AuthContext,
@@ -86,5 +86,3 @@ export class StudentAdmissionsController {
     };
   }
 }
-
-

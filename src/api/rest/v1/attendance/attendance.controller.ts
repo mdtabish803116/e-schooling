@@ -10,7 +10,7 @@ import { AttendanceService } from '../../../../services/attendance/attendance.se
 import type { AuthContext } from '../../../../interfaces/auth-context.interface';
 import { TakeAttendanceDto } from '../../../../interfaces/request/attendance/take-attendance.dto';
 import { UpdateAttendanceDto } from '../../../../interfaces/request/attendance/update-attendance.dto';
-import { PermissionKeyEnum } from '../../../../models/enums/enums';
+import { ResourceEnum, ActionEnum } from '../../../../models/enums/enums';
 
 @ApiTags('Attendance Management')
 @ApiBearerAuth('JWT-auth')
@@ -21,7 +21,7 @@ export class AttendanceController {
   constructor(private readonly attendanceService: AttendanceService) {}
 
   @ApiOperation({ summary: 'Take class/section student attendance in bulk' })
-  @Permission(PermissionKeyEnum.ATTENDANCE_CREATE)
+  @Permission(ResourceEnum.ATTENDANCE, ActionEnum.CREATE)
   @Post()
   async takeAttendance(
     @Param('schoolId') schoolId: string,
@@ -32,7 +32,7 @@ export class AttendanceController {
   }
 
   @ApiOperation({ summary: 'Bulk update specific student attendance marks' })
-  @Permission(PermissionKeyEnum.ATTENDANCE_UPDATE)
+  @Permission(ResourceEnum.ATTENDANCE, ActionEnum.UPDATE)
   @Patch(':sessionId')
   async updateAttendance(
     @Param('schoolId') schoolId: string,

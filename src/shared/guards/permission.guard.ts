@@ -2,7 +2,7 @@ import { Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@
 import { Reflector } from '@nestjs/core';
 import { DataSource } from 'typeorm';
 import { RBACService } from '../../services/school-roles/rbac.service';
-import { PERMISSION_KEY } from '../decorators/permission.decorator';
+import { PERMISSION_KEY, PermissionMetadata } from '../decorators/permission.decorator';
 import { SchoolOwnerMember } from '../../models/entities/school/school-owner-member.entity';
 
 @Injectable()
@@ -14,7 +14,7 @@ export class PermissionGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const requiredPermission = this.reflector.getAllAndOverride<string>(PERMISSION_KEY, [
+    const requiredPermission = this.reflector.getAllAndOverride<PermissionMetadata>(PERMISSION_KEY, [
       context.getHandler(),
       context.getClass(),
     ]);
@@ -50,11 +50,15 @@ export class PermissionGuard implements CanActivate {
       return true;
     }
 
-    const hasPermission = await this.rbacService.hasPermission(user.id, requiredPermission);
+    const hasPermission = await this.rbacService.hasPermission(
+      user.id,
+      requiredPermission.resource,
+      requiredPermission.action,
+    );
 
     if (!hasPermission) {
       throw new ForbiddenException({
-        message: `Permission '${requiredPermission}' denied`,
+        message: `Permission '${requiredPermission.resource}:${requiredPermission.action}' denied`,
       });
     }
 

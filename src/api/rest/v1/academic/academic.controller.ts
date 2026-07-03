@@ -8,7 +8,7 @@ import { Feature } from '../../../../shared/decorators/feature.decorator';
 import { Permission } from '../../../../shared/decorators/permission.decorator';
 import { AcademicService } from '../../../../services/academic/academic.service';
 import type { AuthContext } from '../../../../interfaces/auth-context.interface';
-import { PermissionKeyEnum } from '../../../../models/enums/enums';
+import { ResourceEnum, ActionEnum } from '../../../../models/enums/enums';
 import { CreateClassDto } from '../../../../interfaces/request/academic/create-class.dto';
 import { UpdateClassDto } from '../../../../interfaces/request/academic/update-class.dto';
 import { CreateSectionDto } from '../../../../interfaces/request/academic/create-section.dto';
@@ -26,7 +26,7 @@ export class AcademicController {
 
   // CLASSES
   @ApiOperation({ summary: 'Create a new class' })
-  @Permission(PermissionKeyEnum.CLASSES_CREATE)
+  @Permission(ResourceEnum.CLASSES, ActionEnum.CREATE)
   @Post('classes')
   async createClass(
     @Param('schoolId') schoolId: string,
@@ -37,14 +37,14 @@ export class AcademicController {
   }
 
   @ApiOperation({ summary: 'Get all classes' })
-  @Permission(PermissionKeyEnum.CLASSES_VIEW)
+  @Permission(ResourceEnum.CLASSES, ActionEnum.VIEW)
   @Get('classes')
   async getClasses(@Param('schoolId') schoolId: string) {
     return this.academicService.getClasses(schoolId);
   }
 
   @ApiOperation({ summary: 'Update a class' })
-  @Permission(PermissionKeyEnum.CLASSES_UPDATE)
+  @Permission(ResourceEnum.CLASSES, ActionEnum.UPDATE)
   @Patch('classes/:id')
   async updateClass(
     @Param('schoolId') schoolId: string,
@@ -56,7 +56,7 @@ export class AcademicController {
   }
 
   @ApiOperation({ summary: 'Delete a class' })
-  @Permission(PermissionKeyEnum.CLASSES_DELETE)
+  @Permission(ResourceEnum.CLASSES, ActionEnum.DELETE)
   @Delete('classes/:id')
   async deleteClass(
     @Param('schoolId') schoolId: string,
@@ -68,7 +68,7 @@ export class AcademicController {
 
   // SECTIONS
   @ApiOperation({ summary: 'Create a new section' })
-  @Permission(PermissionKeyEnum.SECTIONS_CREATE)
+  @Permission(ResourceEnum.SECTIONS, ActionEnum.CREATE)
   @Post('sections')
   async createSection(
     @Param('schoolId') schoolId: string,
@@ -79,7 +79,7 @@ export class AcademicController {
   }
 
   @ApiOperation({ summary: 'Get all sections' })
-  @Permission(PermissionKeyEnum.SECTIONS_VIEW)
+  @Permission(ResourceEnum.SECTIONS, ActionEnum.VIEW)
   @Get('sections')
   async getSections(
     @Param('schoolId') schoolId: string,
@@ -89,7 +89,7 @@ export class AcademicController {
   }
 
   @ApiOperation({ summary: 'Update a section' })
-  @Permission(PermissionKeyEnum.SECTIONS_UPDATE)
+  @Permission(ResourceEnum.SECTIONS, ActionEnum.UPDATE)
   @Patch('sections/:id')
   async updateSection(
     @Param('schoolId') schoolId: string,
@@ -101,7 +101,7 @@ export class AcademicController {
   }
 
   @ApiOperation({ summary: 'Bulk transfer students to a section' })
-  @Permission(PermissionKeyEnum.SECTIONS_UPDATE)
+  @Permission(ResourceEnum.SECTIONS, ActionEnum.UPDATE)
   @Patch('sections/transfer-students')
   async transferStudents(
     @Param('schoolId') schoolId: string,
@@ -113,7 +113,7 @@ export class AcademicController {
 
   // SUBJECTS
   @ApiOperation({ summary: 'Create a new subject' })
-  @Permission(PermissionKeyEnum.SUBJECTS_CREATE)
+  @Permission(ResourceEnum.SUBJECTS, ActionEnum.CREATE)
   @Post('subjects')
   async createSubject(
     @Param('schoolId') schoolId: string,
@@ -124,14 +124,14 @@ export class AcademicController {
   }
 
   @ApiOperation({ summary: 'Get all subjects' })
-  @Permission(PermissionKeyEnum.SUBJECTS_VIEW)
+  @Permission(ResourceEnum.SUBJECTS, ActionEnum.VIEW)
   @Get('subjects')
   async getSubjects(@Param('schoolId') schoolId: string) {
     return this.academicService.getSubjects(schoolId);
   }
 
   @ApiOperation({ summary: 'Update a subject' })
-  @Permission(PermissionKeyEnum.SUBJECTS_UPDATE)
+  @Permission(ResourceEnum.SUBJECTS, ActionEnum.UPDATE)
   @Patch('subjects/:id')
   async updateSubject(
     @Param('schoolId') schoolId: string,
@@ -144,7 +144,7 @@ export class AcademicController {
 
   // MAPPINGS
   @ApiOperation({ summary: 'Map subject to class and section' })
-  @Permission(PermissionKeyEnum.ACADEMIC_MAPPING_MANAGE)
+  @Permission(ResourceEnum.ACADEMIC_MAPPING, ActionEnum.UPDATE)
   @Post('mappings')
   async assignMapping(
     @Param('schoolId') schoolId: string,
@@ -155,7 +155,7 @@ export class AcademicController {
   }
 
   @ApiOperation({ summary: 'Get academic mappings' })
-  @Permission(PermissionKeyEnum.ACADEMIC_MAPPING_VIEW)
+  @Permission(ResourceEnum.ACADEMIC_MAPPING, ActionEnum.VIEW)
   @Get('mappings')
   async getMappings(
     @Param('schoolId') schoolId: string,

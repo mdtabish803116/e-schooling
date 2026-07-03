@@ -146,7 +146,6 @@ export class PlatformService {
             // Upsert / Reactivate
             perm.isActive = true;
             perm.isDeleted = false;
-            perm.key = generatedKey;
             if (dto.description) perm.description = dto.description;
           }
         } else {
@@ -154,7 +153,6 @@ export class PlatformService {
           perm = new ModuleOperationPermission();
           perm.moduleId = module.id;
           perm.operationId = operation.id;
-          perm.key = generatedKey;
           perm.description = dto.description || `Grants permission to ${operation.name} in ${module.name}`;
           perm.isActive = true;
           perm.isDeleted = false;
@@ -307,23 +305,34 @@ export class PlatformService {
 
       // 3. Module Masters (Sidebar navigation with nesting)
       const modulesData = [
-        { name: 'Dashboard', route: '/dashboard', icon: 'dashboard', displayOrder: 1, isMenuGroup: false, featureCode: 'DASHBOARD_ANALYTICS', parentName: null },
-        { name: 'Academics', route: '/academics', icon: 'school', displayOrder: 2, isMenuGroup: true, featureCode: 'ACADEMIC_MANAGEMENT', parentName: null },
-        { name: 'Class', route: '/academics/classes', icon: 'class', displayOrder: 3, isMenuGroup: false, featureCode: 'ACADEMIC_MANAGEMENT', parentName: 'Academics' },
-        { name: 'Subject', route: '/academics/subjects', icon: 'book', displayOrder: 4, isMenuGroup: false, featureCode: 'ACADEMIC_MANAGEMENT', parentName: 'Academics' },
-        { name: 'Section', route: '/academics/sections', icon: 'view_list', displayOrder: 5, isMenuGroup: false, featureCode: 'ACADEMIC_MANAGEMENT', parentName: 'Academics' },
-        { name: 'Class Section Subject', route: '/academics/class-section-subject', icon: 'assignment_turned_in', displayOrder: 6, isMenuGroup: false, featureCode: 'ACADEMIC_MANAGEMENT', parentName: 'Academics' },
+        { name: 'Dashboard', route: '/dashboard', icon: 'dashboard', displayOrder: 1, isMenuGroup: false, featureCode: 'DASHBOARD_ANALYTICS', parentName: null, showInSidebar: true },
+        { name: 'Academics', route: '/academics', icon: 'school', displayOrder: 2, isMenuGroup: true, featureCode: 'ACADEMIC_MANAGEMENT', parentName: null, showInSidebar: true },
+        { name: 'Classes', route: '/academics/classes', icon: 'class', displayOrder: 3, isMenuGroup: false, featureCode: 'ACADEMIC_MANAGEMENT', parentName: 'Academics', showInSidebar: true },
+        { name: 'Subjects', route: '/academics/subjects', icon: 'book', displayOrder: 4, isMenuGroup: false, featureCode: 'ACADEMIC_MANAGEMENT', parentName: 'Academics', showInSidebar: true },
+        { name: 'Sections', route: '/academics/sections', icon: 'view_list', displayOrder: 5, isMenuGroup: false, featureCode: 'ACADEMIC_MANAGEMENT', parentName: 'Academics', showInSidebar: true },
+        { name: 'Academic Mapping', route: '/academics/class-section-subject', icon: 'assignment_turned_in', displayOrder: 6, isMenuGroup: false, featureCode: 'ACADEMIC_MANAGEMENT', parentName: 'Academics', showInSidebar: true },
 
-        { name: 'Students', route: '/students', icon: 'people', displayOrder: 7, isMenuGroup: false, featureCode: 'STUDENT_MANAGEMENT', parentName: null },
-        { name: 'Attendance', route: '/attendance', icon: 'check_circle', displayOrder: 8, isMenuGroup: false, featureCode: 'ATTENDANCE_MANAGEMENT', parentName: null },
-        { name: 'Fees', route: '/fees', icon: 'attach_money', displayOrder: 9, isMenuGroup: false, featureCode: 'FEE_MANAGEMENT', parentName: null },
-        { name: 'Timetable', route: '/timetable', icon: 'schedule', displayOrder: 10, isMenuGroup: false, featureCode: 'TIMETABLE_MANAGEMENT', parentName: null },
-        { name: 'Exams', route: '/exams', icon: 'assignment', displayOrder: 11, isMenuGroup: false, featureCode: 'EXAM_MANAGEMENT', parentName: null },
-        { name: 'Reports', route: '/reports', icon: 'bar_chart', displayOrder: 12, isMenuGroup: false, featureCode: 'REPORT_MANAGEMENT', parentName: null },
+        { name: 'Students', route: '/students', icon: 'people', displayOrder: 7, isMenuGroup: false, featureCode: 'STUDENT_MANAGEMENT', parentName: null, showInSidebar: true },
+        { name: 'Attendance', route: '/attendance', icon: 'check_circle', displayOrder: 8, isMenuGroup: false, featureCode: 'ATTENDANCE_MANAGEMENT', parentName: null, showInSidebar: true },
+        { name: 'Fees', route: '/fees', icon: 'attach_money', displayOrder: 9, isMenuGroup: false, featureCode: 'FEE_MANAGEMENT', parentName: null, showInSidebar: true },
+        { name: 'Timetable', route: '/timetable', icon: 'schedule', displayOrder: 10, isMenuGroup: false, featureCode: 'TIMETABLE_MANAGEMENT', parentName: null, showInSidebar: true },
+        { name: 'Exams', route: '/exams', icon: 'assignment', displayOrder: 11, isMenuGroup: false, featureCode: 'EXAM_MANAGEMENT', parentName: null, showInSidebar: true },
+        { name: 'Reports', route: '/reports', icon: 'bar_chart', displayOrder: 12, isMenuGroup: false, featureCode: 'REPORT_MANAGEMENT', parentName: null, showInSidebar: true },
 
-        { name: 'Administration', route: '/administration', icon: 'settings', displayOrder: 90, isMenuGroup: true, featureCode: null, parentName: null },
-        { name: 'School Users', route: '/administration/users', icon: 'manage_accounts', displayOrder: 91, isMenuGroup: false, featureCode: null, parentName: 'Administration' },
-        { name: 'School Roles', route: '/administration/roles', icon: 'admin_panel_settings', displayOrder: 92, isMenuGroup: false, featureCode: null, parentName: 'Administration' },
+        { name: 'Administration', route: '/administration', icon: 'settings', displayOrder: 90, isMenuGroup: true, featureCode: null, parentName: null, showInSidebar: true },
+        { name: 'School Users', route: '/administration/users', icon: 'manage_accounts', displayOrder: 91, isMenuGroup: false, featureCode: null, parentName: 'Administration', showInSidebar: true },
+        { name: 'School Roles', route: '/administration/roles', icon: 'admin_panel_settings', displayOrder: 92, isMenuGroup: false, featureCode: null, parentName: 'Administration', showInSidebar: true },
+        { name: 'Subscription', route: '/administration/subscription', icon: 'payment', displayOrder: 93, isMenuGroup: false, featureCode: null, parentName: 'Administration', showInSidebar: true },
+        { name: 'Finance Order', route: '/administration/orders', icon: 'shopping_cart', displayOrder: 94, isMenuGroup: false, featureCode: null, parentName: 'Administration', showInSidebar: true },
+        { name: 'Finance Invoice', route: '/administration/invoices', icon: 'receipt', displayOrder: 95, isMenuGroup: false, featureCode: null, parentName: 'Administration', showInSidebar: true },
+
+        // Platform administration modules (not shown in school sidebar)
+        { name: 'Platform Features', route: '/platform/features', icon: 'extension', displayOrder: 100, isMenuGroup: false, featureCode: null, parentName: null, showInSidebar: false },
+        { name: 'Platform Modules', route: '/platform/modules', icon: 'view_module', displayOrder: 101, isMenuGroup: false, featureCode: null, parentName: null, showInSidebar: false },
+        { name: 'Platform Schools', route: '/platform/schools', icon: 'business', displayOrder: 102, isMenuGroup: false, featureCode: null, parentName: null, showInSidebar: false },
+        { name: 'Platform Owners', route: '/platform/owners', icon: 'supervised_user_circle', displayOrder: 103, isMenuGroup: false, featureCode: null, parentName: null, showInSidebar: false },
+        { name: 'Platform Students', route: '/platform/students', icon: 'face', displayOrder: 104, isMenuGroup: false, featureCode: null, parentName: null, showInSidebar: false },
+        { name: 'Platform Staff', route: '/platform/staff', icon: 'badge', displayOrder: 105, isMenuGroup: false, featureCode: null, parentName: null, showInSidebar: false },
       ];
 
       const seededModules: Record<string, ModuleMaster> = {};
@@ -339,7 +348,7 @@ export class PlatformService {
         m.routePath = md.route;
         m.icon = md.icon;
         m.displayOrder = md.displayOrder;
-        m.showInSidebar = true;
+        m.showInSidebar = md.showInSidebar !== false;
         m.isMenuGroup = md.isMenuGroup;
         if (md.featureCode && seededFeatures[md.featureCode]) {
           m.platformFeatureId = seededFeatures[md.featureCode].id;
@@ -381,55 +390,98 @@ export class PlatformService {
         seededOps[generatedCode] = o;
       }
 
-      // 5. Module Operation Permissions (Linking PermissionKeys)
+      // 5. Module Operation Permissions (Linking Modules to Operations)
       const permsMap = [
-        { modCode: 'DASHBOARD', opCode: 'VIEW', key: 'dashboard:view' },
+        { modCode: 'DASHBOARD', opCode: 'VIEW' },
 
-        { modCode: 'ATTENDANCE', opCode: 'VIEW', key: 'attendance:view' },
-        { modCode: 'ATTENDANCE', opCode: 'CREATE', key: 'attendance:create' },
-        { modCode: 'ATTENDANCE', opCode: 'UPDATE', key: 'attendance:update' },
-        { modCode: 'ATTENDANCE', opCode: 'DELETE', key: 'attendance:delete' },
+        { modCode: 'ATTENDANCE', opCode: 'VIEW' },
+        { modCode: 'ATTENDANCE', opCode: 'CREATE' },
+        { modCode: 'ATTENDANCE', opCode: 'UPDATE' },
+        { modCode: 'ATTENDANCE', opCode: 'DELETE' },
 
-        { modCode: 'CLASS', opCode: 'VIEW', key: 'classes:view' },
-        { modCode: 'CLASS', opCode: 'CREATE', key: 'classes:create' },
-        { modCode: 'CLASS', opCode: 'UPDATE', key: 'classes:update' },
-        { modCode: 'CLASS', opCode: 'DELETE', key: 'classes:delete' },
+        { modCode: 'CLASSES', opCode: 'VIEW' },
+        { modCode: 'CLASSES', opCode: 'CREATE' },
+        { modCode: 'CLASSES', opCode: 'UPDATE' },
+        { modCode: 'CLASSES', opCode: 'DELETE' },
 
-        { modCode: 'SUBJECT', opCode: 'VIEW', key: 'subjects:view' },
-        { modCode: 'SUBJECT', opCode: 'CREATE', key: 'subjects:create' },
-        { modCode: 'SUBJECT', opCode: 'UPDATE', key: 'subjects:update' },
-        { modCode: 'SUBJECT', opCode: 'DELETE', key: 'subjects:delete' },
+        { modCode: 'SUBJECTS', opCode: 'VIEW' },
+        { modCode: 'SUBJECTS', opCode: 'CREATE' },
+        { modCode: 'SUBJECTS', opCode: 'UPDATE' },
+        { modCode: 'SUBJECTS', opCode: 'DELETE' },
 
-        { modCode: 'SECTION', opCode: 'VIEW', key: 'sections:view' },
-        { modCode: 'SECTION', opCode: 'CREATE', key: 'sections:create' },
-        { modCode: 'SECTION', opCode: 'UPDATE', key: 'sections:update' },
-        { modCode: 'SECTION', opCode: 'DELETE', key: 'sections:delete' },
+        { modCode: 'SECTIONS', opCode: 'VIEW' },
+        { modCode: 'SECTIONS', opCode: 'CREATE' },
+        { modCode: 'SECTIONS', opCode: 'UPDATE' },
+        { modCode: 'SECTIONS', opCode: 'DELETE' },
 
-        { modCode: 'CLASS_SECTION_SUBJECT', opCode: 'VIEW', key: 'academic_mapping:view' },
-        { modCode: 'CLASS_SECTION_SUBJECT', opCode: 'UPDATE', key: 'academic_mapping:manage' },
+        { modCode: 'ACADEMIC_MAPPING', opCode: 'VIEW' },
+        { modCode: 'ACADEMIC_MAPPING', opCode: 'CREATE' },
+        { modCode: 'ACADEMIC_MAPPING', opCode: 'UPDATE' },
+        { modCode: 'ACADEMIC_MAPPING', opCode: 'DELETE' },
 
-        { modCode: 'STUDENTS', opCode: 'VIEW', key: 'students:view' },
-        { modCode: 'STUDENTS', opCode: 'CREATE', key: 'students:create' },
-        { modCode: 'STUDENTS', opCode: 'UPDATE', key: 'students:update' },
-        { modCode: 'STUDENTS', opCode: 'DELETE', key: 'students:delete' },
-        { modCode: 'STUDENTS', opCode: 'CREATE', key: 'students:admission' },
+        { modCode: 'STUDENTS', opCode: 'VIEW' },
+        { modCode: 'STUDENTS', opCode: 'CREATE' },
+        { modCode: 'STUDENTS', opCode: 'UPDATE' },
+        { modCode: 'STUDENTS', opCode: 'DELETE' },
 
-        { modCode: 'FEES', opCode: 'VIEW', key: 'fees:view' },
-        { modCode: 'FEES', opCode: 'CREATE', key: 'fees:create' },
-        { modCode: 'FEES', opCode: 'UPDATE', key: 'fees:update' },
+        { modCode: 'FEES', opCode: 'VIEW' },
+        { modCode: 'FEES', opCode: 'CREATE' },
+        { modCode: 'FEES', opCode: 'UPDATE' },
+        { modCode: 'FEES', opCode: 'DELETE' },
 
-        { modCode: 'TIMETABLE', opCode: 'VIEW', key: 'timetable:view' },
-        { modCode: 'TIMETABLE', opCode: 'UPDATE', key: 'timetable:manage' },
+        { modCode: 'TIMETABLE', opCode: 'VIEW' },
+        { modCode: 'TIMETABLE', opCode: 'CREATE' },
+        { modCode: 'TIMETABLE', opCode: 'UPDATE' },
+        { modCode: 'TIMETABLE', opCode: 'DELETE' },
 
-        { modCode: 'EXAMS', opCode: 'VIEW', key: 'exams:view' },
-        { modCode: 'EXAMS', opCode: 'CREATE', key: 'exams:create' },
-        { modCode: 'EXAMS', opCode: 'UPDATE', key: 'exams:update' },
+        { modCode: 'EXAMS', opCode: 'VIEW' },
+        { modCode: 'EXAMS', opCode: 'CREATE' },
+        { modCode: 'EXAMS', opCode: 'UPDATE' },
+        { modCode: 'EXAMS', opCode: 'DELETE' },
 
-        { modCode: 'REPORTS', opCode: 'VIEW', key: 'reports:view' },
+        { modCode: 'REPORTS', opCode: 'VIEW' },
 
-        { modCode: 'SCHOOL_ROLES', opCode: 'VIEW', key: 'school_roles:view' },
-        { modCode: 'SCHOOL_ROLES', opCode: 'UPDATE', key: 'school_roles:manage' },
-        { modCode: 'SCHOOL_USERS', opCode: 'UPDATE', key: 'school_users:update' }
+        { modCode: 'SCHOOL_ROLES', opCode: 'VIEW' },
+        { modCode: 'SCHOOL_ROLES', opCode: 'CREATE' },
+        { modCode: 'SCHOOL_ROLES', opCode: 'UPDATE' },
+        { modCode: 'SCHOOL_ROLES', opCode: 'DELETE' },
+
+        { modCode: 'SCHOOL_USERS', opCode: 'VIEW' },
+        { modCode: 'SCHOOL_USERS', opCode: 'CREATE' },
+        { modCode: 'SCHOOL_USERS', opCode: 'UPDATE' },
+        { modCode: 'SCHOOL_USERS', opCode: 'DELETE' },
+
+        { modCode: 'SUBSCRIPTION', opCode: 'VIEW' },
+        { modCode: 'SUBSCRIPTION', opCode: 'CREATE' },
+        { modCode: 'SUBSCRIPTION', opCode: 'UPDATE' },
+        { modCode: 'SUBSCRIPTION', opCode: 'DELETE' },
+
+        { modCode: 'FINANCE_ORDER', opCode: 'VIEW' },
+        { modCode: 'FINANCE_INVOICE', opCode: 'VIEW' },
+
+        // Platform modules
+        { modCode: 'PLATFORM_FEATURES', opCode: 'VIEW' },
+        { modCode: 'PLATFORM_FEATURES', opCode: 'CREATE' },
+        { modCode: 'PLATFORM_FEATURES', opCode: 'UPDATE' },
+        { modCode: 'PLATFORM_FEATURES', opCode: 'DELETE' },
+
+        { modCode: 'PLATFORM_MODULES', opCode: 'VIEW' },
+        { modCode: 'PLATFORM_MODULES', opCode: 'CREATE' },
+        { modCode: 'PLATFORM_MODULES', opCode: 'UPDATE' },
+        { modCode: 'PLATFORM_MODULES', opCode: 'DELETE' },
+
+        { modCode: 'PLATFORM_SCHOOLS', opCode: 'VIEW' },
+        { modCode: 'PLATFORM_SCHOOLS', opCode: 'CREATE' },
+        { modCode: 'PLATFORM_SCHOOLS', opCode: 'UPDATE' },
+        { modCode: 'PLATFORM_SCHOOLS', opCode: 'DELETE' },
+
+        { modCode: 'PLATFORM_OWNERS', opCode: 'VIEW' },
+        { modCode: 'PLATFORM_OWNERS', opCode: 'CREATE' },
+        { modCode: 'PLATFORM_OWNERS', opCode: 'UPDATE' },
+        { modCode: 'PLATFORM_OWNERS', opCode: 'DELETE' },
+
+        { modCode: 'PLATFORM_STUDENTS', opCode: 'VIEW' },
+        { modCode: 'PLATFORM_STAFF', opCode: 'VIEW' }
       ];
 
       for (const pm of permsMap) {
@@ -441,7 +493,6 @@ export class PlatformService {
             p = new ModuleOperationPermission();
             p.moduleId = mod.id;
             p.operationId = op.id;
-            p.key = pm.key as any;
             p.description = `Grants permission to ${op.name} in ${mod.name}`;
             p.isActive = true;
             await permRepo.save(p);

@@ -9,6 +9,7 @@ import { SchoolRole } from '../../models/entities/rbac/school-role.entity';
 import { SchoolRolePermission } from '../../models/entities/rbac/school-role-permission.entity';
 import { ModuleOperationPermission } from '../../models/entities/rbac/module-operation-permission.entity';
 import { ModuleMaster } from '../../models/entities/rbac/module-master.entity';
+import { OperationMaster } from '../../models/entities/rbac/operation-master.entity';
 import { PlatformFeature } from '../../models/entities/entitlement/platform-feature.entity';
 import { SchoolOwnerMember } from '../../models/entities/school/school-owner-member.entity';
 import { EntitlementService } from '../entitlement/entitlement.service';
@@ -256,6 +257,11 @@ export class SchoolRolesService {
       }
     }
 
+    const ops = await this.dataSource.getRepository(OperationMaster).find({
+      where: { isActive: true, isDeleted: false },
+    });
+    const opCodeMap = new Map(ops.map(o => [o.id, o.code]));
+
     const groupedResults = new Map<string, any>();
     for (const p of basePermissions) {
       if (p.moduleId && clearedModuleIds.has(p.moduleId)) {
@@ -271,10 +277,11 @@ export class SchoolRolesService {
           });
         }
 
+        const opCode = opCodeMap.get(p.operationId);
         groupedResults.get(p.moduleId).operations.push({
           permissionId: p.id,
           operationId: p.operationId,
-          key: p.key,
+          key: `${modObj.code.toLowerCase()}:${opCode?.toLowerCase()}`,
           description: p.description,
         });
       }
@@ -358,8 +365,10 @@ export class SchoolRolesService {
     if (!role || role.isDeleted) throw new NotFoundException('This role does not exist');
 
     const permissions = await this.dataSource.getRepository(SchoolRolePermission).createQueryBuilder('rp')
-      .innerJoinAndSelect(ModuleOperationPermission, 'p', 'p.id = rp.permissionId')
-      .select(['p.id as id', 'p.key as key', 'p.description as description'])
+      .innerJoin(ModuleOperationPermission, 'p', 'p.id = rp.permissionId')
+      .innerJoin(ModuleMaster, 'm', 'm.id = p.moduleId')
+      .innerJoin(OperationMaster, 'o', 'o.id = p.operationId')
+      .select(['p.id as id', "CONCAT(LOWER(m.code), ':', LOWER(o.code)) as key", 'p.description as description'])
       .where('rp.roleId = :schoolRoleId', { schoolRoleId })
       .andWhere('rp.isActive = true')
       .andWhere('rp.isDeleted = false')
@@ -382,8 +391,10 @@ export class SchoolRolesService {
     }
 
     const permissions = await this.dataSource.getRepository(SchoolRolePermission).createQueryBuilder('rp')
-      .innerJoinAndSelect(ModuleOperationPermission, 'p', 'p.id = rp.permissionId')
-      .select(['p.id as id', 'p.key as key', 'p.description as description'])
+      .innerJoin(ModuleOperationPermission, 'p', 'p.id = rp.permissionId')
+      .innerJoin(ModuleMaster, 'm', 'm.id = p.moduleId')
+      .innerJoin(OperationMaster, 'o', 'o.id = p.operationId')
+      .select(['p.id as id', "CONCAT(LOWER(m.code), ':', LOWER(o.code)) as key", 'p.description as description'])
       .where('rp.roleId = :schoolRoleId', { schoolRoleId })
       .andWhere('rp.isActive = true')
       .andWhere('rp.isDeleted = false')
