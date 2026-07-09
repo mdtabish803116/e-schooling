@@ -12,4 +12,19 @@ export class CreateClassDto {
   @IsInt()
   @Min(1)
   dailyAttendanceLimit?: number;
+
+  @ApiPropertyOptional({ example: 'CLASS-10', description: 'Code of the class' })
+  @IsOptional()
+  @IsString()
+  classCode?: string;
+
+  @ApiPropertyOptional({ example: 'Grade 10 High School class', description: 'Description of the class' })
+  @IsOptional()
+  @IsString()
+  description?: string;
+
+  @ApiPropertyOptional({ example: '5', description: 'SchoolUser ID of the Class Teacher' })
+  @IsOptional()
+  @IsString()
+  classTeacherId?: string;
 }

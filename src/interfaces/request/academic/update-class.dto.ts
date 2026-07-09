@@ -17,4 +17,19 @@ export class UpdateClassDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  @ApiPropertyOptional({ example: 'CLASS-10', description: 'Updated code of the class' })
+  @IsOptional()
+  @IsString()
+  classCode?: string;
+
+  @ApiPropertyOptional({ example: 'Grade 10 High School class', description: 'Updated description of the class' })
+  @IsOptional()
+  @IsString()
+  description?: string;
+
+  @ApiPropertyOptional({ example: '5', description: 'Updated SchoolUser ID of the Class Teacher' })
+  @IsOptional()
+  @IsString()
+  classTeacherId?: string;
 }
