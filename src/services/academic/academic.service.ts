@@ -1,9 +1,10 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, Repository, In } from 'typeorm';
 import { Class } from '../../models/entities/academic/class.entity';
 import { Section } from '../../models/entities/academic/section.entity';
 import { Subject } from '../../models/entities/academic/subject.entity';
 import { ClassSectionSubject } from '../../models/entities/academic/class-section-subject.entity';
+import { TeacherSectionAssignment } from '../../models/entities/academic/teacher-section-assignment.entity';
 import { CreateClassDto } from '../../interfaces/request/academic/create-class.dto';
 import { UpdateClassDto } from '../../interfaces/request/academic/update-class.dto';
 import { CreateSectionDto } from '../../interfaces/request/academic/create-section.dto';
@@ -12,6 +13,10 @@ import { UpdateSubjectDto } from '../../interfaces/request/academic/update-subje
 import { TransferStudentsDto } from '../../interfaces/request/academic/transfer-students.dto';
 import { StudentEnrollment } from '../../models/entities/student/student-enrollment.entity';
 import { SectionTransferHistory } from '../../models/entities/student/section-transfer-history.entity';
+import { SchoolUser } from '../../models/entities/school/school-user.entity';
+import { SchoolOwner } from '../../models/entities/school/school-owner.entity';
+import { PlatformUser } from '../../models/entities/platform/platform-user.entity';
+import type { AuthContext } from '../../interfaces/auth-context.interface';
 
 @Injectable()
 export class AcademicService {
@@ -19,17 +24,66 @@ export class AcademicService {
   private sectionRepo: Repository<Section>;
   private subjectRepo: Repository<Subject>;
   private mappingRepo: Repository<ClassSectionSubject>;
+  private assignmentRepo: Repository<TeacherSectionAssignment>;
 
   constructor(private dataSource: DataSource) {
     this.classRepo = this.dataSource.getRepository(Class);
     this.sectionRepo = this.dataSource.getRepository(Section);
     this.subjectRepo = this.dataSource.getRepository(Subject);
     this.mappingRepo = this.dataSource.getRepository(ClassSectionSubject);
+    this.assignmentRepo = this.dataSource.getRepository(TeacherSectionAssignment);
+  }
+
+  // ASSIGNMENTS HELPER
+  private async upsertSectionTeacher(
+    schoolId: string,
+    classId: string,
+    sectionId: string,
+    teacherId: string | null, // null means unassign
+    userId: string
+  ) {
+    const existingAssignment = await this.assignmentRepo.findOne({
+      where: { sectionId, schoolId, isClassTeacher: true, isDeleted: false }
+    });
+
+    if (teacherId) {
+      if (existingAssignment) {
+        existingAssignment.teacherId = teacherId;
+        existingAssignment.isActive = true;
+        existingAssignment.updatedById = userId;
+        await this.assignmentRepo.save(existingAssignment);
+      } else {
+        const newAssignment = this.assignmentRepo.create({
+          schoolId,
+          classId,
+          sectionId,
+          teacherId,
+          isClassTeacher: true,
+          isActive: true,
+          createdById: userId,
+          updatedById: userId
+        });
+        await this.assignmentRepo.save(newAssignment);
+      }
+    } else if (existingAssignment) {
+      existingAssignment.isActive = false;
+      existingAssignment.updatedById = userId;
+      await this.assignmentRepo.save(existingAssignment);
+    }
   }
 
   // CLASSES
   async createClass(schoolId: string, data: CreateClassDto, userId: string) {
     const normalizedInput = data.name.replace(/\s+/g, '').toLowerCase();
+
+    if (data.classTeacherId) {
+      const teacher = await this.dataSource.getRepository(SchoolUser).findOne({
+        where: { id: data.classTeacherId, schoolId, isDeleted: false },
+      });
+      if (!teacher) {
+        throw new NotFoundException('Class teacher not found in this school');
+      }
+    }
 
     // Check if class with same normalized name exists in the school
     const existingClasses = await this.classRepo.find({ where: { schoolId } });
@@ -42,6 +96,8 @@ export class AcademicService {
         match.isActive = true;
         match.name = data.name; // Keep input casing
         match.dailyAttendanceLimit = data.dailyAttendanceLimit ?? match.dailyAttendanceLimit;
+        if (data.classCode !== undefined) match.classCode = data.classCode;
+        if (data.description !== undefined) match.description = data.description;
         match.updatedById = userId;
         const saved = await this.classRepo.save(match);
 
@@ -49,6 +105,7 @@ export class AcademicService {
         const defaultSection = await this.sectionRepo.findOne({
           where: { classId: saved.id, schoolId, name: 'default', isDefault: true }
         });
+        let finalDefaultSectionId = defaultSection?.id;
         if (defaultSection) {
           defaultSection.isDeleted = false;
           defaultSection.isActive = true;
@@ -64,7 +121,12 @@ export class AcademicService {
             createdById: userId,
             updatedById: userId,
           });
-          await this.sectionRepo.save(newDefaultSection);
+          const savedSection = await this.sectionRepo.save(newDefaultSection);
+          finalDefaultSectionId = savedSection.id;
+        }
+
+        if (data.classTeacherId !== undefined && finalDefaultSectionId) {
+          await this.upsertSectionTeacher(schoolId, saved.id, finalDefaultSectionId, data.classTeacherId || null, userId);
         }
 
         return saved;
@@ -87,7 +149,7 @@ export class AcademicService {
     const savedClass = await this.classRepo.save(newClass);
 
     // Automatically create a default section since hasSections is false
-    const defaultSection = this.sectionRepo.create({
+    const newDefaultSection = this.sectionRepo.create({
       schoolId,
       classId: savedClass.id,
       name: 'default',
@@ -96,7 +158,11 @@ export class AcademicService {
       createdById: userId,
       updatedById: userId,
     });
-    await this.sectionRepo.save(defaultSection);
+    const savedDefaultSection = await this.sectionRepo.save(newDefaultSection);
+
+    if (data.classTeacherId !== undefined) {
+      await this.upsertSectionTeacher(schoolId, savedClass.id, savedDefaultSection.id, data.classTeacherId || null, userId);
+    }
 
     return savedClass;
   }
@@ -108,6 +174,15 @@ export class AcademicService {
   async updateClass(schoolId: string, id: string, data: UpdateClassDto, userId: string) {
     const existing = await this.classRepo.findOne({ where: { id, schoolId, isDeleted: false } });
     if (!existing) throw new NotFoundException('Class not found');
+
+    if (data.classTeacherId) {
+      const teacher = await this.dataSource.getRepository(SchoolUser).findOne({
+        where: { id: data.classTeacherId, schoolId, isDeleted: false },
+      });
+      if (!teacher) {
+        throw new NotFoundException('Class teacher not found in this school');
+      }
+    }
 
     if (data.name) {
       const normalizedInput = data.name.replace(/\s+/g, '').toLowerCase();
@@ -126,6 +201,8 @@ export class AcademicService {
           match.isActive = true;
           match.name = data.name; // Keep input casing
           match.dailyAttendanceLimit = data.dailyAttendanceLimit ?? match.dailyAttendanceLimit;
+          if (data.classCode !== undefined) match.classCode = data.classCode;
+          if (data.description !== undefined) match.description = data.description;
           match.updatedById = userId;
           const saved = await this.classRepo.save(match);
 
@@ -133,6 +210,7 @@ export class AcademicService {
           const defaultSection = await this.sectionRepo.findOne({
             where: { classId: saved.id, schoolId, name: 'default', isDefault: true }
           });
+          let finalDefaultSectionId = defaultSection?.id;
           if (defaultSection) {
             defaultSection.isDeleted = false;
             defaultSection.isActive = true;
@@ -148,7 +226,12 @@ export class AcademicService {
               createdById: userId,
               updatedById: userId,
             });
-            await this.sectionRepo.save(newDefaultSection);
+            const savedSection = await this.sectionRepo.save(newDefaultSection);
+            finalDefaultSectionId = savedSection.id;
+          }
+
+          if (data.classTeacherId !== undefined && finalDefaultSectionId) {
+            await this.upsertSectionTeacher(schoolId, saved.id, finalDefaultSectionId, data.classTeacherId || null, userId);
           }
 
           return saved;
@@ -162,8 +245,20 @@ export class AcademicService {
       }
     }
 
-    Object.assign(existing, { ...data, updatedById: userId });
-    return await this.classRepo.save(existing);
+    const { classTeacherId, ...updateData } = data;
+    Object.assign(existing, { ...updateData, updatedById: userId });
+    const savedClass = await this.classRepo.save(existing);
+
+    if (classTeacherId !== undefined) {
+      // Find the default section to assign the teacher
+      const defaultSection = await this.sectionRepo.findOne({
+        where: { classId: existing.id, schoolId, name: 'default', isDefault: true }
+      });
+      if (defaultSection) {
+        await this.upsertSectionTeacher(schoolId, existing.id, defaultSection.id, classTeacherId || null, userId);
+      }
+    }
+    return savedClass;
   }
 
   async deleteClass(schoolId: string, id: string, userId: string) {
@@ -174,6 +269,131 @@ export class AcademicService {
     return await this.classRepo.save(existing);
   }
 
+  async getClassDetails(schoolId: string, classId: string, caller: AuthContext) {
+    const cls = await this.classRepo.findOne({
+      where: { id: classId, schoolId, isDeleted: false }
+    });
+    if (!cls) {
+      throw new NotFoundException('Class not found');
+    }
+
+    // Resolve creator's name
+    let createdByName = 'System';
+    if (cls.createdById) {
+      // Try SchoolUser
+      const user = await this.dataSource.getRepository(SchoolUser).findOne({
+        where: { id: cls.createdById }
+      });
+      if (user) {
+        createdByName = user.name;
+      } else {
+        // Try SchoolOwner
+        const owner = await this.dataSource.getRepository(SchoolOwner).findOne({
+          where: { id: cls.createdById }
+        });
+        if (owner) {
+          createdByName = owner.fullName;
+        } else {
+          // Try PlatformUser
+          const platformUser = await this.dataSource.getRepository(PlatformUser).findOne({
+            where: { id: cls.createdById }
+          });
+          if (platformUser) {
+            createdByName = platformUser.name;
+          }
+        }
+      }
+    }
+
+    // Resolve updater's name
+    let updatedByName = 'System';
+    if (cls.updatedById) {
+      // Try SchoolUser
+      const user = await this.dataSource.getRepository(SchoolUser).findOne({
+        where: { id: cls.updatedById }
+      });
+      if (user) {
+        updatedByName = user.name;
+      } else {
+        // Try SchoolOwner
+        const owner = await this.dataSource.getRepository(SchoolOwner).findOne({
+          where: { id: cls.updatedById }
+        });
+        if (owner) {
+          updatedByName = owner.fullName;
+        } else {
+          // Try PlatformUser
+          const platformUser = await this.dataSource.getRepository(PlatformUser).findOne({
+            where: { id: cls.updatedById }
+          });
+          if (platformUser) {
+            updatedByName = platformUser.name;
+          }
+        }
+      }
+    }
+
+    // Fetch active non-default sections allotted to this class
+    const sections = await this.sectionRepo.find({
+      where: { classId: cls.id, schoolId, isDefault: false, isDeleted: false },
+      order: { name: 'ASC' }
+    });
+
+    // Fetch assignments for the sections and the default section
+    const assignments = await this.assignmentRepo.find({
+      where: { classId: cls.id, schoolId, isClassTeacher: true, isDeleted: false, isActive: true },
+      relations: ['teacher']
+    });
+
+    let classTeacherId: string | null = null;
+    let classTeacherName: string | null = null;
+
+    if (!cls.hasSections) {
+      const defaultSection = await this.sectionRepo.findOne({
+        where: { classId: cls.id, schoolId, name: 'default', isDefault: true, isDeleted: false }
+      });
+      if (defaultSection) {
+        const assignment = assignments.find(a => a.sectionId === defaultSection.id);
+        if (assignment && assignment.teacher) {
+          classTeacherId = assignment.teacherId;
+          classTeacherName = assignment.teacher.name;
+        }
+      }
+    }
+
+    return {
+      id: cls.id,
+      schoolId: cls.schoolId,
+      name: cls.name,
+      classCode: cls.classCode || null,
+      description: cls.description || null,
+      classTeacherId,
+      classTeacherName,
+      dailyAttendanceLimit: cls.dailyAttendanceLimit,
+      hasSections: cls.hasSections,
+      isActive: cls.isActive,
+      createdById: cls.createdById,
+      createdBy: createdByName,
+      updatedById: cls.updatedById,
+      updatedBy: updatedByName,
+      createdAt: cls.createdAt,
+      updatedAt: cls.updatedAt,
+      sections: sections.map(s => {
+        const assignment = assignments.find(a => a.sectionId === s.id);
+        return {
+          id: s.id,
+          name: s.name,
+          capacity: s.capacity || null,
+          isDefault: s.isDefault,
+          isActive: s.isActive,
+          classTeacherId: assignment ? assignment.teacherId : null,
+          classTeacherName: assignment?.teacher ? assignment.teacher.name : null,
+        };
+      }),
+      sectionCount: sections.length,
+    };
+  }
+
   // SECTIONS
   async createSection(schoolId: string, data: CreateSectionDto, userId: string) {
     // 1. Validate that the class exists and belongs to the same school
@@ -182,6 +402,15 @@ export class AcademicService {
     });
     if (!parentClass) {
       throw new NotFoundException('Class not found');
+    }
+
+    if (data.classTeacherId) {
+      const teacher = await this.dataSource.getRepository(SchoolUser).findOne({
+        where: { id: data.classTeacherId, schoolId, isDeleted: false },
+      });
+      if (!teacher) {
+        throw new NotFoundException('Section teacher not found in this school');
+      }
     }
 
     const normalizedInput = data.name.replace(/\s+/g, '').toLowerCase();
@@ -262,6 +491,22 @@ export class AcademicService {
       });
       const savedSection = await queryRunner.manager.save(Section, section);
 
+      if (data.classTeacherId !== undefined) {
+        if (data.classTeacherId) {
+          const newAssignment = queryRunner.manager.create(TeacherSectionAssignment, {
+            schoolId,
+            classId: data.classId,
+            sectionId: savedSection.id,
+            teacherId: data.classTeacherId,
+            isClassTeacher: true,
+            isActive: true,
+            createdById: userId,
+            updatedById: userId
+          });
+          await queryRunner.manager.save(TeacherSectionAssignment, newAssignment);
+        }
+      }
+
       if (defaultSection) {
         // Soft-delete the default section
         defaultSection.isDeleted = true;
@@ -334,14 +579,41 @@ export class AcademicService {
   }
 
   async getSections(schoolId: string, classId?: string) {
-    const where: any = { schoolId, isDeleted: false };
+    const where: any = { schoolId, isDefault: false, isDeleted: false };
     if (classId) where.classId = classId;
-    return await this.sectionRepo.find({ where });
+    const sections = await this.sectionRepo.find({ where });
+
+    const sectionIds = sections.map(s => s.id);
+    let assignments: TeacherSectionAssignment[] = [];
+    if (sectionIds.length > 0) {
+      assignments = await this.assignmentRepo.find({
+        where: { sectionId: In(sectionIds), isClassTeacher: true, isDeleted: false, isActive: true },
+        relations: ['teacher']
+      });
+    }
+
+    return sections.map(s => {
+      const assignment = assignments.find(a => a.sectionId === s.id);
+      return {
+        ...s,
+        classTeacherId: assignment ? assignment.teacherId : null,
+        classTeacherName: assignment?.teacher ? assignment.teacher.name : null,
+      };
+    });
   }
 
   async updateSection(schoolId: string, id: string, data: UpdateSectionDto, userId: string) {
     const existing = await this.sectionRepo.findOne({ where: { id, schoolId, isDeleted: false } });
     if (!existing) throw new NotFoundException('Section not found');
+
+    if (data.classTeacherId) {
+      const teacher = await this.dataSource.getRepository(SchoolUser).findOne({
+        where: { id: data.classTeacherId, schoolId, isDeleted: false },
+      });
+      if (!teacher) {
+        throw new NotFoundException('Section teacher not found in this school');
+      }
+    }
 
     if (data.name) {
       const normalizedInput = data.name.replace(/\s+/g, '').toLowerCase();
@@ -359,8 +631,14 @@ export class AcademicService {
           match.isDeleted = false;
           match.isActive = true;
           match.name = data.name;
+          if (data.capacity !== undefined) match.capacity = data.capacity;
           match.updatedById = userId;
-          return await this.sectionRepo.save(match);
+          const savedSection = await this.sectionRepo.save(match);
+          
+          if (data.classTeacherId !== undefined) {
+            await this.upsertSectionTeacher(schoolId, existing.classId, savedSection.id, data.classTeacherId || null, userId);
+          }
+          return savedSection;
         }
 
         if (!match.isActive) {
@@ -371,8 +649,14 @@ export class AcademicService {
       }
     }
 
-    Object.assign(existing, { ...data, updatedById: userId });
-    return await this.sectionRepo.save(existing);
+    const { classTeacherId, ...updateData } = data;
+    Object.assign(existing, { ...updateData, updatedById: userId });
+    const savedSection = await this.sectionRepo.save(existing);
+    
+    if (classTeacherId !== undefined) {
+      await this.upsertSectionTeacher(schoolId, existing.classId, existing.id, classTeacherId || null, userId);
+    }
+    return savedSection;
   }
 
   async transferStudents(schoolId: string, dto: TransferStudentsDto, userId: string) {

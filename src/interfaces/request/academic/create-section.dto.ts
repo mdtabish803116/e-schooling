@@ -1,5 +1,5 @@
-import { IsNotEmpty, IsString } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
+import { IsNotEmpty, IsString, IsOptional, IsInt, Min } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateSectionDto {
   @ApiProperty({ example: '1', description: 'Parent Class Database ID' })
@@ -11,4 +11,15 @@ export class CreateSectionDto {
   @IsNotEmpty()
   @IsString()
   name: string;
+
+  @ApiPropertyOptional({ example: 40, description: 'Maximum student capacity in this section' })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  capacity?: number;
+
+  @ApiPropertyOptional({ example: '5', description: 'SchoolUser ID of the Section Teacher' })
+  @IsOptional()
+  @IsString()
+  classTeacherId?: string;
 }

@@ -1,4 +1,5 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Index, ManyToOne, JoinColumn } from 'typeorm';
+import { SchoolUser } from '../school/school-user.entity';
 
 @Entity({ name: 'teacher_section_assignments', schema: 'e_schooling' })
 export class TeacherSectionAssignment {
@@ -12,6 +13,10 @@ export class TeacherSectionAssignment {
   @Index()
   @Column({ name: 'teacher_id', type: 'bigint', nullable: true, comment: 'Reference to SchoolUser' })
   teacherId: string;
+
+  @ManyToOne(() => SchoolUser)
+  @JoinColumn({ name: 'teacher_id' })
+  teacher: SchoolUser;
 
   @Index()
   @Column({ name: 'class_id', type: 'bigint', nullable: true, comment: 'Reference to Class' })

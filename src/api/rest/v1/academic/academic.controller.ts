@@ -43,6 +43,17 @@ export class AcademicController {
     return this.academicService.getClasses(schoolId);
   }
 
+  @ApiOperation({ summary: 'Get class details by ID' })
+  @Permission(ResourceEnum.CLASSES, ActionEnum.VIEW)
+  @Get('classes/:id')
+  async getClassDetails(
+    @Param('schoolId') schoolId: string,
+    @Param('id') id: string,
+    @CurrentUser() user: AuthContext
+  ) {
+    return this.academicService.getClassDetails(schoolId, id, user);
+  }
+
   @ApiOperation({ summary: 'Update a class' })
   @Permission(ResourceEnum.CLASSES, ActionEnum.UPDATE)
   @Patch('classes/:id')

@@ -12,6 +12,13 @@ export class Class {
   @Column({ name: 'name', type: 'varchar', nullable: true, comment: 'Class name' })
   name: string;
 
+  @Column({ name: 'class_code', type: 'varchar', nullable: true, comment: 'Class code (unique identifier)' })
+  classCode: string;
+
+  @Column({ name: 'description', type: 'text', nullable: true, comment: 'Optional description of the class' })
+  description: string;
+
+
   @Column({ name: 'has_sections', type: 'boolean', nullable: true, comment: 'Whether class has multiple sections' })
   hasSections: boolean;
 

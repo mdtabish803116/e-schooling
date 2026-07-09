@@ -21,6 +21,9 @@ export class Section {
   @Column({ name: 'name', type: 'varchar', nullable: true, comment: 'Section name' })
   name: string;
 
+  @Column({ name: 'capacity', type: 'integer', nullable: true, comment: 'Maximum student capacity in this section' })
+  capacity: number;
+
   @Column({ name: 'is_default', type: 'boolean', nullable: true, comment: 'Is default section' })
   isDefault: boolean;
 
