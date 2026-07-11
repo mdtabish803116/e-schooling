@@ -28,7 +28,7 @@ export class PermissionGuard implements CanActivate {
 
     // SCHOOL ID TENANT VALIDATION & OWNERSHIP CHECK
     const routeSchoolId = request.params?.schoolId || request.body?.schoolId || request.query?.schoolId;
-    if (routeSchoolId) {
+    if (routeSchoolId && routeSchoolId !== 'undefined') {
       if (user.actorType === 'school_owner') {
         const membership = await this.dataSource.getRepository(SchoolOwnerMember).findOne({
           where: { schoolOwnerId: user.id, schoolId: routeSchoolId, isActive: true },

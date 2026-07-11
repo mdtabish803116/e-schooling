@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Patch, Delete, Body, Param, UseGuards } from '@nestjs/common';
+import { Controller, Post, Get, Patch, Delete, Body, Param, UseGuards, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../../../shared/guards/jwt-auth.guard';
 import { PermissionGuard } from '../../../../shared/guards/permission.guard';
@@ -17,6 +17,16 @@ import { ResourceEnum, ActionEnum } from '../../../../models/enums/enums';
 @Controller('schools/:schoolId/users')
 export class SchoolUsersController {
   constructor(private readonly schoolUsersService: SchoolUsersService) {}
+
+  @ApiOperation({ summary: 'Get current user active permissions for this school' })
+  @Get('me/permissions')
+  async getMyPermissions(
+    @Param('schoolId') schoolId: string,
+    @Query('moduleCode') moduleCode: string,
+    @CurrentUser() caller: AuthContext,
+  ) {
+    return this.schoolUsersService.getMyPermissions(caller, schoolId, moduleCode);
+  }
 
   @ApiOperation({ summary: 'Create a school user (teacher / accountant / admin / staff) and optionally assign a role' })
   @Permission(ResourceEnum.SCHOOL_USERS, ActionEnum.CREATE)

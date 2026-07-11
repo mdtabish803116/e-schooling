@@ -10,6 +10,10 @@ import { SchoolUser } from '../../models/entities/school/school-user.entity';
 import { SchoolOwnerMember } from '../../models/entities/school/school-owner-member.entity';
 import { SchoolUserRole } from '../../models/entities/rbac/school-user-role.entity';
 import { SchoolRole } from '../../models/entities/rbac/school-role.entity';
+import { SchoolRolePermission } from '../../models/entities/rbac/school-role-permission.entity';
+import { ModuleOperationPermission } from '../../models/entities/rbac/module-operation-permission.entity';
+import { ModuleMaster } from '../../models/entities/rbac/module-master.entity';
+import { OperationMaster } from '../../models/entities/rbac/operation-master.entity';
 import { SchoolUserProfile } from '../../models/entities/school/school-user-profile.entity';
 import { AuthContext } from '../../interfaces/auth-context.interface';
 import { CreateSchoolUserDto } from '../../interfaces/request/school-user/create-school-user.dto';
@@ -179,5 +183,52 @@ export class SchoolUsersService {
 
     const profile = await this.dataSource.getRepository(SchoolUserProfile).findOne({ where: { schoolUserId: userId } });
     return { user, profile: profile || null };
+  }
+
+  /**
+   * Fetches the permitted operations for the current user in a specific module.
+   */
+  async getMyPermissions(caller: AuthContext, schoolId: string, moduleCode: string) {
+    await this.assertAccessToSchool(caller, schoolId);
+
+    if (caller.actorType === 'school_owner') {
+      return { isOwner: true, hasRoleAssigned: true, operations: [] };
+    }
+
+    if (!moduleCode) {
+      throw new BadRequestException('moduleCode query parameter is required');
+    }
+
+    // 1. Get roles assigned to this user
+    const userRoles = await this.dataSource.getRepository(SchoolUserRole).find({
+      where: { userId: caller.id, isActive: true, isDeleted: false },
+    });
+
+    if (!userRoles.length) {
+      return { isOwner: false, hasRoleAssigned: false, operations: [] };
+    }
+
+    const roleIds = userRoles.map(ur => ur.roleId);
+
+    // 2. Fetch active operations mapped to these roles for the specific module
+    const permissions = await this.dataSource.getRepository(SchoolRolePermission).createQueryBuilder('rp')
+      .innerJoin(ModuleOperationPermission, 'p', 'p.id = rp.permissionId')
+      .innerJoin(ModuleMaster, 'm', 'm.id = p.moduleId')
+      .innerJoin(OperationMaster, 'o', 'o.id = p.operationId')
+      .select(["LOWER(o.code) as operation"])
+      .where('rp.roleId IN (:...roleIds)', { roleIds })
+      .andWhere('LOWER(m.code) = LOWER(:moduleCode)', { moduleCode })
+      .andWhere('rp.isActive = true')
+      .andWhere('rp.isDeleted = false')
+      .andWhere('p.isActive = true')
+      .andWhere('p.isDeleted = false')
+      .andWhere('m.isActive = true')
+      .andWhere('o.isActive = true')
+      .getRawMany();
+
+    // 3. Extract unique operation strings (e.g. ['create', 'view', 'update'])
+    const uniqueOperations = Array.from(new Set(permissions.map(p => p.operation)));
+
+    return { isOwner: false, hasRoleAssigned: true, operations: uniqueOperations };
   }
 }

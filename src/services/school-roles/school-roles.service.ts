@@ -381,6 +381,10 @@ export class SchoolRolesService {
    * Get details of a school role by its ID.
    */
   async getSchoolRole(caller: AuthContext, schoolId: string, schoolRoleId: string) {
+    if (!schoolRoleId || schoolRoleId === 'undefined') {
+      throw new BadRequestException('Invalid role ID');
+    }
+
     await this.assertAccessToSchool(caller, schoolId);
 
     const role = await this.dataSource.getRepository(SchoolRole).findOne({

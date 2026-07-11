@@ -16,6 +16,11 @@ import { SectionTransferHistory } from '../../models/entities/student/section-tr
 import { SchoolUser } from '../../models/entities/school/school-user.entity';
 import { SchoolOwner } from '../../models/entities/school/school-owner.entity';
 import { PlatformUser } from '../../models/entities/platform/platform-user.entity';
+import { SchoolUserRole } from '../../models/entities/rbac/school-user-role.entity';
+import { SchoolRolePermission } from '../../models/entities/rbac/school-role-permission.entity';
+import { ModuleOperationPermission } from '../../models/entities/rbac/module-operation-permission.entity';
+import { ModuleMaster } from '../../models/entities/rbac/module-master.entity';
+import { OperationMaster } from '../../models/entities/rbac/operation-master.entity';
 import type { AuthContext } from '../../interfaces/auth-context.interface';
 
 @Injectable()
@@ -32,6 +37,34 @@ export class AcademicService {
     this.subjectRepo = this.dataSource.getRepository(Subject);
     this.mappingRepo = this.dataSource.getRepository(ClassSectionSubject);
     this.assignmentRepo = this.dataSource.getRepository(TeacherSectionAssignment);
+  }
+
+  private async checkModulePermission(caller: AuthContext, schoolId: string, moduleCode: string, requiredOperation: string): Promise<boolean> {
+    if (caller.actorType === 'school_owner') return true;
+
+    const userRoles = await this.dataSource.getRepository(SchoolUserRole).find({
+      where: { userId: caller.id, isActive: true, isDeleted: false },
+    });
+
+    if (!userRoles.length) return false;
+    const roleIds = userRoles.map(ur => ur.roleId);
+
+    const permission = await this.dataSource.getRepository(SchoolRolePermission).createQueryBuilder('rp')
+      .innerJoin(ModuleOperationPermission, 'p', 'p.id = rp.permissionId')
+      .innerJoin(ModuleMaster, 'm', 'm.id = p.moduleId')
+      .innerJoin(OperationMaster, 'o', 'o.id = p.operationId')
+      .where('rp.roleId IN (:...roleIds)', { roleIds })
+      .andWhere('LOWER(m.code) = LOWER(:moduleCode)', { moduleCode })
+      .andWhere('LOWER(o.code) = LOWER(:requiredOperation)', { requiredOperation })
+      .andWhere('rp.isActive = true')
+      .andWhere('rp.isDeleted = false')
+      .andWhere('p.isActive = true')
+      .andWhere('p.isDeleted = false')
+      .andWhere('m.isActive = true')
+      .andWhere('o.isActive = true')
+      .getOne();
+
+    return !!permission;
   }
 
   // ASSIGNMENTS HELPER
@@ -361,6 +394,8 @@ export class AcademicService {
       }
     }
 
+    const hasSectionViewAccess = await this.checkModulePermission(caller, schoolId, 'sections', 'view');
+
     return {
       id: cls.id,
       schoolId: cls.schoolId,
@@ -378,7 +413,7 @@ export class AcademicService {
       updatedBy: updatedByName,
       createdAt: cls.createdAt,
       updatedAt: cls.updatedAt,
-      sections: sections.map(s => {
+      sections: hasSectionViewAccess ? sections.map(s => {
         const assignment = assignments.find(a => a.sectionId === s.id);
         return {
           id: s.id,
@@ -389,8 +424,9 @@ export class AcademicService {
           classTeacherId: assignment ? assignment.teacherId : null,
           classTeacherName: assignment?.teacher ? assignment.teacher.name : null,
         };
-      }),
+      }) : [],
       sectionCount: sections.length,
+      sectionMessage: hasSectionViewAccess ? undefined : "You do not have permission to view sections for this class."
     };
   }
 
