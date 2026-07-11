@@ -4,7 +4,7 @@ import {
   ForbiddenException,
   BadRequestException,
 } from '@nestjs/common';
-import { DataSource, In } from 'typeorm';
+import { DataSource, In, Not } from 'typeorm';
 import { SchoolRole } from '../../models/entities/rbac/school-role.entity';
 import { SchoolRolePermission } from '../../models/entities/rbac/school-role-permission.entity';
 import { ModuleOperationPermission } from '../../models/entities/rbac/module-operation-permission.entity';
@@ -16,15 +16,22 @@ import { EntitlementService } from '../entitlement/entitlement.service';
 import { AuthContext } from '../../interfaces/auth-context.interface';
 import { CreateSchoolRoleDto } from '../../interfaces/request/school-role/create-school-role.dto';
 import { UpdateSchoolRoleDto } from '../../interfaces/request/school-role/update-school-role.dto';
+import {
+  ApiResponse,
+  ApiResponseException,
+} from '../../shared/utils/response.utils';
 
 @Injectable()
 export class SchoolRolesService {
   constructor(
     private dataSource: DataSource,
     private entitlementService: EntitlementService,
-  ) { }
+  ) {}
 
-  private async assertAccessToSchool(caller: AuthContext, schoolId: string): Promise<void> {
+  private async assertAccessToSchool(
+    caller: AuthContext,
+    schoolId: string,
+  ): Promise<void> {
     if (caller.actorType === 'school_owner') {
       const membership = await this.dataSource
         .getRepository(SchoolOwnerMember)
@@ -45,17 +52,21 @@ export class SchoolRolesService {
   /**
    * Step 1: Create a basic School Role metadata.
    */
-  async createSchoolRole(caller: AuthContext, schoolId: string, dto: CreateSchoolRoleDto) {
+  async createSchoolRole(
+    caller: AuthContext,
+    schoolId: string,
+    dto: CreateSchoolRoleDto,
+  ) {
     await this.assertAccessToSchool(caller, schoolId);
 
     const roleRepo = this.dataSource.getRepository(SchoolRole);
-    
+
     // Fetch all roles in this school (both active and soft deleted/inactive)
     const existingRoles = await roleRepo.find({ where: { schoolId } });
     const normalizedIncoming = dto.name.trim().toUpperCase();
-    
+
     const duplicate = existingRoles.find(
-      r => r.name.trim().toUpperCase() === normalizedIncoming
+      (r) => r.name.trim().toUpperCase() === normalizedIncoming,
     );
 
     if (duplicate) {
@@ -71,16 +82,22 @@ export class SchoolRolesService {
         const savedRole = await roleRepo.save(duplicate);
         return {
           message: 'School role reactivated successfully from history.',
-          role: { id: savedRole.id, name: savedRole.name, description: savedRole.description }
+          role: {
+            id: savedRole.id,
+            name: savedRole.name,
+            description: savedRole.description,
+          },
         };
       } else if (!duplicate.isActive) {
         // Exist but inactive
         throw new BadRequestException(
-          `Role '${duplicate.name}' already exists but is inactive. Please make this active using the activation API.`
+          `Role '${duplicate.name}' already exists but is inactive. Please make this active using the activation API.`,
         );
       } else {
         // Active duplicate
-        throw new BadRequestException(`Role '${duplicate.name}' already exists and is active.`);
+        throw new BadRequestException(
+          `Role '${duplicate.name}' already exists and is active.`,
+        );
       }
     }
 
@@ -94,20 +111,33 @@ export class SchoolRolesService {
     const savedRole = await roleRepo.save(role);
 
     return {
-      message: 'School role created successfully. You can now assign permissions to it.',
-      role: { id: savedRole.id, name: savedRole.name, description: savedRole.description }
+      message:
+        'School role created successfully. You can now assign permissions to it.',
+      role: {
+        id: savedRole.id,
+        name: savedRole.name,
+        description: savedRole.description,
+      },
     };
   }
 
   /**
    * Update School Role metadata.
    */
-  async updateSchoolRole(caller: AuthContext, schoolId: string, schoolRoleId: string, dto: UpdateSchoolRoleDto) {
+  async updateSchoolRole(
+    caller: AuthContext,
+    schoolId: string,
+    schoolRoleId: string,
+    dto: UpdateSchoolRoleDto,
+  ) {
     await this.assertAccessToSchool(caller, schoolId);
 
     const roleRepo = this.dataSource.getRepository(SchoolRole);
-    const role = await roleRepo.findOne({ where: { id: schoolRoleId, schoolId } });
-    if (!role || role.isDeleted) throw new NotFoundException('This role does not exist');
+    const role = await roleRepo.findOne({
+      where: { id: schoolRoleId, schoolId },
+    });
+    if (!role || role.isDeleted)
+      throw new NotFoundException('This role does not exist');
 
     if (dto.name !== undefined) role.name = dto.name;
     if (dto.description !== undefined) role.description = dto.description;
@@ -116,19 +146,30 @@ export class SchoolRolesService {
     const savedRole = await roleRepo.save(role);
     return {
       message: 'School role updated successfully',
-      role: { id: savedRole.id, name: savedRole.name, description: savedRole.description }
+      role: {
+        id: savedRole.id,
+        name: savedRole.name,
+        description: savedRole.description,
+      },
     };
   }
 
   /**
    * Soft delete / Deactivate a School Role.
    */
-  async deactivateSchoolRole(caller: AuthContext, schoolId: string, schoolRoleId: string) {
+  async deactivateSchoolRole(
+    caller: AuthContext,
+    schoolId: string,
+    schoolRoleId: string,
+  ) {
     await this.assertAccessToSchool(caller, schoolId);
 
     const roleRepo = this.dataSource.getRepository(SchoolRole);
-    const role = await roleRepo.findOne({ where: { id: schoolRoleId, schoolId } });
-    if (!role || role.isDeleted) throw new NotFoundException('This role does not exist');
+    const role = await roleRepo.findOne({
+      where: { id: schoolRoleId, schoolId },
+    });
+    if (!role || role.isDeleted)
+      throw new NotFoundException('This role does not exist');
 
     role.isDeleted = true;
     role.isActive = false;
@@ -141,59 +182,121 @@ export class SchoolRolesService {
   /**
    * Step 2: Assign Granular Permissions to a School Role.
    */
-  async assignPermissionsToSchoolRole(caller: AuthContext, schoolId: string, schoolRoleId: string, permissionIds: string[]) {
-    await this.assertAccessToSchool(caller, schoolId);
-
-    const role = await this.dataSource.getRepository(SchoolRole).findOne({ where: { id: schoolRoleId, schoolId } });
-    if (!role || role.isDeleted) throw new NotFoundException('This role does not exist');
-    if (!role.isActive) {
-      throw new BadRequestException('This role is inactive. Please activate it first before assigning permissions.');
-    }
-
-    const queryRunner = this.dataSource.createQueryRunner();
-    await queryRunner.connect();
-    await queryRunner.startTransaction();
-
+  async assignPermissionsToSchoolRole(
+    caller: AuthContext,
+    schoolId: string,
+    schoolRoleId: string,
+    permissionIds: string[],
+  ) {
     try {
-      for (const pId of permissionIds) {
-        // Soft-Upsert: If mapping exists but is deleted/inactive, reactivate it.
-        let mapping = await queryRunner.manager.findOne(SchoolRolePermission, {
-          where: { roleId: schoolRoleId, permissionId: pId }
-        });
+      await this.assertAccessToSchool(caller, schoolId);
 
-        if (mapping) {
-          mapping.isDeleted = false;
-          mapping.isActive = true;
-        } else {
-          mapping = new SchoolRolePermission();
-          mapping.roleId = schoolRoleId;
-          mapping.permissionId = pId;
-        }
-        mapping.createdById = caller.id;
-        await queryRunner.manager.save(mapping);
+      const role = await this.dataSource
+        .getRepository(SchoolRole)
+        .findOne({ where: { id: schoolRoleId, schoolId } });
+      if (!role || role.isDeleted)
+        throw new NotFoundException('This role does not exist');
+      if (!role.isActive) {
+        throw new BadRequestException(
+          'This role is inactive. Please activate it first before assigning permissions.',
+        );
       }
 
-      await queryRunner.commitTransaction();
-      return { message: 'Permissions assigned/reactivated successfully' };
-    } catch (error) {
-      await queryRunner.rollbackTransaction();
-      throw error;
-    } finally {
-      await queryRunner.release();
+      const queryRunner = this.dataSource.createQueryRunner();
+      await queryRunner.connect();
+      await queryRunner.startTransaction();
+
+      try {
+        if (permissionIds.length > 0) {
+          await queryRunner.manager.update(
+            SchoolRolePermission,
+            {
+              roleId: schoolRoleId,
+              permissionId: Not(In(permissionIds)),
+            },
+            { isActive: false },
+          );
+        } else {
+          await queryRunner.manager.update(
+            SchoolRolePermission,
+            { roleId: schoolRoleId },
+            { isActive: false },
+          );
+        }
+
+        for (const pId of permissionIds) {
+          // Soft-Upsert: If mapping exists but is deleted/inactive, reactivate it.
+          let mapping = await queryRunner.manager.findOne(
+            SchoolRolePermission,
+            {
+              where: { roleId: schoolRoleId, permissionId: pId },
+            },
+          );
+
+          if (mapping) {
+            mapping.isActive = true;
+          } else {
+            mapping = new SchoolRolePermission();
+            mapping.roleId = schoolRoleId;
+            mapping.permissionId = pId;
+          }
+          mapping.createdById = caller.id;
+          await queryRunner.manager.save(mapping);
+        }
+
+        await queryRunner.commitTransaction();
+        return ApiResponse.success(
+          null,
+          'Permissions assigned/reactivated successfully',
+          200,
+        );
+      } catch (error) {
+        await queryRunner.rollbackTransaction();
+        throw error;
+      } finally {
+        await queryRunner.release();
+      }
+    } catch (error: unknown) {
+      if (error instanceof ApiResponseException) {
+        throw error;
+      }
+      const err = error as {
+        status?: number;
+        getStatus?: () => number;
+        message?: string;
+        name?: string;
+      };
+      const status = err.status || (err.getStatus ? err.getStatus() : 500);
+      const message = err.message || 'An error occurred';
+      throw new ApiResponseException(
+        message,
+        status,
+        err.name || 'INTERNAL_SERVER_ERROR',
+      );
     }
   }
 
   /**
    * Deactivate/Remove a permission from a School Role (Soft Delete).
    */
-  async removePermissionFromSchoolRole(caller: AuthContext, schoolId: string, schoolRoleId: string, permissionId: string) {
+  async removePermissionFromSchoolRole(
+    caller: AuthContext,
+    schoolId: string,
+    schoolRoleId: string,
+    permissionId: string,
+  ) {
     await this.assertAccessToSchool(caller, schoolId);
 
-    const role = await this.dataSource.getRepository(SchoolRole).findOne({ where: { id: schoolRoleId, schoolId } });
-    if (!role || role.isDeleted) throw new NotFoundException('This role does not exist');
+    const role = await this.dataSource
+      .getRepository(SchoolRole)
+      .findOne({ where: { id: schoolRoleId, schoolId } });
+    if (!role || role.isDeleted)
+      throw new NotFoundException('This role does not exist');
 
     const mappingRepo = this.dataSource.getRepository(SchoolRolePermission);
-    const mapping = await mappingRepo.findOne({ where: { roleId: schoolRoleId, permissionId } });
+    const mapping = await mappingRepo.findOne({
+      where: { roleId: schoolRoleId, permissionId },
+    });
 
     if (mapping) {
       mapping.isDeleted = true;
@@ -201,7 +304,10 @@ export class SchoolRolesService {
       await mappingRepo.save(mapping);
     }
 
-    return { message: 'Permission removed from school role successfully (Soft Deleted)' };
+    return {
+      message:
+        'Permission removed from school role successfully (Soft Deleted)',
+    };
   }
 
   /**
@@ -222,27 +328,38 @@ export class SchoolRolesService {
   /**
    * List all accessible permissions for a school (Enforces Feature Locking).
    */
-  async listAccessiblePermissionsForSchool(caller: AuthContext, schoolId: string) {
+  async listAccessiblePermissionsForSchool(
+    caller: AuthContext,
+    schoolId: string,
+  ) {
     await this.assertAccessToSchool(caller, schoolId);
 
-    const basePermissions = await this.dataSource.getRepository(ModuleOperationPermission).find({
-      where: { isActive: true, isDeleted: false },
-    });
+    const basePermissions = await this.dataSource
+      .getRepository(ModuleOperationPermission)
+      .find({
+        where: { isActive: true, isDeleted: false },
+      });
 
     if (!basePermissions.length) return { accessibleModules: [] };
 
-    const moduleIds = [...new Set(basePermissions.map(p => p.moduleId).filter(Boolean))];
+    const moduleIds = [
+      ...new Set(basePermissions.map((p) => p.moduleId).filter(Boolean)),
+    ];
     const modules = await this.dataSource.getRepository(ModuleMaster).find({
       where: { id: In(moduleIds), isActive: true },
     });
 
-    const moduleMap = new Map(modules.map(m => [m.id, m]));
-    const platformFeatureIds = [...new Set(modules.map(m => m.platformFeatureId).filter(Boolean))];
-    
-    const pFeatures = await this.dataSource.getRepository(PlatformFeature).find({
-      where: { id: In(platformFeatureIds) },
-    });
-    const featureCodeMap = new Map(pFeatures.map(pf => [pf.id, pf.code]));
+    const moduleMap = new Map(modules.map((m) => [m.id, m]));
+    const platformFeatureIds = [
+      ...new Set(modules.map((m) => m.platformFeatureId).filter(Boolean)),
+    ];
+
+    const pFeatures = await this.dataSource
+      .getRepository(PlatformFeature)
+      .find({
+        where: { id: In(platformFeatureIds) },
+      });
+    const featureCodeMap = new Map(pFeatures.map((pf) => [pf.id, pf.code]));
 
     const clearedModuleIds = new Set<string>();
     for (const [modId, modObj] of moduleMap.entries()) {
@@ -251,7 +368,10 @@ export class SchoolRolesService {
       } else {
         const featureCode = featureCodeMap.get(modObj.platformFeatureId);
         if (featureCode) {
-          const check = await this.entitlementService.evaluateFeatureAccess(schoolId, featureCode);
+          const check = await this.entitlementService.evaluateFeatureAccess(
+            schoolId,
+            featureCode,
+          );
           if (check.isAllowed) clearedModuleIds.add(modId);
         }
       }
@@ -260,7 +380,7 @@ export class SchoolRolesService {
     const ops = await this.dataSource.getRepository(OperationMaster).find({
       where: { isActive: true, isDeleted: false },
     });
-    const opCodeMap = new Map(ops.map(o => [o.id, o.code]));
+    const opCodeMap = new Map(ops.map((o) => [o.id, o.code]));
 
     const groupedResults = new Map<string, any>();
     for (const p of basePermissions) {
@@ -293,12 +413,20 @@ export class SchoolRolesService {
   /**
    * Update the active status (activation/deactivation) of a school role.
    */
-  async updateSchoolRoleStatus(caller: AuthContext, schoolId: string, schoolRoleId: string, isActive: boolean) {
+  async updateSchoolRoleStatus(
+    caller: AuthContext,
+    schoolId: string,
+    schoolRoleId: string,
+    isActive: boolean,
+  ) {
     await this.assertAccessToSchool(caller, schoolId);
 
     const roleRepo = this.dataSource.getRepository(SchoolRole);
-    const role = await roleRepo.findOne({ where: { id: schoolRoleId, schoolId } });
-    if (!role || role.isDeleted) throw new NotFoundException('This role does not exist');
+    const role = await roleRepo.findOne({
+      where: { id: schoolRoleId, schoolId },
+    });
+    if (!role || role.isDeleted)
+      throw new NotFoundException('This role does not exist');
 
     role.isActive = isActive;
     role.updatedById = caller.id;
@@ -307,19 +435,26 @@ export class SchoolRolesService {
 
     return {
       message: `School role successfully ${isActive ? 'activated' : 'deactivated'}.`,
-      role: { id: role.id, name: role.name, isActive: role.isActive }
+      role: { id: role.id, name: role.name, isActive: role.isActive },
     };
   }
 
   /**
    * Soft delete a school role and its permissions.
    */
-  async removeSchoolRole(caller: AuthContext, schoolId: string, schoolRoleId: string) {
+  async removeSchoolRole(
+    caller: AuthContext,
+    schoolId: string,
+    schoolRoleId: string,
+  ) {
     await this.assertAccessToSchool(caller, schoolId);
 
     const roleRepo = this.dataSource.getRepository(SchoolRole);
-    const role = await roleRepo.findOne({ where: { id: schoolRoleId, schoolId } });
-    if (!role || role.isDeleted) throw new NotFoundException('This role does not exist');
+    const role = await roleRepo.findOne({
+      where: { id: schoolRoleId, schoolId },
+    });
+    if (!role || role.isDeleted)
+      throw new NotFoundException('This role does not exist');
 
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
@@ -330,7 +465,7 @@ export class SchoolRolesService {
       await queryRunner.manager.update(
         SchoolRolePermission,
         { roleId: schoolRoleId },
-        { isActive: false, isDeleted: true }
+        { isActive: false, isDeleted: true },
       );
 
       // Soft delete the role itself
@@ -342,7 +477,7 @@ export class SchoolRolesService {
       await queryRunner.commitTransaction();
 
       return {
-        message: 'School role and its permission mappings removed.'
+        message: 'School role and its permission mappings removed.',
       };
     } catch (error) {
       await queryRunner.rollbackTransaction();
@@ -352,23 +487,33 @@ export class SchoolRolesService {
     }
   }
 
-
   /**
    * Get all active permissions currently assigned to a school role.
    */
-  async getPermissionsForSchoolRole(caller: AuthContext, schoolId: string, schoolRoleId: string) {
+  async getPermissionsForSchoolRole(
+    caller: AuthContext,
+    schoolId: string,
+    schoolRoleId: string,
+  ) {
     await this.assertAccessToSchool(caller, schoolId);
 
     const role = await this.dataSource.getRepository(SchoolRole).findOne({
-      where: { id: schoolRoleId, schoolId }
+      where: { id: schoolRoleId, schoolId },
     });
-    if (!role || role.isDeleted) throw new NotFoundException('This role does not exist');
+    if (!role || role.isDeleted)
+      throw new NotFoundException('This role does not exist');
 
-    const permissions = await this.dataSource.getRepository(SchoolRolePermission).createQueryBuilder('rp')
+    const permissions = await this.dataSource
+      .getRepository(SchoolRolePermission)
+      .createQueryBuilder('rp')
       .innerJoin(ModuleOperationPermission, 'p', 'p.id = rp.permissionId')
       .innerJoin(ModuleMaster, 'm', 'm.id = p.moduleId')
       .innerJoin(OperationMaster, 'o', 'o.id = p.operationId')
-      .select(['p.id as id', "CONCAT(LOWER(m.code), ':', LOWER(o.code)) as key", 'p.description as description'])
+      .select([
+        'p.id as id',
+        "CONCAT(LOWER(m.code), ':', LOWER(o.code)) as key",
+        'p.description as description',
+      ])
       .where('rp.roleId = :schoolRoleId', { schoolRoleId })
       .andWhere('rp.isActive = true')
       .andWhere('rp.isDeleted = false')
@@ -380,7 +525,11 @@ export class SchoolRolesService {
   /**
    * Get details of a school role by its ID.
    */
-  async getSchoolRole(caller: AuthContext, schoolId: string, schoolRoleId: string) {
+  async getSchoolRole(
+    caller: AuthContext,
+    schoolId: string,
+    schoolRoleId: string,
+  ) {
     if (!schoolRoleId || schoolRoleId === 'undefined') {
       throw new BadRequestException('Invalid role ID');
     }
@@ -388,17 +537,23 @@ export class SchoolRolesService {
     await this.assertAccessToSchool(caller, schoolId);
 
     const role = await this.dataSource.getRepository(SchoolRole).findOne({
-      where: { id: schoolRoleId, schoolId, isDeleted: false }
+      where: { id: schoolRoleId, schoolId, isDeleted: false },
     });
     if (!role) {
       throw new NotFoundException('This role does not exist');
     }
 
-    const permissions = await this.dataSource.getRepository(SchoolRolePermission).createQueryBuilder('rp')
+    const permissions = await this.dataSource
+      .getRepository(SchoolRolePermission)
+      .createQueryBuilder('rp')
       .innerJoin(ModuleOperationPermission, 'p', 'p.id = rp.permissionId')
       .innerJoin(ModuleMaster, 'm', 'm.id = p.moduleId')
       .innerJoin(OperationMaster, 'o', 'o.id = p.operationId')
-      .select(['p.id as id', "CONCAT(LOWER(m.code), ':', LOWER(o.code)) as key", 'p.description as description'])
+      .select([
+        'p.id as id',
+        "CONCAT(LOWER(m.code), ':', LOWER(o.code)) as key",
+        'p.description as description',
+      ])
       .where('rp.roleId = :schoolRoleId', { schoolRoleId })
       .andWhere('rp.isActive = true')
       .andWhere('rp.isDeleted = false')
@@ -407,5 +562,3 @@ export class SchoolRolesService {
     return { role, permissions };
   }
 }
-
-
