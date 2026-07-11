@@ -3,11 +3,9 @@ import {
   Post,
   Get,
   Patch,
-  Delete,
   Body,
   Param,
   UseGuards,
-  BadRequestException,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../../../shared/guards/jwt-auth.guard';
@@ -19,6 +17,7 @@ import type { AuthContext } from '../../../../interfaces/auth-context.interface'
 import { CreateSchoolRoleDto } from '../../../../interfaces/request/school-role/create-school-role.dto';
 import { UpdateSchoolRoleDto } from '../../../../interfaces/request/school-role/update-school-role.dto';
 import { UpdateSchoolRoleStatusDto } from '../../../../interfaces/request/school-role/update-school-role-status.dto';
+import { UpdateRolePermissionStatusDto } from '../../../../interfaces/request/school-role/update-role-permission-status.dto';
 import { AssignSchoolPermissionsDto } from '../../../../interfaces/request/school-role/assign-school-permissions.dto';
 import { ResourceEnum, ActionEnum } from '../../../../models/enums/enums';
 
@@ -122,17 +121,14 @@ export class SchoolRolesController {
     @Param('schoolRoleId') schoolRoleId: string,
     @Param('permissionId') permissionId: string,
     @CurrentUser() caller: AuthContext,
-    @Body('isActive') isActive: boolean,
+    @Body() dto: UpdateRolePermissionStatusDto,
   ) {
-    if (isActive === undefined) {
-      throw new BadRequestException('isActive is required in the request body');
-    }
     return this.schoolRolesService.updatePermissionStatusForSchoolRole(
       caller,
       schoolId,
       schoolRoleId,
       permissionId,
-      isActive,
+      dto.isActive,
     );
   }
 
