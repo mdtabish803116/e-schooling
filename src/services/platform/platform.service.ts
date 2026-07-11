@@ -1,10 +1,20 @@
-import { Injectable, ForbiddenException, BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  ForbiddenException,
+  BadRequestException,
+  NotFoundException,
+} from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { PlatformFeature } from '../../models/entities/entitlement/platform-feature.entity';
 import { ModuleMaster } from '../../models/entities/rbac/module-master.entity';
 import { OperationMaster } from '../../models/entities/rbac/operation-master.entity';
 import { ModuleOperationPermission } from '../../models/entities/rbac/module-operation-permission.entity';
-import { CreatePlatformFeatureDto, CreateModuleMasterDto, CreateOperationMasterDto, AssignPermissionDto } from '../../interfaces/request/platform/platform-management.dto';
+import {
+  CreatePlatformFeatureDto,
+  CreateModuleMasterDto,
+  CreateOperationMasterDto,
+  AssignPermissionDto,
+} from '../../interfaces/request/platform/platform-management.dto';
 import { AuthContext } from '../../interfaces/auth-context.interface';
 import { Config } from '../../config/index';
 
@@ -13,11 +23,16 @@ import { PlatformFeaturePrice } from '../../models/entities/entitlement/plaform-
 import { SubscriptionPlan } from '../../models/entities/subscription/subscription-plan.entity';
 import { SubscriptionPlanPrice } from '../../models/entities/subscription/subscription-plan-price.entity';
 import { SubscriptionPlanPlatformFeatureMapping } from '../../models/entities/entitlement/subscription-plan-platform-feature-mapping.entity';
-import { BillingCycleEnum, FeatureTypeEnum, UsageUnitEnum, PlanCodeEnum } from '../../models/enums/enums';
+import {
+  BillingCycleEnum,
+  FeatureTypeEnum,
+  UsageUnitEnum,
+  PlanCodeEnum,
+} from '../../models/enums/enums';
 
 @Injectable()
 export class PlatformService {
-  constructor(private dataSource: DataSource) { }
+  constructor(private dataSource: DataSource) {}
 
   private generateCodeFromName(name: string): string {
     return name
@@ -31,18 +46,21 @@ export class PlatformService {
   async createFeature(dto: CreatePlatformFeatureDto, caller: AuthContext) {
     const generatedCode = this.generateCodeFromName(dto.name);
     if (!generatedCode) {
-      throw new BadRequestException('Invalid feature name: code could not be generated');
+      throw new BadRequestException(
+        'Invalid feature name: code could not be generated',
+      );
     }
 
     // Check if name OR code already exists
-    const existing = await this.dataSource.getRepository(PlatformFeature).findOne({
-      where: [
-        { name: dto.name },
-        { code: generatedCode }
-      ]
-    });
+    const existing = await this.dataSource
+      .getRepository(PlatformFeature)
+      .findOne({
+        where: [{ name: dto.name }, { code: generatedCode }],
+      });
     if (existing) {
-      throw new BadRequestException('A feature with the same name or generated code already exists');
+      throw new BadRequestException(
+        'A feature with the same name or generated code already exists',
+      );
     }
 
     const feature = new PlatformFeature();
@@ -57,18 +75,19 @@ export class PlatformService {
   async createModule(dto: CreateModuleMasterDto, caller: AuthContext) {
     const generatedCode = this.generateCodeFromName(dto.name);
     if (!generatedCode) {
-      throw new BadRequestException('Invalid module name: code could not be generated');
+      throw new BadRequestException(
+        'Invalid module name: code could not be generated',
+      );
     }
 
     // Check if name OR code already exists
     const existing = await this.dataSource.getRepository(ModuleMaster).findOne({
-      where: [
-        { name: dto.name },
-        { code: generatedCode }
-      ]
+      where: [{ name: dto.name }, { code: generatedCode }],
     });
     if (existing) {
-      throw new BadRequestException('A module with the same name or generated code already exists');
+      throw new BadRequestException(
+        'A module with the same name or generated code already exists',
+      );
     }
 
     const module = new ModuleMaster();
@@ -89,18 +108,21 @@ export class PlatformService {
   async createOperation(dto: CreateOperationMasterDto, caller: AuthContext) {
     const generatedCode = this.generateCodeFromName(dto.name);
     if (!generatedCode) {
-      throw new BadRequestException('Invalid operation name: code could not be generated');
+      throw new BadRequestException(
+        'Invalid operation name: code could not be generated',
+      );
     }
 
     // Check if name OR code already exists
-    const existing = await this.dataSource.getRepository(OperationMaster).findOne({
-      where: [
-        { name: dto.name },
-        { code: generatedCode }
-      ]
-    });
+    const existing = await this.dataSource
+      .getRepository(OperationMaster)
+      .findOne({
+        where: [{ name: dto.name }, { code: generatedCode }],
+      });
     if (existing) {
-      throw new BadRequestException('An operation with the same name or generated code already exists');
+      throw new BadRequestException(
+        'An operation with the same name or generated code already exists',
+      );
     }
 
     const op = new OperationMaster();
@@ -114,7 +136,7 @@ export class PlatformService {
 
   async assignPermission(dto: AssignPermissionDto) {
     const module = await this.dataSource.getRepository(ModuleMaster).findOne({
-      where: { id: dto.moduleId }
+      where: { id: dto.moduleId },
     });
     if (!module) throw new NotFoundException('Module not found');
 
@@ -123,25 +145,30 @@ export class PlatformService {
     await queryRunner.startTransaction();
 
     try {
-      const permRepo = queryRunner.manager.getRepository(ModuleOperationPermission);
+      const permRepo = queryRunner.manager.getRepository(
+        ModuleOperationPermission,
+      );
       const opRepo = queryRunner.manager.getRepository(OperationMaster);
 
       const results: ModuleOperationPermission[] = [];
 
       for (const opId of dto.operationIds) {
         const operation = await opRepo.findOne({ where: { id: opId } });
-        if (!operation) throw new NotFoundException(`Operation with ID ${opId} not found`);
+        if (!operation)
+          throw new NotFoundException(`Operation with ID ${opId} not found`);
 
         const generatedKey = `${module.code.toLowerCase()}:${operation.code.toLowerCase()}`;
 
         // Find existing mapping
         let perm = await permRepo.findOne({
-          where: { moduleId: module.id, operationId: operation.id }
+          where: { moduleId: module.id, operationId: operation.id },
         });
 
         if (perm) {
           if (perm.isActive && !perm.isDeleted) {
-            throw new BadRequestException(`Permission mapping with key '${generatedKey}' already exists and is active!`);
+            throw new BadRequestException(
+              `Permission mapping with key '${generatedKey}' already exists and is active!`,
+            );
           } else {
             // Upsert / Reactivate
             perm.isActive = true;
@@ -153,7 +180,9 @@ export class PlatformService {
           perm = new ModuleOperationPermission();
           perm.moduleId = module.id;
           perm.operationId = operation.id;
-          perm.description = dto.description || `Grants permission to ${operation.name} in ${module.name}`;
+          perm.description =
+            dto.description ||
+            `Grants permission to ${operation.name} in ${module.name}`;
           perm.isActive = true;
           perm.isDeleted = false;
         }
@@ -165,7 +194,7 @@ export class PlatformService {
       await queryRunner.commitTransaction();
       return {
         message: 'Permissions assigned successfully',
-        permissions: results
+        permissions: results,
       };
     } catch (error) {
       await queryRunner.rollbackTransaction();
@@ -175,28 +204,25 @@ export class PlatformService {
     }
   }
 
-  async removePermission(id: string) {
-    const permRepo = this.dataSource.getRepository(ModuleOperationPermission);
-    const perm = await permRepo.findOne({ where: { id } });
-    if (!perm) throw new NotFoundException('Permission mapping not found');
-
-    perm.isActive = false;
-    perm.isDeleted = true;
-    await permRepo.save(perm);
-
-    return { message: 'Permission mapping soft-deleted successfully (isActive set to false, isDeleted set to true)' };
-  }
-
   async listFeatures() {
-    return this.dataSource.getRepository(PlatformFeature).find({ where: { isActive: true, isDeleted: false } });
+    return this.dataSource
+      .getRepository(PlatformFeature)
+      .find({ where: { isActive: true, isDeleted: false } });
   }
 
   async listModules() {
-    return this.dataSource.getRepository(ModuleMaster).find({ where: { isActive: true, isDeleted: false }, order: { displayOrder: 'ASC' } });
+    return this.dataSource
+      .getRepository(ModuleMaster)
+      .find({
+        where: { isActive: true, isDeleted: false },
+        order: { displayOrder: 'ASC' },
+      });
   }
 
   async listOperations() {
-    return this.dataSource.getRepository(OperationMaster).find({ where: { isActive: true, isDeleted: false } });
+    return this.dataSource
+      .getRepository(OperationMaster)
+      .find({ where: { isActive: true, isDeleted: false } });
   }
 
   async seedPlatformData(apiKey: string) {
@@ -214,22 +240,127 @@ export class PlatformService {
       const priceRepo = queryRunner.manager.getRepository(PlatformFeaturePrice);
       const modRepo = queryRunner.manager.getRepository(ModuleMaster);
       const opRepo = queryRunner.manager.getRepository(OperationMaster);
-      const permRepo = queryRunner.manager.getRepository(ModuleOperationPermission);
+      const permRepo = queryRunner.manager.getRepository(
+        ModuleOperationPermission,
+      );
       const planRepo = queryRunner.manager.getRepository(SubscriptionPlan);
-      const planPriceRepo = queryRunner.manager.getRepository(SubscriptionPlanPrice);
-      const planMappingRepo = queryRunner.manager.getRepository(SubscriptionPlanPlatformFeatureMapping);
+      const planPriceRepo = queryRunner.manager.getRepository(
+        SubscriptionPlanPrice,
+      );
+      const planMappingRepo = queryRunner.manager.getRepository(
+        SubscriptionPlanPlatformFeatureMapping,
+      );
 
       // 1. Platform Features
       const featuresData = [
-        { name: 'Academic Management', desc: 'Manage classes, sections, and subjects', type: FeatureTypeEnum.CORE, usageUnit: UsageUnitEnum.NONE, isMetered: false, prices: [{ cycle: BillingCycleEnum.MONTHLY, price: 150.00 }, { cycle: BillingCycleEnum.QUARTERLY, price: 400.00 }, { cycle: BillingCycleEnum.YEARLY, price: 1500.00 }] },
-        { name: 'Student Management', desc: 'Admit, track, and manage student lifecycle', type: FeatureTypeEnum.CORE, usageUnit: UsageUnitEnum.NONE, isMetered: false, prices: [{ cycle: BillingCycleEnum.MONTHLY, price: 200.00 }, { cycle: BillingCycleEnum.QUARTERLY, price: 550.00 }, { cycle: BillingCycleEnum.YEARLY, price: 2000.00 }] },
-        { name: 'Attendance Management', desc: 'Real-time attendance tracking for students', type: FeatureTypeEnum.CORE, usageUnit: UsageUnitEnum.NONE, isMetered: false, prices: [{ cycle: BillingCycleEnum.MONTHLY, price: 100.00 }, { cycle: BillingCycleEnum.QUARTERLY, price: 280.00 }, { cycle: BillingCycleEnum.YEARLY, price: 1000.00 }] },
-        { name: 'Fee Management', desc: 'Collect and track fee payments and structures', type: FeatureTypeEnum.CORE, usageUnit: UsageUnitEnum.NONE, isMetered: false, prices: [{ cycle: BillingCycleEnum.MONTHLY, price: 250.00 }, { cycle: BillingCycleEnum.QUARTERLY, price: 700.00 }, { cycle: BillingCycleEnum.YEARLY, price: 2500.00 }] },
-        { name: 'Timetable Management', desc: 'Create and assign class/section schedules', type: FeatureTypeEnum.CORE, usageUnit: UsageUnitEnum.NONE, isMetered: false, prices: [{ cycle: BillingCycleEnum.MONTHLY, price: 120.00 }, { cycle: BillingCycleEnum.QUARTERLY, price: 320.00 }, { cycle: BillingCycleEnum.YEARLY, price: 1200.00 }] },
-        { name: 'Exam Management', desc: 'Conduct online/offline exams and produce grade-sheets', type: FeatureTypeEnum.CORE, usageUnit: UsageUnitEnum.NONE, isMetered: false, prices: [{ cycle: BillingCycleEnum.MONTHLY, price: 180.00 }, { cycle: BillingCycleEnum.QUARTERLY, price: 500.00 }, { cycle: BillingCycleEnum.YEARLY, price: 1800.00 }] },
-        { name: 'Report Management', desc: 'View comprehensive visual analytics and reports', type: FeatureTypeEnum.CORE, usageUnit: UsageUnitEnum.NONE, isMetered: false, prices: [{ cycle: BillingCycleEnum.MONTHLY, price: 150.00 }, { cycle: BillingCycleEnum.QUARTERLY, price: 400.00 }, { cycle: BillingCycleEnum.YEARLY, price: 1500.00 }] },
-        { name: 'Dashboard Analytics', desc: 'Interactive charts and summary indicators of school stats', type: FeatureTypeEnum.CORE, usageUnit: UsageUnitEnum.NONE, isMetered: false, prices: [{ cycle: BillingCycleEnum.MONTHLY, price: 100.00 }, { cycle: BillingCycleEnum.QUARTERLY, price: 280.00 }, { cycle: BillingCycleEnum.YEARLY, price: 1000.00 }] },
-        { name: 'Whatsapp Reminders', desc: 'Send automated student attendance & fee reminders via WhatsApp', type: FeatureTypeEnum.CORE, usageUnit: UsageUnitEnum.MESSAGES, isMetered: true, prices: [{ cycle: BillingCycleEnum.MONTHLY, price: 300.00 }, { cycle: BillingCycleEnum.QUARTERLY, price: 800.00 }, { cycle: BillingCycleEnum.YEARLY, price: 3000.00 }] }
+        {
+          name: 'Academic Management',
+          desc: 'Manage classes, sections, and subjects',
+          type: FeatureTypeEnum.CORE,
+          usageUnit: UsageUnitEnum.NONE,
+          isMetered: false,
+          prices: [
+            { cycle: BillingCycleEnum.MONTHLY, price: 150.0 },
+            { cycle: BillingCycleEnum.QUARTERLY, price: 400.0 },
+            { cycle: BillingCycleEnum.YEARLY, price: 1500.0 },
+          ],
+        },
+        {
+          name: 'Student Management',
+          desc: 'Admit, track, and manage student lifecycle',
+          type: FeatureTypeEnum.CORE,
+          usageUnit: UsageUnitEnum.NONE,
+          isMetered: false,
+          prices: [
+            { cycle: BillingCycleEnum.MONTHLY, price: 200.0 },
+            { cycle: BillingCycleEnum.QUARTERLY, price: 550.0 },
+            { cycle: BillingCycleEnum.YEARLY, price: 2000.0 },
+          ],
+        },
+        {
+          name: 'Attendance Management',
+          desc: 'Real-time attendance tracking for students',
+          type: FeatureTypeEnum.CORE,
+          usageUnit: UsageUnitEnum.NONE,
+          isMetered: false,
+          prices: [
+            { cycle: BillingCycleEnum.MONTHLY, price: 100.0 },
+            { cycle: BillingCycleEnum.QUARTERLY, price: 280.0 },
+            { cycle: BillingCycleEnum.YEARLY, price: 1000.0 },
+          ],
+        },
+        {
+          name: 'Fee Management',
+          desc: 'Collect and track fee payments and structures',
+          type: FeatureTypeEnum.CORE,
+          usageUnit: UsageUnitEnum.NONE,
+          isMetered: false,
+          prices: [
+            { cycle: BillingCycleEnum.MONTHLY, price: 250.0 },
+            { cycle: BillingCycleEnum.QUARTERLY, price: 700.0 },
+            { cycle: BillingCycleEnum.YEARLY, price: 2500.0 },
+          ],
+        },
+        {
+          name: 'Timetable Management',
+          desc: 'Create and assign class/section schedules',
+          type: FeatureTypeEnum.CORE,
+          usageUnit: UsageUnitEnum.NONE,
+          isMetered: false,
+          prices: [
+            { cycle: BillingCycleEnum.MONTHLY, price: 120.0 },
+            { cycle: BillingCycleEnum.QUARTERLY, price: 320.0 },
+            { cycle: BillingCycleEnum.YEARLY, price: 1200.0 },
+          ],
+        },
+        {
+          name: 'Exam Management',
+          desc: 'Conduct online/offline exams and produce grade-sheets',
+          type: FeatureTypeEnum.CORE,
+          usageUnit: UsageUnitEnum.NONE,
+          isMetered: false,
+          prices: [
+            { cycle: BillingCycleEnum.MONTHLY, price: 180.0 },
+            { cycle: BillingCycleEnum.QUARTERLY, price: 500.0 },
+            { cycle: BillingCycleEnum.YEARLY, price: 1800.0 },
+          ],
+        },
+        {
+          name: 'Report Management',
+          desc: 'View comprehensive visual analytics and reports',
+          type: FeatureTypeEnum.CORE,
+          usageUnit: UsageUnitEnum.NONE,
+          isMetered: false,
+          prices: [
+            { cycle: BillingCycleEnum.MONTHLY, price: 150.0 },
+            { cycle: BillingCycleEnum.QUARTERLY, price: 400.0 },
+            { cycle: BillingCycleEnum.YEARLY, price: 1500.0 },
+          ],
+        },
+        {
+          name: 'Dashboard Analytics',
+          desc: 'Interactive charts and summary indicators of school stats',
+          type: FeatureTypeEnum.CORE,
+          usageUnit: UsageUnitEnum.NONE,
+          isMetered: false,
+          prices: [
+            { cycle: BillingCycleEnum.MONTHLY, price: 100.0 },
+            { cycle: BillingCycleEnum.QUARTERLY, price: 280.0 },
+            { cycle: BillingCycleEnum.YEARLY, price: 1000.0 },
+          ],
+        },
+        {
+          name: 'Whatsapp Reminders',
+          desc: 'Send automated student attendance & fee reminders via WhatsApp',
+          type: FeatureTypeEnum.CORE,
+          usageUnit: UsageUnitEnum.MESSAGES,
+          isMetered: true,
+          prices: [
+            { cycle: BillingCycleEnum.MONTHLY, price: 300.0 },
+            { cycle: BillingCycleEnum.QUARTERLY, price: 800.0 },
+            { cycle: BillingCycleEnum.YEARLY, price: 3000.0 },
+          ],
+        },
       ];
 
       const seededFeatures: Record<string, PlatformFeature> = {};
@@ -251,7 +382,9 @@ export class PlatformService {
 
         // Seed prices for core features
         for (const fpData of fd.prices) {
-          let fp = await priceRepo.findOne({ where: { platformFeatureId: f.id, billingCycle: fpData.cycle } });
+          let fp = await priceRepo.findOne({
+            where: { platformFeatureId: f.id, billingCycle: fpData.cycle },
+          });
           if (!fp) {
             fp = new PlatformFeaturePrice();
             fp.platformFeatureId = f.id;
@@ -265,10 +398,62 @@ export class PlatformService {
 
       // 2. Addon Features (Boosters / Metered Extras)
       const addonFeaturesData = [
-        { code: 'STUDENT_BOOSTER_SMALL', name: 'Small Student Capacity Booster', desc: 'Adds 50 students capacity to your school', type: FeatureTypeEnum.ADDON, usageUnit: UsageUnitEnum.STUDENTS, isMetered: false, defaultLimit: '50', prices: [{ cycle: BillingCycleEnum.MONTHLY, price: 500.00 }, { cycle: BillingCycleEnum.QUARTERLY, price: 1350.00 }, { cycle: BillingCycleEnum.YEARLY, price: 5000.00 }] },
-        { code: 'STUDENT_BOOSTER_MEDIUM', name: 'Medium Student Capacity Booster', desc: 'Adds 100 students capacity to your school', type: FeatureTypeEnum.ADDON, usageUnit: UsageUnitEnum.STUDENTS, isMetered: false, defaultLimit: '100', prices: [{ cycle: BillingCycleEnum.MONTHLY, price: 800.00 }, { cycle: BillingCycleEnum.QUARTERLY, price: 2200.00 }, { cycle: BillingCycleEnum.YEARLY, price: 8000.00 }] },
-        { code: 'WHATSAPP_BOOSTER_SMALL', name: 'Small WhatsApp Message Booster', desc: 'Adds 100 messages to your WhatsApp reminders balance', type: FeatureTypeEnum.ADDON, usageUnit: UsageUnitEnum.MESSAGES, isMetered: false, defaultLimit: '100', prices: [{ cycle: BillingCycleEnum.MONTHLY, price: 50.00 }, { cycle: BillingCycleEnum.QUARTERLY, price: 135.00 }, { cycle: BillingCycleEnum.YEARLY, price: 500.00 }] },
-        { code: 'WHATSAPP_BOOSTER_MEDIUM', name: 'Medium WhatsApp Message Booster', desc: 'Adds 1000 messages to your WhatsApp reminders balance', type: FeatureTypeEnum.ADDON, usageUnit: UsageUnitEnum.MESSAGES, isMetered: false, defaultLimit: '1000', prices: [{ cycle: BillingCycleEnum.MONTHLY, price: 400.00 }, { cycle: BillingCycleEnum.QUARTERLY, price: 1100.00 }, { cycle: BillingCycleEnum.YEARLY, price: 4000.00 }] },
+        {
+          code: 'STUDENT_BOOSTER_SMALL',
+          name: 'Small Student Capacity Booster',
+          desc: 'Adds 50 students capacity to your school',
+          type: FeatureTypeEnum.ADDON,
+          usageUnit: UsageUnitEnum.STUDENTS,
+          isMetered: false,
+          defaultLimit: '50',
+          prices: [
+            { cycle: BillingCycleEnum.MONTHLY, price: 500.0 },
+            { cycle: BillingCycleEnum.QUARTERLY, price: 1350.0 },
+            { cycle: BillingCycleEnum.YEARLY, price: 5000.0 },
+          ],
+        },
+        {
+          code: 'STUDENT_BOOSTER_MEDIUM',
+          name: 'Medium Student Capacity Booster',
+          desc: 'Adds 100 students capacity to your school',
+          type: FeatureTypeEnum.ADDON,
+          usageUnit: UsageUnitEnum.STUDENTS,
+          isMetered: false,
+          defaultLimit: '100',
+          prices: [
+            { cycle: BillingCycleEnum.MONTHLY, price: 800.0 },
+            { cycle: BillingCycleEnum.QUARTERLY, price: 2200.0 },
+            { cycle: BillingCycleEnum.YEARLY, price: 8000.0 },
+          ],
+        },
+        {
+          code: 'WHATSAPP_BOOSTER_SMALL',
+          name: 'Small WhatsApp Message Booster',
+          desc: 'Adds 100 messages to your WhatsApp reminders balance',
+          type: FeatureTypeEnum.ADDON,
+          usageUnit: UsageUnitEnum.MESSAGES,
+          isMetered: false,
+          defaultLimit: '100',
+          prices: [
+            { cycle: BillingCycleEnum.MONTHLY, price: 50.0 },
+            { cycle: BillingCycleEnum.QUARTERLY, price: 135.0 },
+            { cycle: BillingCycleEnum.YEARLY, price: 500.0 },
+          ],
+        },
+        {
+          code: 'WHATSAPP_BOOSTER_MEDIUM',
+          name: 'Medium WhatsApp Message Booster',
+          desc: 'Adds 1000 messages to your WhatsApp reminders balance',
+          type: FeatureTypeEnum.ADDON,
+          usageUnit: UsageUnitEnum.MESSAGES,
+          isMetered: false,
+          defaultLimit: '1000',
+          prices: [
+            { cycle: BillingCycleEnum.MONTHLY, price: 400.0 },
+            { cycle: BillingCycleEnum.QUARTERLY, price: 1100.0 },
+            { cycle: BillingCycleEnum.YEARLY, price: 4000.0 },
+          ],
+        },
       ];
       for (const afd of addonFeaturesData) {
         let f = await featRepo.findOne({ where: { code: afd.code } });
@@ -291,7 +476,9 @@ export class PlatformService {
 
         // Seed multiple prices for Addons
         for (const fpData of afd.prices) {
-          let fp = await priceRepo.findOne({ where: { platformFeatureId: f.id, billingCycle: fpData.cycle } });
+          let fp = await priceRepo.findOne({
+            where: { platformFeatureId: f.id, billingCycle: fpData.cycle },
+          });
           if (!fp) {
             fp = new PlatformFeaturePrice();
             fp.platformFeatureId = f.id;
@@ -305,34 +492,250 @@ export class PlatformService {
 
       // 3. Module Masters (Sidebar navigation with nesting)
       const modulesData = [
-        { name: 'Dashboard', route: '/dashboard', icon: 'dashboard', displayOrder: 1, isMenuGroup: false, featureCode: 'DASHBOARD_ANALYTICS', parentName: null, showInSidebar: true },
-        { name: 'Academics', route: '/academics', icon: 'school', displayOrder: 2, isMenuGroup: true, featureCode: 'ACADEMIC_MANAGEMENT', parentName: null, showInSidebar: true },
-        { name: 'Classes', route: '/academics/classes', icon: 'class', displayOrder: 3, isMenuGroup: false, featureCode: 'ACADEMIC_MANAGEMENT', parentName: 'Academics', showInSidebar: true },
-        { name: 'Subjects', route: '/academics/subjects', icon: 'book', displayOrder: 4, isMenuGroup: false, featureCode: 'ACADEMIC_MANAGEMENT', parentName: 'Academics', showInSidebar: true },
-        { name: 'Sections', route: '/academics/sections', icon: 'view_list', displayOrder: 5, isMenuGroup: false, featureCode: 'ACADEMIC_MANAGEMENT', parentName: 'Academics', showInSidebar: true },
-        { name: 'Academic Mapping', route: '/academics/class-section-subject', icon: 'assignment_turned_in', displayOrder: 6, isMenuGroup: false, featureCode: 'ACADEMIC_MANAGEMENT', parentName: 'Academics', showInSidebar: true },
+        {
+          name: 'Dashboard',
+          route: '/dashboard',
+          icon: 'dashboard',
+          displayOrder: 1,
+          isMenuGroup: false,
+          featureCode: 'DASHBOARD_ANALYTICS',
+          parentName: null,
+          showInSidebar: true,
+        },
+        {
+          name: 'Academics',
+          route: '/academics',
+          icon: 'school',
+          displayOrder: 2,
+          isMenuGroup: true,
+          featureCode: 'ACADEMIC_MANAGEMENT',
+          parentName: null,
+          showInSidebar: true,
+        },
+        {
+          name: 'Classes',
+          route: '/academics/classes',
+          icon: 'class',
+          displayOrder: 3,
+          isMenuGroup: false,
+          featureCode: 'ACADEMIC_MANAGEMENT',
+          parentName: 'Academics',
+          showInSidebar: true,
+        },
+        {
+          name: 'Subjects',
+          route: '/academics/subjects',
+          icon: 'book',
+          displayOrder: 4,
+          isMenuGroup: false,
+          featureCode: 'ACADEMIC_MANAGEMENT',
+          parentName: 'Academics',
+          showInSidebar: true,
+        },
+        {
+          name: 'Sections',
+          route: '/academics/sections',
+          icon: 'view_list',
+          displayOrder: 5,
+          isMenuGroup: false,
+          featureCode: 'ACADEMIC_MANAGEMENT',
+          parentName: 'Academics',
+          showInSidebar: true,
+        },
+        {
+          name: 'Academic Mapping',
+          route: '/academics/class-section-subject',
+          icon: 'assignment_turned_in',
+          displayOrder: 6,
+          isMenuGroup: false,
+          featureCode: 'ACADEMIC_MANAGEMENT',
+          parentName: 'Academics',
+          showInSidebar: true,
+        },
 
-        { name: 'Students', route: '/students', icon: 'people', displayOrder: 7, isMenuGroup: false, featureCode: 'STUDENT_MANAGEMENT', parentName: null, showInSidebar: true },
-        { name: 'Attendance', route: '/attendance', icon: 'check_circle', displayOrder: 8, isMenuGroup: false, featureCode: 'ATTENDANCE_MANAGEMENT', parentName: null, showInSidebar: true },
-        { name: 'Fees', route: '/fees', icon: 'attach_money', displayOrder: 9, isMenuGroup: false, featureCode: 'FEE_MANAGEMENT', parentName: null, showInSidebar: true },
-        { name: 'Timetable', route: '/timetable', icon: 'schedule', displayOrder: 10, isMenuGroup: false, featureCode: 'TIMETABLE_MANAGEMENT', parentName: null, showInSidebar: true },
-        { name: 'Exams', route: '/exams', icon: 'assignment', displayOrder: 11, isMenuGroup: false, featureCode: 'EXAM_MANAGEMENT', parentName: null, showInSidebar: true },
-        { name: 'Reports', route: '/reports', icon: 'bar_chart', displayOrder: 12, isMenuGroup: false, featureCode: 'REPORT_MANAGEMENT', parentName: null, showInSidebar: true },
+        {
+          name: 'Students',
+          route: '/students',
+          icon: 'people',
+          displayOrder: 7,
+          isMenuGroup: false,
+          featureCode: 'STUDENT_MANAGEMENT',
+          parentName: null,
+          showInSidebar: true,
+        },
+        {
+          name: 'Attendance',
+          route: '/attendance',
+          icon: 'check_circle',
+          displayOrder: 8,
+          isMenuGroup: false,
+          featureCode: 'ATTENDANCE_MANAGEMENT',
+          parentName: null,
+          showInSidebar: true,
+        },
+        {
+          name: 'Fees',
+          route: '/fees',
+          icon: 'attach_money',
+          displayOrder: 9,
+          isMenuGroup: false,
+          featureCode: 'FEE_MANAGEMENT',
+          parentName: null,
+          showInSidebar: true,
+        },
+        {
+          name: 'Timetable',
+          route: '/timetable',
+          icon: 'schedule',
+          displayOrder: 10,
+          isMenuGroup: false,
+          featureCode: 'TIMETABLE_MANAGEMENT',
+          parentName: null,
+          showInSidebar: true,
+        },
+        {
+          name: 'Exams',
+          route: '/exams',
+          icon: 'assignment',
+          displayOrder: 11,
+          isMenuGroup: false,
+          featureCode: 'EXAM_MANAGEMENT',
+          parentName: null,
+          showInSidebar: true,
+        },
+        {
+          name: 'Reports',
+          route: '/reports',
+          icon: 'bar_chart',
+          displayOrder: 12,
+          isMenuGroup: false,
+          featureCode: 'REPORT_MANAGEMENT',
+          parentName: null,
+          showInSidebar: true,
+        },
 
-        { name: 'Administration', route: '/administration', icon: 'settings', displayOrder: 90, isMenuGroup: true, featureCode: null, parentName: null, showInSidebar: true },
-        { name: 'School Users', route: '/administration/users', icon: 'manage_accounts', displayOrder: 91, isMenuGroup: false, featureCode: null, parentName: 'Administration', showInSidebar: true },
-        { name: 'School Roles', route: '/administration/roles', icon: 'admin_panel_settings', displayOrder: 92, isMenuGroup: false, featureCode: null, parentName: 'Administration', showInSidebar: true },
-        { name: 'Subscription', route: '/administration/subscription', icon: 'payment', displayOrder: 93, isMenuGroup: false, featureCode: null, parentName: 'Administration', showInSidebar: true },
-        { name: 'Finance Order', route: '/administration/orders', icon: 'shopping_cart', displayOrder: 94, isMenuGroup: false, featureCode: null, parentName: 'Administration', showInSidebar: true },
-        { name: 'Finance Invoice', route: '/administration/invoices', icon: 'receipt', displayOrder: 95, isMenuGroup: false, featureCode: null, parentName: 'Administration', showInSidebar: true },
+        {
+          name: 'Administration',
+          route: '/administration',
+          icon: 'settings',
+          displayOrder: 90,
+          isMenuGroup: true,
+          featureCode: null,
+          parentName: null,
+          showInSidebar: true,
+        },
+        {
+          name: 'School Users',
+          route: '/administration/users',
+          icon: 'manage_accounts',
+          displayOrder: 91,
+          isMenuGroup: false,
+          featureCode: null,
+          parentName: 'Administration',
+          showInSidebar: true,
+        },
+        {
+          name: 'School Roles',
+          route: '/administration/roles',
+          icon: 'admin_panel_settings',
+          displayOrder: 92,
+          isMenuGroup: false,
+          featureCode: null,
+          parentName: 'Administration',
+          showInSidebar: true,
+        },
+        {
+          name: 'Subscription',
+          route: '/administration/subscription',
+          icon: 'payment',
+          displayOrder: 93,
+          isMenuGroup: false,
+          featureCode: null,
+          parentName: 'Administration',
+          showInSidebar: true,
+        },
+        {
+          name: 'Finance Order',
+          route: '/administration/orders',
+          icon: 'shopping_cart',
+          displayOrder: 94,
+          isMenuGroup: false,
+          featureCode: null,
+          parentName: 'Administration',
+          showInSidebar: true,
+        },
+        {
+          name: 'Finance Invoice',
+          route: '/administration/invoices',
+          icon: 'receipt',
+          displayOrder: 95,
+          isMenuGroup: false,
+          featureCode: null,
+          parentName: 'Administration',
+          showInSidebar: true,
+        },
 
         // Platform administration modules (not shown in school sidebar)
-        { name: 'Platform Features', route: '/platform/features', icon: 'extension', displayOrder: 100, isMenuGroup: false, featureCode: null, parentName: null, showInSidebar: false },
-        { name: 'Platform Modules', route: '/platform/modules', icon: 'view_module', displayOrder: 101, isMenuGroup: false, featureCode: null, parentName: null, showInSidebar: false },
-        { name: 'Platform Schools', route: '/platform/schools', icon: 'business', displayOrder: 102, isMenuGroup: false, featureCode: null, parentName: null, showInSidebar: false },
-        { name: 'Platform Owners', route: '/platform/owners', icon: 'supervised_user_circle', displayOrder: 103, isMenuGroup: false, featureCode: null, parentName: null, showInSidebar: false },
-        { name: 'Platform Students', route: '/platform/students', icon: 'face', displayOrder: 104, isMenuGroup: false, featureCode: null, parentName: null, showInSidebar: false },
-        { name: 'Platform Staff', route: '/platform/staff', icon: 'badge', displayOrder: 105, isMenuGroup: false, featureCode: null, parentName: null, showInSidebar: false },
+        {
+          name: 'Platform Features',
+          route: '/platform/features',
+          icon: 'extension',
+          displayOrder: 100,
+          isMenuGroup: false,
+          featureCode: null,
+          parentName: null,
+          showInSidebar: false,
+        },
+        {
+          name: 'Platform Modules',
+          route: '/platform/modules',
+          icon: 'view_module',
+          displayOrder: 101,
+          isMenuGroup: false,
+          featureCode: null,
+          parentName: null,
+          showInSidebar: false,
+        },
+        {
+          name: 'Platform Schools',
+          route: '/platform/schools',
+          icon: 'business',
+          displayOrder: 102,
+          isMenuGroup: false,
+          featureCode: null,
+          parentName: null,
+          showInSidebar: false,
+        },
+        {
+          name: 'Platform Owners',
+          route: '/platform/owners',
+          icon: 'supervised_user_circle',
+          displayOrder: 103,
+          isMenuGroup: false,
+          featureCode: null,
+          parentName: null,
+          showInSidebar: false,
+        },
+        {
+          name: 'Platform Students',
+          route: '/platform/students',
+          icon: 'face',
+          displayOrder: 104,
+          isMenuGroup: false,
+          featureCode: null,
+          parentName: null,
+          showInSidebar: false,
+        },
+        {
+          name: 'Platform Staff',
+          route: '/platform/staff',
+          icon: 'badge',
+          displayOrder: 105,
+          isMenuGroup: false,
+          featureCode: null,
+          parentName: null,
+          showInSidebar: false,
+        },
       ];
 
       const seededModules: Record<string, ModuleMaster> = {};
@@ -481,14 +884,16 @@ export class PlatformService {
         { modCode: 'PLATFORM_OWNERS', opCode: 'DELETE' },
 
         { modCode: 'PLATFORM_STUDENTS', opCode: 'VIEW' },
-        { modCode: 'PLATFORM_STAFF', opCode: 'VIEW' }
+        { modCode: 'PLATFORM_STAFF', opCode: 'VIEW' },
       ];
 
       for (const pm of permsMap) {
         const mod = seededModules[pm.modCode];
         const op = seededOps[pm.opCode];
         if (mod && op) {
-          let p = await permRepo.findOne({ where: { moduleId: mod.id, operationId: op.id } });
+          let p = await permRepo.findOne({
+            where: { moduleId: mod.id, operationId: op.id },
+          });
           if (!p) {
             p = new ModuleOperationPermission();
             p.moduleId = mod.id;
@@ -502,10 +907,58 @@ export class PlatformService {
 
       // 6. Subscription Plans
       const plansData = [
-        { code: PlanCodeEnum.TRIAL, name: 'Free Trial Plan', desc: '1 month trial capacity', maxSt: 20, maxSf: 5, maxCl: 5, maxSc: 5, prices: [] },
-        { code: PlanCodeEnum.BASIC, name: 'Basic Plan', desc: 'For smaller schools starting out', maxSt: 100, maxSf: 20, maxCl: 10, maxSc: 20, prices: [{ cycle: BillingCycleEnum.MONTHLY, price: 1000.00 }, { cycle: BillingCycleEnum.QUARTERLY, price: 2700.00 }, { cycle: BillingCycleEnum.YEARLY, price: 10000.00 }] },
-        { code: PlanCodeEnum.STANDARD, name: 'Standard Plan', desc: 'Ideal for medium size operations', maxSt: 500, maxSf: 50, maxCl: 30, maxSc: 60, prices: [{ cycle: BillingCycleEnum.MONTHLY, price: 2500.00 }, { cycle: BillingCycleEnum.QUARTERLY, price: 6800.00 }, { cycle: BillingCycleEnum.YEARLY, price: 25000.00 }] },
-        { code: PlanCodeEnum.PREMIUM, name: 'Premium Plan', desc: 'Enterprise-grade unlimited capacity', maxSt: null, maxSf: null, maxCl: null, maxSc: null, prices: [{ cycle: BillingCycleEnum.MONTHLY, price: 5000.00 }, { cycle: BillingCycleEnum.QUARTERLY, price: 13500.00 }, { cycle: BillingCycleEnum.YEARLY, price: 50000.00 }] },
+        {
+          code: PlanCodeEnum.TRIAL,
+          name: 'Free Trial Plan',
+          desc: '1 month trial capacity',
+          maxSt: 20,
+          maxSf: 5,
+          maxCl: 5,
+          maxSc: 5,
+          prices: [],
+        },
+        {
+          code: PlanCodeEnum.BASIC,
+          name: 'Basic Plan',
+          desc: 'For smaller schools starting out',
+          maxSt: 100,
+          maxSf: 20,
+          maxCl: 10,
+          maxSc: 20,
+          prices: [
+            { cycle: BillingCycleEnum.MONTHLY, price: 1000.0 },
+            { cycle: BillingCycleEnum.QUARTERLY, price: 2700.0 },
+            { cycle: BillingCycleEnum.YEARLY, price: 10000.0 },
+          ],
+        },
+        {
+          code: PlanCodeEnum.STANDARD,
+          name: 'Standard Plan',
+          desc: 'Ideal for medium size operations',
+          maxSt: 500,
+          maxSf: 50,
+          maxCl: 30,
+          maxSc: 60,
+          prices: [
+            { cycle: BillingCycleEnum.MONTHLY, price: 2500.0 },
+            { cycle: BillingCycleEnum.QUARTERLY, price: 6800.0 },
+            { cycle: BillingCycleEnum.YEARLY, price: 25000.0 },
+          ],
+        },
+        {
+          code: PlanCodeEnum.PREMIUM,
+          name: 'Premium Plan',
+          desc: 'Enterprise-grade unlimited capacity',
+          maxSt: null,
+          maxSf: null,
+          maxCl: null,
+          maxSc: null,
+          prices: [
+            { cycle: BillingCycleEnum.MONTHLY, price: 5000.0 },
+            { cycle: BillingCycleEnum.QUARTERLY, price: 13500.0 },
+            { cycle: BillingCycleEnum.YEARLY, price: 50000.0 },
+          ],
+        },
       ];
 
       for (const pd of plansData) {
@@ -525,7 +978,9 @@ export class PlatformService {
 
         // Seed prices
         for (const pp of pd.prices) {
-          let priceObj = await planPriceRepo.findOne({ where: { subscriptionPlanId: plan.id, billingCycle: pp.cycle } });
+          let priceObj = await planPriceRepo.findOne({
+            where: { subscriptionPlanId: plan.id, billingCycle: pp.cycle },
+          });
           if (!priceObj) {
             priceObj = new SubscriptionPlanPrice();
             priceObj.subscriptionPlanId = plan.id;
@@ -542,13 +997,13 @@ export class PlatformService {
           planFeatures.push(
             { code: 'ACADEMIC_MANAGEMENT', limit: null },
             { code: 'STUDENT_MANAGEMENT', limit: null },
-            { code: 'ATTENDANCE_MANAGEMENT', limit: null }
+            { code: 'ATTENDANCE_MANAGEMENT', limit: null },
           );
         } else if (pd.code === PlanCodeEnum.BASIC) {
           planFeatures.push(
             { code: 'ACADEMIC_MANAGEMENT', limit: null },
             { code: 'STUDENT_MANAGEMENT', limit: null },
-            { code: 'ATTENDANCE_MANAGEMENT', limit: null }
+            { code: 'ATTENDANCE_MANAGEMENT', limit: null },
           );
         } else if (pd.code === PlanCodeEnum.STANDARD) {
           planFeatures.push(
@@ -558,7 +1013,7 @@ export class PlatformService {
             { code: 'FEE_MANAGEMENT', limit: null },
             { code: 'TIMETABLE_MANAGEMENT', limit: null },
             { code: 'DASHBOARD_ANALYTICS', limit: null },
-            { code: 'WHATSAPP_REMINDERS', limit: '1000' } // 1,000 free monthly messages
+            { code: 'WHATSAPP_REMINDERS', limit: '1000' }, // 1,000 free monthly messages
           );
         } else if (pd.code === PlanCodeEnum.PREMIUM) {
           planFeatures.push(
@@ -570,14 +1025,16 @@ export class PlatformService {
             { code: 'EXAM_MANAGEMENT', limit: null },
             { code: 'REPORT_MANAGEMENT', limit: null },
             { code: 'DASHBOARD_ANALYTICS', limit: null },
-            { code: 'WHATSAPP_REMINDERS', limit: '5000' } // 5,000 free monthly messages
+            { code: 'WHATSAPP_REMINDERS', limit: '5000' }, // 5,000 free monthly messages
           );
         }
 
         for (const item of planFeatures) {
           const f = seededFeatures[item.code];
           if (f) {
-            let mapping = await planMappingRepo.findOne({ where: { subscriptionPlanId: plan.id, platformFeatureId: f.id } });
+            let mapping = await planMappingRepo.findOne({
+              where: { subscriptionPlanId: plan.id, platformFeatureId: f.id },
+            });
             if (!mapping) {
               mapping = new SubscriptionPlanPlatformFeatureMapping();
               mapping.subscriptionPlanId = plan.id;
@@ -592,7 +1049,10 @@ export class PlatformService {
       }
 
       await queryRunner.commitTransaction();
-      return { message: 'Metadata seeded successfully! Ready for manual and frontend testing.' };
+      return {
+        message:
+          'Metadata seeded successfully! Ready for manual and frontend testing.',
+      };
     } catch (error) {
       await queryRunner.rollbackTransaction();
       throw error;

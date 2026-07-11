@@ -1,4 +1,14 @@
-import { Controller, Post, Get, Patch, Delete, Body, Param, UseGuards, Query } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Get,
+  Patch,
+  Delete,
+  Body,
+  Param,
+  UseGuards,
+  Query,
+} from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../../../shared/guards/jwt-auth.guard';
 import { CurrentUser } from '../../../../shared/decorators/current-user.decorator';
@@ -31,7 +41,7 @@ export class AcademicController {
   async createClass(
     @Param('schoolId') schoolId: string,
     @CurrentUser() user: AuthContext,
-    @Body() dto: CreateClassDto
+    @Body() dto: CreateClassDto,
   ) {
     return this.academicService.createClass(schoolId, dto, user.id);
   }
@@ -49,7 +59,7 @@ export class AcademicController {
   async getClassDetails(
     @Param('schoolId') schoolId: string,
     @Param('id') id: string,
-    @CurrentUser() user: AuthContext
+    @CurrentUser() user: AuthContext,
   ) {
     return this.academicService.getClassDetails(schoolId, id, user);
   }
@@ -61,20 +71,9 @@ export class AcademicController {
     @Param('schoolId') schoolId: string,
     @Param('id') id: string,
     @CurrentUser() user: AuthContext,
-    @Body() dto: UpdateClassDto
+    @Body() dto: UpdateClassDto,
   ) {
     return this.academicService.updateClass(schoolId, id, dto, user.id);
-  }
-
-  @ApiOperation({ summary: 'Delete a class' })
-  @Permission(ResourceEnum.CLASSES, ActionEnum.DELETE)
-  @Delete('classes/:id')
-  async deleteClass(
-    @Param('schoolId') schoolId: string,
-    @Param('id') id: string,
-    @CurrentUser() user: AuthContext
-  ) {
-    return this.academicService.deleteClass(schoolId, id, user.id);
   }
 
   // SECTIONS
@@ -84,7 +83,7 @@ export class AcademicController {
   async createSection(
     @Param('schoolId') schoolId: string,
     @CurrentUser() user: AuthContext,
-    @Body() dto: CreateSectionDto
+    @Body() dto: CreateSectionDto,
   ) {
     return this.academicService.createSection(schoolId, dto, user.id);
   }
@@ -94,7 +93,7 @@ export class AcademicController {
   @Get('sections')
   async getSections(
     @Param('schoolId') schoolId: string,
-    @Query('classId') classId?: string
+    @Query('classId') classId?: string,
   ) {
     return this.academicService.getSections(schoolId, classId);
   }
@@ -106,7 +105,7 @@ export class AcademicController {
     @Param('schoolId') schoolId: string,
     @Param('id') id: string,
     @CurrentUser() user: AuthContext,
-    @Body() dto: UpdateSectionDto
+    @Body() dto: UpdateSectionDto,
   ) {
     return this.academicService.updateSection(schoolId, id, dto, user.id);
   }
@@ -117,7 +116,7 @@ export class AcademicController {
   async transferStudents(
     @Param('schoolId') schoolId: string,
     @CurrentUser() user: AuthContext,
-    @Body() dto: TransferStudentsDto
+    @Body() dto: TransferStudentsDto,
   ) {
     return this.academicService.transferStudents(schoolId, dto, user.id);
   }
@@ -129,7 +128,7 @@ export class AcademicController {
   async createSubject(
     @Param('schoolId') schoolId: string,
     @CurrentUser() user: AuthContext,
-    @Body() dto: any
+    @Body() dto: any,
   ) {
     return this.academicService.createSubject(schoolId, dto, user.id);
   }
@@ -148,7 +147,7 @@ export class AcademicController {
     @Param('schoolId') schoolId: string,
     @Param('id') id: string,
     @CurrentUser() user: AuthContext,
-    @Body() dto: UpdateSubjectDto
+    @Body() dto: UpdateSubjectDto,
   ) {
     return this.academicService.updateSubject(schoolId, id, dto, user.id);
   }
@@ -160,9 +159,13 @@ export class AcademicController {
   async assignMapping(
     @Param('schoolId') schoolId: string,
     @CurrentUser() user: AuthContext,
-    @Body() dto: any
+    @Body() dto: any,
   ) {
-    return this.academicService.assignSubjectToClassSection(schoolId, dto, user.id);
+    return this.academicService.assignSubjectToClassSection(
+      schoolId,
+      dto,
+      user.id,
+    );
   }
 
   @ApiOperation({ summary: 'Get academic mappings' })

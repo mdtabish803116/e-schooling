@@ -1,4 +1,14 @@
-import { Controller, Post, Get, Patch, Delete, Body, Param, UseGuards, Query } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Get,
+  Patch,
+  Delete,
+  Body,
+  Param,
+  UseGuards,
+  Query,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../../../shared/guards/jwt-auth.guard';
 import { PermissionGuard } from '../../../../shared/guards/permission.guard';
@@ -18,17 +28,26 @@ import { ResourceEnum, ActionEnum } from '../../../../models/enums/enums';
 export class SchoolUsersController {
   constructor(private readonly schoolUsersService: SchoolUsersService) {}
 
-  @ApiOperation({ summary: 'Get current user active permissions for this school' })
+  @ApiOperation({
+    summary: 'Get current user active permissions for this school',
+  })
   @Get('me/permissions')
   async getMyPermissions(
     @Param('schoolId') schoolId: string,
     @Query('moduleCode') moduleCode: string,
     @CurrentUser() caller: AuthContext,
   ) {
-    return this.schoolUsersService.getMyPermissions(caller, schoolId, moduleCode);
+    return this.schoolUsersService.getMyPermissions(
+      caller,
+      schoolId,
+      moduleCode,
+    );
   }
 
-  @ApiOperation({ summary: 'Create a school user (teacher / accountant / admin / staff) and optionally assign a role' })
+  @ApiOperation({
+    summary:
+      'Create a school user (teacher / accountant / admin / staff) and optionally assign a role',
+  })
   @Permission(ResourceEnum.SCHOOL_USERS, ActionEnum.CREATE)
   @Post()
   async createUser(
@@ -58,19 +77,12 @@ export class SchoolUsersController {
     @CurrentUser() caller: AuthContext,
     @Body() dto: AssignSchoolRoleDto,
   ) {
-    return this.schoolUsersService.assignSchoolRoles(caller, schoolId, userId, dto);
-  }
-
-  @ApiOperation({ summary: 'De-assign / Remove a school role from a school user (Soft Delete)' })
-  @Permission(ResourceEnum.SCHOOL_USERS, ActionEnum.DELETE)
-  @Delete(':userId/school-roles/:schoolRoleId')
-  async deassignSchoolRole(
-    @Param('schoolId') schoolId: string,
-    @Param('userId') userId: string,
-    @Param('schoolRoleId') schoolRoleId: string,
-    @CurrentUser() caller: AuthContext
-  ) {
-    return this.schoolUsersService.deassignSchoolRole(caller, schoolId, userId, schoolRoleId);
+    return this.schoolUsersService.assignSchoolRoles(
+      caller,
+      schoolId,
+      userId,
+      dto,
+    );
   }
 
   @ApiOperation({ summary: 'Upsert extended profile for a school user' })
@@ -82,7 +94,12 @@ export class SchoolUsersController {
     @CurrentUser() caller: AuthContext,
     @Body() dto: UpdateSchoolUserProfileDto,
   ) {
-    return this.schoolUsersService.upsertUserProfile(caller, schoolId, userId, dto);
+    return this.schoolUsersService.upsertUserProfile(
+      caller,
+      schoolId,
+      userId,
+      dto,
+    );
   }
 
   @ApiOperation({ summary: 'Get school user profile' })

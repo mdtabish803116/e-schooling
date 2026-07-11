@@ -7,6 +7,7 @@ import {
   Body,
   Param,
   UseGuards,
+  BadRequestException,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../../../shared/guards/jwt-auth.guard';
@@ -56,21 +57,6 @@ export class SchoolRolesController {
     );
   }
 
-  @ApiOperation({ summary: 'Delete a school role' })
-  @Permission(ResourceEnum.SCHOOL_ROLES, ActionEnum.DELETE)
-  @Delete(':schoolRoleId')
-  async deactivateSchoolRole(
-    @Param('schoolId') schoolId: string,
-    @Param('schoolRoleId') schoolRoleId: string,
-    @CurrentUser() caller: AuthContext,
-  ) {
-    return this.schoolRolesService.deactivateSchoolRole(
-      caller,
-      schoolId,
-      schoolRoleId,
-    );
-  }
-
   @ApiOperation({
     summary: 'Activate / Deactivate a school role active status',
   })
@@ -87,23 +73,6 @@ export class SchoolRolesController {
       schoolId,
       schoolRoleId,
       dto.isActive,
-    );
-  }
-
-  @ApiOperation({
-    summary: 'Permanently remove a school role and its permissions',
-  })
-  @Permission(ResourceEnum.SCHOOL_ROLES, ActionEnum.DELETE)
-  @Delete(':schoolRoleId/remove')
-  async removeSchoolRole(
-    @Param('schoolId') schoolId: string,
-    @Param('schoolRoleId') schoolRoleId: string,
-    @CurrentUser() caller: AuthContext,
-  ) {
-    return this.schoolRolesService.removeSchoolRole(
-      caller,
-      schoolId,
-      schoolRoleId,
     );
   }
 
@@ -144,21 +113,26 @@ export class SchoolRolesController {
   }
 
   @ApiOperation({
-    summary: 'Remove a specific permission from a school role (Soft Delete)',
+    summary: 'Activate / Deactivate a specific permission from a school role',
   })
-  @Permission(ResourceEnum.SCHOOL_ROLES, ActionEnum.DELETE)
-  @Delete(':schoolRoleId/permissions/:permissionId')
-  async removePermissionFromSchoolRole(
+  @Permission(ResourceEnum.SCHOOL_ROLES, ActionEnum.UPDATE)
+  @Patch(':schoolRoleId/permissions/:permissionId/status')
+  async updatePermissionStatusForSchoolRole(
     @Param('schoolId') schoolId: string,
     @Param('schoolRoleId') schoolRoleId: string,
     @Param('permissionId') permissionId: string,
     @CurrentUser() caller: AuthContext,
+    @Body('isActive') isActive: boolean,
   ) {
-    return this.schoolRolesService.removePermissionFromSchoolRole(
+    if (isActive === undefined) {
+      throw new BadRequestException('isActive is required in the request body');
+    }
+    return this.schoolRolesService.updatePermissionStatusForSchoolRole(
       caller,
       schoolId,
       schoolRoleId,
       permissionId,
+      isActive,
     );
   }
 

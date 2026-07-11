@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { DataSource, Like } from 'typeorm';
 import { School } from '../../models/entities/school/school.entity';
 import { Student } from '../../models/entities/student/student.entity';
@@ -20,12 +24,14 @@ export class PlatformUserService {
     const { page = 1, limit = 10, search } = query;
     const skip = (page - 1) * limit;
 
-    const [items, total] = await this.dataSource.getRepository(School).findAndCount({
-      where: search ? { schoolName: Like(`%${search}%`) } : {},
-      order: { createdAt: 'DESC' },
-      take: limit,
-      skip: skip,
-    });
+    const [items, total] = await this.dataSource
+      .getRepository(School)
+      .findAndCount({
+        where: search ? { schoolName: Like(`%${search}%`) } : {},
+        order: { createdAt: 'DESC' },
+        take: limit,
+        skip: skip,
+      });
 
     return {
       items,
@@ -42,15 +48,16 @@ export class PlatformUserService {
     const { page = 1, limit = 10, search } = query;
     const skip = (page - 1) * limit;
 
-    const [items, total] = await this.dataSource.getRepository(SchoolOwner).findAndCount({
-      where: search ? [
-        { fullName: Like(`%${search}%`) },
-        { email: Like(`%${search}%`) }
-      ] : {},
-      order: { createdAt: 'DESC' },
-      take: limit,
-      skip: skip,
-    });
+    const [items, total] = await this.dataSource
+      .getRepository(SchoolOwner)
+      .findAndCount({
+        where: search
+          ? [{ fullName: Like(`%${search}%`) }, { email: Like(`%${search}%`) }]
+          : {},
+        order: { createdAt: 'DESC' },
+        take: limit,
+        skip: skip,
+      });
 
     return {
       items,
@@ -64,9 +71,11 @@ export class PlatformUserService {
    * Toggle school active status
    */
   async toggleSchoolStatus(schoolId: string, isActive: boolean) {
-    const school = await this.dataSource.getRepository(School).findOne({ where: { id: schoolId } });
+    const school = await this.dataSource
+      .getRepository(School)
+      .findOne({ where: { id: schoolId } });
     if (!school) throw new NotFoundException('School not found');
-    
+
     school.isActive = isActive;
     return this.dataSource.getRepository(School).save(school);
   }
@@ -75,32 +84,12 @@ export class PlatformUserService {
    * Toggle owner active status
    */
   async toggleOwnerStatus(ownerId: string, isActive: boolean) {
-    const owner = await this.dataSource.getRepository(SchoolOwner).findOne({ where: { id: ownerId } });
+    const owner = await this.dataSource
+      .getRepository(SchoolOwner)
+      .findOne({ where: { id: ownerId } });
     if (!owner) throw new NotFoundException('Owner not found');
-    
+
     owner.isActive = isActive;
-    return this.dataSource.getRepository(SchoolOwner).save(owner);
-  }
-
-  /**
-   * Soft delete a school
-   */
-  async deleteSchool(schoolId: string) {
-    const school = await this.dataSource.getRepository(School).findOne({ where: { id: schoolId } });
-    if (!school) throw new NotFoundException('School not found');
-    
-    school.isDeleted = true;
-    return this.dataSource.getRepository(School).save(school);
-  }
-
-  /**
-   * Soft delete an owner
-   */
-  async deleteOwner(ownerId: string) {
-    const owner = await this.dataSource.getRepository(SchoolOwner).findOne({ where: { id: ownerId } });
-    if (!owner) throw new NotFoundException('Owner not found');
-    
-    owner.isDeleted = true;
     return this.dataSource.getRepository(SchoolOwner).save(owner);
   }
 
@@ -113,13 +102,13 @@ export class PlatformUserService {
 
     const where: any = {};
     if (schoolId) where.schoolId = schoolId;
-    
+
     if (search) {
       return this.dataSource.getRepository(Student).findAndCount({
         where: [
           { ...where, firstName: Like(`%${search}%`) },
           { ...where, lastName: Like(`%${search}%`) },
-          { ...where, studentCode: Like(`%${search}%`) }
+          { ...where, studentCode: Like(`%${search}%`) },
         ],
         relations: ['school'],
         order: { createdAt: 'DESC' },
@@ -128,13 +117,15 @@ export class PlatformUserService {
       });
     }
 
-    const [items, total] = await this.dataSource.getRepository(Student).findAndCount({
-      where,
-      relations: ['school'],
-      order: { createdAt: 'DESC' },
-      take: limit,
-      skip: skip,
-    });
+    const [items, total] = await this.dataSource
+      .getRepository(Student)
+      .findAndCount({
+        where,
+        relations: ['school'],
+        order: { createdAt: 'DESC' },
+        take: limit,
+        skip: skip,
+      });
 
     return {
       items,
@@ -153,12 +144,12 @@ export class PlatformUserService {
 
     const where: any = {};
     if (schoolId) where.schoolId = schoolId;
-    
+
     if (search) {
       return this.dataSource.getRepository(SchoolUser).findAndCount({
         where: [
           { ...where, name: Like(`%${search}%`) },
-          { ...where, username: Like(`%${search}%`) }
+          { ...where, username: Like(`%${search}%`) },
         ],
         relations: ['school'],
         order: { createdAt: 'DESC' },
@@ -167,13 +158,15 @@ export class PlatformUserService {
       });
     }
 
-    const [items, total] = await this.dataSource.getRepository(SchoolUser).findAndCount({
-      where,
-      relations: ['school'],
-      order: { createdAt: 'DESC' },
-      take: limit,
-      skip: skip,
-    });
+    const [items, total] = await this.dataSource
+      .getRepository(SchoolUser)
+      .findAndCount({
+        where,
+        relations: ['school'],
+        order: { createdAt: 'DESC' },
+        take: limit,
+        skip: skip,
+      });
 
     return {
       items,
@@ -186,20 +179,34 @@ export class PlatformUserService {
   /**
    * Admin capability to manually extend a school's trial or subscription duration.
    */
-  async extendSubscriptionDuration(caller: AuthContext, schoolId: string, daysToExtend: number) {
-  
-    const sub = await this.dataSource.getRepository(SchoolSubscription).findOne({
-      where: { schoolId },
-    });
-    if (!sub) throw new NotFoundException('No active subscription found for this school');
+  async extendSubscriptionDuration(
+    caller: AuthContext,
+    schoolId: string,
+    daysToExtend: number,
+  ) {
+    const sub = await this.dataSource
+      .getRepository(SchoolSubscription)
+      .findOne({
+        where: { schoolId },
+      });
+    if (!sub)
+      throw new NotFoundException(
+        'No active subscription found for this school',
+      );
 
     const now = new Date();
     if (sub.subscriptionState === SubscriptionStatusEnum.TRIAL) {
-      const currentEnd = sub.trialEndAt && sub.trialEndAt > now ? new Date(sub.trialEndAt) : new Date(now);
+      const currentEnd =
+        sub.trialEndAt && sub.trialEndAt > now
+          ? new Date(sub.trialEndAt)
+          : new Date(now);
       currentEnd.setDate(currentEnd.getDate() + daysToExtend);
       sub.trialEndAt = currentEnd;
     } else {
-      const currentEnd = sub.currentPeriodEnd && sub.currentPeriodEnd > now ? new Date(sub.currentPeriodEnd) : new Date(now);
+      const currentEnd =
+        sub.currentPeriodEnd && sub.currentPeriodEnd > now
+          ? new Date(sub.currentPeriodEnd)
+          : new Date(now);
       currentEnd.setDate(currentEnd.getDate() + daysToExtend);
       sub.currentPeriodEnd = currentEnd;
     }
@@ -208,7 +215,10 @@ export class PlatformUserService {
 
     return {
       message: `Successfully extended subscription by ${daysToExtend} days.`,
-      newExpiryDate: sub.subscriptionState === SubscriptionStatusEnum.TRIAL ? sub.trialEndAt : sub.currentPeriodEnd,
+      newExpiryDate:
+        sub.subscriptionState === SubscriptionStatusEnum.TRIAL
+          ? sub.trialEndAt
+          : sub.currentPeriodEnd,
     };
   }
 }

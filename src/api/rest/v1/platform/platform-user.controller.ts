@@ -1,9 +1,31 @@
-import { Controller, Post, Get, Patch, Delete, Body, Query, Param, UseGuards, Headers } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
+import {
+  Controller,
+  Post,
+  Get,
+  Patch,
+  Delete,
+  Body,
+  Query,
+  Param,
+  UseGuards,
+  Headers,
+} from '@nestjs/common';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+  ApiQuery,
+} from '@nestjs/swagger';
 import { PlatformService } from '../../../../services/platform/platform.service';
 import { PlatformUserService } from '../../../../services/platform/platform-user.service';
 import { PaginationDto } from '../../../../interfaces/request/common/pagination.dto';
-import { CreatePlatformFeatureDto, CreateModuleMasterDto, CreateOperationMasterDto, AssignPermissionDto } from '../../../../interfaces/request/platform/platform-management.dto';
+import {
+  CreatePlatformFeatureDto,
+  CreateModuleMasterDto,
+  CreateOperationMasterDto,
+  AssignPermissionDto,
+} from '../../../../interfaces/request/platform/platform-management.dto';
 import { JwtAuthGuard } from '../../../../shared/guards/jwt-auth.guard';
 import { PlatformGuard } from '../../../../shared/guards/platform.guard';
 import { PlatformPermissionGuard } from '../../../../shared/guards/platform-permission.guard';
@@ -19,7 +41,7 @@ import type { AuthContext } from '../../../../interfaces/auth-context.interface'
 export class PlatformUserController {
   constructor(
     private readonly platformService: PlatformService,
-    private readonly userService: PlatformUserService
+    private readonly userService: PlatformUserService,
   ) {}
 
   // --- Features & Modules ---
@@ -28,7 +50,10 @@ export class PlatformUserController {
   @ApiResponse({ status: 201, description: 'Feature created successfully' })
   @Post('features')
   @Permission(ResourceEnum.PLATFORM_FEATURES, ActionEnum.CREATE)
-  async createFeature(@Body() dto: CreatePlatformFeatureDto, @CurrentUser() caller: AuthContext) {
+  async createFeature(
+    @Body() dto: CreatePlatformFeatureDto,
+    @CurrentUser() caller: AuthContext,
+  ) {
     return this.platformService.createFeature(dto, caller);
   }
 
@@ -43,7 +68,10 @@ export class PlatformUserController {
   @ApiResponse({ status: 201, description: 'Module created successfully' })
   @Post('modules')
   @Permission(ResourceEnum.PLATFORM_MODULES, ActionEnum.CREATE)
-  async createModule(@Body() dto: CreateModuleMasterDto, @CurrentUser() caller: AuthContext) {
+  async createModule(
+    @Body() dto: CreateModuleMasterDto,
+    @CurrentUser() caller: AuthContext,
+  ) {
     return this.platformService.createModule(dto, caller);
   }
 
@@ -57,7 +85,10 @@ export class PlatformUserController {
   @ApiOperation({ summary: 'Create a new operation' })
   @Post('operations')
   @Permission(ResourceEnum.PLATFORM_FEATURES, ActionEnum.CREATE)
-  async createOperation(@Body() dto: CreateOperationMasterDto, @CurrentUser() caller: AuthContext) {
+  async createOperation(
+    @Body() dto: CreateOperationMasterDto,
+    @CurrentUser() caller: AuthContext,
+  ) {
     return this.platformService.createOperation(dto, caller);
   }
 
@@ -73,13 +104,6 @@ export class PlatformUserController {
   @Permission(ResourceEnum.PLATFORM_FEATURES, ActionEnum.CREATE)
   async assignPermission(@Body() dto: AssignPermissionDto) {
     return this.platformService.assignPermission(dto);
-  }
-
-  @ApiOperation({ summary: 'Soft delete / Deactivate permission mapping' })
-  @Delete('permissions/:id')
-  @Permission(ResourceEnum.PLATFORM_FEATURES, ActionEnum.DELETE)
-  async removePermission(@Param('id') id: string) {
-    return this.platformService.removePermission(id);
   }
 
   // --- Schools & Owners ---
@@ -101,29 +125,21 @@ export class PlatformUserController {
   @ApiOperation({ summary: 'Toggle school activation status' })
   @Patch('schools/:schoolId/status')
   @Permission(ResourceEnum.PLATFORM_SCHOOLS, ActionEnum.UPDATE)
-  async toggleSchool(@Param('schoolId') schoolId: string, @Body('isActive') isActive: boolean) {
+  async toggleSchool(
+    @Param('schoolId') schoolId: string,
+    @Body('isActive') isActive: boolean,
+  ) {
     return this.userService.toggleSchoolStatus(schoolId, isActive);
-  }
-
-  @ApiOperation({ summary: 'Soft delete a school' })
-  @Delete('schools/:schoolId')
-  @Permission(ResourceEnum.PLATFORM_SCHOOLS, ActionEnum.DELETE)
-  async deleteSchool(@Param('schoolId') schoolId: string) {
-    return this.userService.deleteSchool(schoolId);
   }
 
   @ApiOperation({ summary: 'Toggle school owner activation status' })
   @Patch('owners/:ownerId/status')
   @Permission(ResourceEnum.PLATFORM_OWNERS, ActionEnum.UPDATE)
-  async toggleOwner(@Param('ownerId') ownerId: string, @Body('isActive') isActive: boolean) {
+  async toggleOwner(
+    @Param('ownerId') ownerId: string,
+    @Body('isActive') isActive: boolean,
+  ) {
     return this.userService.toggleOwnerStatus(ownerId, isActive);
-  }
-
-  @ApiOperation({ summary: 'Soft delete a school owner' })
-  @Delete('owners/:ownerId')
-  @Permission(ResourceEnum.PLATFORM_OWNERS, ActionEnum.DELETE)
-  async deleteOwner(@Param('ownerId') ownerId: string) {
-    return this.userService.deleteOwner(ownerId);
   }
 
   // --- Global Visibility ---
@@ -132,7 +148,10 @@ export class PlatformUserController {
   @ApiQuery({ name: 'schoolId', required: false })
   @Get('students')
   @Permission(ResourceEnum.PLATFORM_STUDENTS, ActionEnum.VIEW)
-  async listStudents(@Query() query: PaginationDto, @Query('schoolId') schoolId?: string) {
+  async listStudents(
+    @Query() query: PaginationDto,
+    @Query('schoolId') schoolId?: string,
+  ) {
     return this.userService.listAllStudents({ ...query, schoolId });
   }
 
@@ -140,7 +159,10 @@ export class PlatformUserController {
   @ApiQuery({ name: 'schoolId', required: false })
   @Get('staff')
   @Permission(ResourceEnum.PLATFORM_STAFF, ActionEnum.VIEW)
-  async listStaff(@Query() query: PaginationDto, @Query('schoolId') schoolId?: string) {
+  async listStaff(
+    @Query() query: PaginationDto,
+    @Query('schoolId') schoolId?: string,
+  ) {
     return this.userService.listAllStaff({ ...query, schoolId });
   }
 
@@ -150,7 +172,10 @@ export class PlatformUserController {
     return this.platformService.seedPlatformData(apiKey);
   }
 
-  @ApiOperation({ summary: 'Admin manually extends school subscription or trial duration by specified days' })
+  @ApiOperation({
+    summary:
+      'Admin manually extends school subscription or trial duration by specified days',
+  })
   @Patch('schools/:schoolId/extend-duration')
   @Permission(ResourceEnum.PLATFORM_SCHOOLS, ActionEnum.UPDATE)
   async extendDuration(
@@ -158,6 +183,10 @@ export class PlatformUserController {
     @Param('schoolId') schoolId: string,
     @Body('daysToExtend') daysToExtend: number,
   ) {
-    return this.userService.extendSubscriptionDuration(caller, schoolId, daysToExtend);
+    return this.userService.extendSubscriptionDuration(
+      caller,
+      schoolId,
+      daysToExtend,
+    );
   }
 }

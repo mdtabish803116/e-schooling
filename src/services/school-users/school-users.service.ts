@@ -212,6 +212,21 @@ export class SchoolUsersService {
         );
       }
 
+      // Validate all roleIds exist, belong to this school, and are not deleted/inactive
+      for (const schoolRoleId of dto.roleIds) {
+        const role = await this.dataSource.getRepository(SchoolRole).findOne({
+          where: { id: schoolRoleId, schoolId },
+        });
+        if (!role || role.isDeleted) {
+          throw new NotFoundException('This role does not exist');
+        }
+        if (!role.isActive) {
+          throw new BadRequestException(
+            `This role is inactive. Please activate it first before assigning roles.`,
+          );
+        }
+      }
+
       const queryRunner = this.dataSource.createQueryRunner();
       await queryRunner.connect();
       await queryRunner.startTransaction();
@@ -294,38 +309,6 @@ export class SchoolUsersService {
         err.name || 'INTERNAL_SERVER_ERROR',
       );
     }
-  }
-
-  /**
-   * De-assign / Deactivate a School Role from a User (Soft Delete).
-   */
-  async deassignSchoolRole(
-    caller: AuthContext,
-    schoolId: string,
-    userId: string,
-    schoolRoleId: string,
-  ) {
-    await this.assertAccessToSchool(caller, schoolId);
-
-    const user = await this.dataSource
-      .getRepository(SchoolUser)
-      .findOne({ where: { id: userId, schoolId } });
-    if (!user || user.isDeleted)
-      throw new NotFoundException('This user does not exist');
-
-    const mappingRepo = this.dataSource.getRepository(SchoolUserRole);
-    const mapping = await mappingRepo.findOne({
-      where: { userId, roleId: schoolRoleId },
-    });
-
-    if (mapping) {
-      mapping.isDeleted = true;
-      mapping.isActive = false;
-      mapping.updatedById = caller.id;
-      await mappingRepo.save(mapping);
-    }
-
-    return { message: 'School role de-assigned successfully (Soft Deleted)' };
   }
 
   async upsertUserProfile(

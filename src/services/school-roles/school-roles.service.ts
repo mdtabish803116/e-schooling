@@ -155,31 +155,6 @@ export class SchoolRolesService {
   }
 
   /**
-   * Soft delete / Deactivate a School Role.
-   */
-  async deactivateSchoolRole(
-    caller: AuthContext,
-    schoolId: string,
-    schoolRoleId: string,
-  ) {
-    await this.assertAccessToSchool(caller, schoolId);
-
-    const roleRepo = this.dataSource.getRepository(SchoolRole);
-    const role = await roleRepo.findOne({
-      where: { id: schoolRoleId, schoolId },
-    });
-    if (!role || role.isDeleted)
-      throw new NotFoundException('This role does not exist');
-
-    role.isDeleted = true;
-    role.isActive = false;
-    role.updatedById = caller.id;
-
-    await roleRepo.save(role);
-    return { message: 'School role deactivated successfully (Soft Deleted)' };
-  }
-
-  /**
    * Step 2: Assign Granular Permissions to a School Role.
    */
   async assignPermissionsToSchoolRole(
@@ -200,6 +175,16 @@ export class SchoolRolesService {
         throw new BadRequestException(
           'This role is inactive. Please activate it first before assigning permissions.',
         );
+      }
+
+      // Validate all permissionIds exist and are not deleted
+      for (const pId of permissionIds) {
+        const permissionExists = await this.dataSource
+          .getRepository(ModuleOperationPermission)
+          .findOne({ where: { id: pId, isDeleted: false } });
+        if (!permissionExists) {
+          throw new NotFoundException('This permission does not exist');
+        }
       }
 
       const queryRunner = this.dataSource.createQueryRunner();
@@ -277,13 +262,14 @@ export class SchoolRolesService {
   }
 
   /**
-   * Deactivate/Remove a permission from a School Role (Soft Delete).
+   * Activate/Deactivate a permission from a School Role.
    */
-  async removePermissionFromSchoolRole(
+  async updatePermissionStatusForSchoolRole(
     caller: AuthContext,
     schoolId: string,
     schoolRoleId: string,
     permissionId: string,
+    isActive: boolean,
   ) {
     await this.assertAccessToSchool(caller, schoolId);
 
@@ -299,15 +285,15 @@ export class SchoolRolesService {
     });
 
     if (mapping) {
-      mapping.isDeleted = true;
-      mapping.isActive = false;
+      mapping.isActive = isActive;
       await mappingRepo.save(mapping);
     }
 
-    return {
-      message:
-        'Permission removed from school role successfully (Soft Deleted)',
-    };
+    return ApiResponse.success(
+      null,
+      `Permission status updated successfully to ${isActive ? 'Active' : 'Inactive'}`,
+      200,
+    );
   }
 
   /**
@@ -437,54 +423,6 @@ export class SchoolRolesService {
       message: `School role successfully ${isActive ? 'activated' : 'deactivated'}.`,
       role: { id: role.id, name: role.name, isActive: role.isActive },
     };
-  }
-
-  /**
-   * Soft delete a school role and its permissions.
-   */
-  async removeSchoolRole(
-    caller: AuthContext,
-    schoolId: string,
-    schoolRoleId: string,
-  ) {
-    await this.assertAccessToSchool(caller, schoolId);
-
-    const roleRepo = this.dataSource.getRepository(SchoolRole);
-    const role = await roleRepo.findOne({
-      where: { id: schoolRoleId, schoolId },
-    });
-    if (!role || role.isDeleted)
-      throw new NotFoundException('This role does not exist');
-
-    const queryRunner = this.dataSource.createQueryRunner();
-    await queryRunner.connect();
-    await queryRunner.startTransaction();
-
-    try {
-      // Soft delete associated role permissions mappings
-      await queryRunner.manager.update(
-        SchoolRolePermission,
-        { roleId: schoolRoleId },
-        { isActive: false, isDeleted: true },
-      );
-
-      // Soft delete the role itself
-      role.isActive = false;
-      role.isDeleted = true;
-      role.updatedById = caller.id;
-      await queryRunner.manager.save(role);
-
-      await queryRunner.commitTransaction();
-
-      return {
-        message: 'School role and its permission mappings removed.',
-      };
-    } catch (error) {
-      await queryRunner.rollbackTransaction();
-      throw error;
-    } finally {
-      await queryRunner.release();
-    }
   }
 
   /**
