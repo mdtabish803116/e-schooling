@@ -182,4 +182,39 @@ export class AttendanceService {
       await queryRunner.release();
     }
   }
+
+  async getAttendanceSession(
+    caller: AuthContext,
+    schoolId: string,
+    query: { classId: string; sectionId: string; date: string; sessionSlot: number }
+  ) {
+    await this.assertAccessToSchool(caller, schoolId);
+
+    const session = await this.dataSource.getRepository(AttendanceSession).findOne({
+      where: {
+        schoolId,
+        classId: query.classId,
+        sectionId: query.sectionId,
+        date: query.date,
+        sessionSlot: Number(query.sessionSlot),
+        isDeleted: false,
+      },
+    });
+
+    if (!session) {
+      return null;
+    }
+
+    const records = await this.dataSource.getRepository(AttendanceRecord).find({
+      where: {
+        sessionId: session.id,
+        isDeleted: false,
+      },
+    });
+
+    return {
+      session,
+      records,
+    };
+  }
 }

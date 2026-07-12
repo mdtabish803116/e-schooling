@@ -178,4 +178,12 @@ export class AcademicController {
   ) {
     return this.academicService.getMappings(schoolId, classId, sectionId);
   }
+
+  // ACADEMIC SESSIONS
+  @ApiOperation({ summary: 'Get all academic sessions for a school' })
+  @Permission(ResourceEnum.CLASSES, ActionEnum.VIEW)
+  @Get('sessions')
+  async getAcademicSessions(@Param('schoolId') schoolId: string) {
+    return this.academicService.getAcademicSessions(schoolId);
+  }
 }

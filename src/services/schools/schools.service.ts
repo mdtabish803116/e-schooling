@@ -140,7 +140,13 @@ export class SchoolsService {
   }
 
   async getSchool(caller: AuthContext, schoolId: string) {
-    await this.assertOwnershipOfSchool(caller.id, schoolId);
+    if (caller.actorType === 'school_owner') {
+      await this.assertOwnershipOfSchool(caller.id, schoolId);
+    } else if (caller.actorType === 'school_user' || caller.actorType === 'student') {
+      if (caller.schoolId !== schoolId) {
+        throw new ForbiddenException('Access denied to school details');
+      }
+    }
     const school = await this.dataSource.getRepository(School).findOne({ where: { id: schoolId } });
     if (!school) throw new NotFoundException('School not found');
     return { school };

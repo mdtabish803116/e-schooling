@@ -9,6 +9,7 @@ import { Section } from '../../models/entities/academic/section.entity';
 import { Subject } from '../../models/entities/academic/subject.entity';
 import { ClassSectionSubject } from '../../models/entities/academic/class-section-subject.entity';
 import { TeacherSectionAssignment } from '../../models/entities/academic/teacher-section-assignment.entity';
+import { AcademicSession } from '../../models/entities/academic/academic-session.entity';
 import { CreateClassDto } from '../../interfaces/request/academic/create-class.dto';
 import { UpdateClassDto } from '../../interfaces/request/academic/update-class.dto';
 import { CreateSectionDto } from '../../interfaces/request/academic/create-section.dto';
@@ -239,7 +240,87 @@ export class AcademicService {
   }
 
   async getClasses(schoolId: string) {
-    return await this.classRepo.find({ where: { schoolId, isDeleted: false } });
+    const classes = await this.classRepo.find({
+      where: { schoolId, isDeleted: false },
+      order: { createdAt: 'ASC' },
+    });
+
+    if (classes.length === 0) return [];
+
+    // Query active non-default sections counts grouped by classId
+    const sectionCounts = await this.sectionRepo
+      .createQueryBuilder('section')
+      .select('section.class_id', 'classId')
+      .addSelect('COUNT(section.id)', 'count')
+      .where('section.schoolId = :schoolId', { schoolId })
+      .andWhere('section.isDefault = false')
+      .andWhere('section.isActive = true')
+      .andWhere('section.isDeleted = false')
+      .groupBy('section.class_id')
+      .getRawMany();
+
+    // Query active student enrollments counts grouped by classId
+    const studentCounts = await this.dataSource
+      .getRepository(StudentEnrollment)
+      .createQueryBuilder('enrollment')
+      .select('enrollment.class_id', 'classId')
+      .addSelect('COUNT(enrollment.id)', 'count')
+      .where('enrollment.schoolId = :schoolId', { schoolId })
+      .andWhere('enrollment.isCurrent = true')
+      .andWhere('enrollment.isActive = true')
+      .andWhere('enrollment.isDeleted = false')
+      .groupBy('enrollment.class_id')
+      .getRawMany();
+
+    const sectionCountMap = new Map<string, number>();
+    sectionCounts.forEach((sc) => {
+      sectionCountMap.set(sc.classId, parseInt(sc.count, 10));
+    });
+
+    const studentCountMap = new Map<string, number>();
+    studentCounts.forEach((sc) => {
+      studentCountMap.set(sc.classId, parseInt(sc.count, 10));
+    });
+
+    // Fetch teacher assignments for the school
+    const assignments = await this.assignmentRepo.find({
+      where: { schoolId, isClassTeacher: true, isActive: true, isDeleted: false },
+      relations: ['teacher'],
+    });
+
+    // Fetch default sections to map teachers for classes without sections
+    const defaultSections = await this.sectionRepo.find({
+      where: { schoolId, isDefault: true, isActive: true, isDeleted: false },
+    });
+
+    return classes.map((cls) => {
+      const sCount = sectionCountMap.get(cls.id) || 0;
+      const stCount = studentCountMap.get(cls.id) || 0;
+
+      let classTeacherId: string | null = null;
+      let classTeacherName: string | null = null;
+
+      if (!cls.hasSections) {
+        const defSec = defaultSections.find((ds) => ds.classId === cls.id);
+        if (defSec) {
+          const assignment = assignments.find((a) => a.sectionId === defSec.id);
+          if (assignment && assignment.teacher) {
+            classTeacherId = assignment.teacherId;
+            classTeacherName = assignment.teacher.name;
+          }
+        }
+      }
+
+      return {
+        ...cls,
+        code: cls.classCode,
+        sectionsCount: sCount,
+        sectionCount: sCount,
+        studentsCount: stCount,
+        classTeacherId,
+        classTeacherName,
+      };
+    });
   }
 
   async updateClass(
@@ -749,30 +830,57 @@ export class AcademicService {
   }
 
   async getSections(schoolId: string, classId?: string) {
-    const where: any = { schoolId, isDefault: false, isDeleted: false };
+    const where: any = { schoolId, isDeleted: false };
     if (classId) where.classId = classId;
     const sections = await this.sectionRepo.find({ where });
 
+    if (sections.length === 0) return [];
+
     const sectionIds = sections.map((s) => s.id);
-    let assignments: TeacherSectionAssignment[] = [];
-    if (sectionIds.length > 0) {
-      assignments = await this.assignmentRepo.find({
-        where: {
-          sectionId: In(sectionIds),
-          isClassTeacher: true,
-          isDeleted: false,
-          isActive: true,
-        },
-        relations: ['teacher'],
-      });
-    }
+
+    // Fetch assignments in parallel
+    const assignmentsPromise = this.assignmentRepo.find({
+      where: {
+        sectionId: In(sectionIds),
+        isClassTeacher: true,
+        isDeleted: false,
+        isActive: true,
+      },
+      relations: ['teacher'],
+    });
+
+    // Fetch active student counts for each section
+    const studentCountsPromise = this.dataSource
+      .getRepository(StudentEnrollment)
+      .createQueryBuilder('enrollment')
+      .select('enrollment.section_id', 'sectionId')
+      .addSelect('COUNT(enrollment.id)', 'count')
+      .where('enrollment.schoolId = :schoolId', { schoolId })
+      .andWhere('enrollment.section_id IN (:...sectionIds)', { sectionIds })
+      .andWhere('enrollment.isCurrent = true')
+      .andWhere('enrollment.isActive = true')
+      .andWhere('enrollment.isDeleted = false')
+      .groupBy('enrollment.section_id')
+      .getRawMany();
+
+    const [assignments, studentCounts] = await Promise.all([
+      assignmentsPromise,
+      studentCountsPromise,
+    ]);
+
+    const studentCountMap = new Map<string, number>();
+    studentCounts.forEach((sc) => {
+      studentCountMap.set(sc.sectionId, parseInt(sc.count, 10));
+    });
 
     return sections.map((s) => {
       const assignment = assignments.find((a) => a.sectionId === s.id);
+      const stCount = studentCountMap.get(s.id) || 0;
       return {
         ...s,
         classTeacherId: assignment ? assignment.teacherId : null,
         classTeacherName: assignment?.teacher ? assignment.teacher.name : null,
+        studentsCount: stCount,
       };
     });
   }
@@ -1119,6 +1227,13 @@ export class AcademicService {
     return await this.mappingRepo.find({
       where,
       relations: ['class', 'section', 'subject'],
+    });
+  }
+
+  async getAcademicSessions(schoolId: string) {
+    return await this.dataSource.getRepository(AcademicSession).find({
+      where: { schoolId, isActive: true, isDeleted: false },
+      order: { startDate: 'DESC' },
     });
   }
 }

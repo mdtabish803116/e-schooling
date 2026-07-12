@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Param, UseGuards } from '@nestjs/common';
+import { Controller, Post, Get, Query, Body, Param, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { StudentAdmissionsService } from '../../../../services/student/student-admissions.service';
 import { StudentAdmissionDto } from '../../../../interfaces/request/student/student-admission.dto';
@@ -47,6 +47,19 @@ export class StudentAdmissionsController {
     @Body() dto: StudentAdmissionDto
   ) {
     return this.admissionsService.admitStudent(caller, schoolId, dto);
+  }
+
+  @ApiOperation({ summary: 'Get all students (optionally class/section wise)' })
+  @Get()
+  @Permission(ResourceEnum.STUDENTS, ActionEnum.VIEW)
+  @Feature('STUDENT_MANAGEMENT')
+  async getStudents(
+    @CurrentUser() caller: AuthContext,
+    @Param('schoolId') schoolId: string,
+    @Query('classId') classId?: string,
+    @Query('sectionId') sectionId?: string,
+  ) {
+    return this.admissionsService.getStudents(caller, schoolId, { classId, sectionId });
   }
 
   @ApiOperation({ summary: 'Bulk promote, demote, or repeat students' })

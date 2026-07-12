@@ -1,4 +1,4 @@
-import { Controller, Post, Patch, Body, Param, UseGuards } from '@nestjs/common';
+import { Controller, Post, Patch, Get, Body, Param, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../../../shared/guards/jwt-auth.guard';
 import { FeatureGuard } from '../../../../shared/guards/feature.guard';
@@ -19,6 +19,25 @@ import { ResourceEnum, ActionEnum } from '../../../../models/enums/enums';
 @Controller('schools/:schoolId/attendance')
 export class AttendanceController {
   constructor(private readonly attendanceService: AttendanceService) {}
+
+  @ApiOperation({ summary: 'Get bulk attendance session by class/section/date/slot' })
+  @Permission(ResourceEnum.ATTENDANCE, ActionEnum.VIEW)
+  @Get()
+  async getAttendanceSession(
+    @Param('schoolId') schoolId: string,
+    @CurrentUser() caller: AuthContext,
+    @Query('classId') classId: string,
+    @Query('sectionId') sectionId: string,
+    @Query('date') date: string,
+    @Query('sessionSlot') sessionSlot: number,
+  ) {
+    return this.attendanceService.getAttendanceSession(caller, schoolId, {
+      classId,
+      sectionId,
+      date,
+      sessionSlot,
+    });
+  }
 
   @ApiOperation({ summary: 'Take class/section student attendance in bulk' })
   @Permission(ResourceEnum.ATTENDANCE, ActionEnum.CREATE)

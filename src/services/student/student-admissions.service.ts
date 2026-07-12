@@ -1,5 +1,5 @@
 import { Injectable, ForbiddenException, NotFoundException, BadRequestException } from '@nestjs/common';
-import { DataSource } from 'typeorm';
+import { DataSource, In } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { Student } from '../../models/entities/student/student.entity';
 import { StudentEnrollment } from '../../models/entities/student/student-enrollment.entity';
@@ -311,6 +311,59 @@ export class StudentAdmissionsService {
     } finally {
       await queryRunner.release();
     }
+  }
+
+  async getStudents(
+    caller: AuthContext,
+    schoolId: string,
+    query: { classId?: string; sectionId?: string },
+  ) {
+    const membership = await this.dataSource.getRepository(SchoolOwnerMember).findOne({
+      where: { schoolOwnerId: caller.id, schoolId }
+    });
+    if (!membership && caller.actorType === 'school_owner') {
+      throw new ForbiddenException('You do not have permission to view students of this school');
+    } else if (caller.actorType === 'school_user' && caller.schoolId !== schoolId) {
+      throw new ForbiddenException('You do not belong to this school');
+    }
+
+    const enrollmentRepo = this.dataSource.getRepository(StudentEnrollment);
+    const where: any = { schoolId, isCurrent: true, isActive: true, isDeleted: false };
+    if (query.classId) where.classId = query.classId;
+    if (query.sectionId) where.sectionId = query.sectionId;
+
+    const enrollments = await enrollmentRepo.find({ where });
+    if (enrollments.length === 0) return [];
+
+    const studentIds = enrollments.map(e => e.studentId);
+    const students = await this.dataSource.getRepository(Student).find({
+      where: { id: In(studentIds), isDeleted: false }
+    });
+
+    return enrollments.map(e => {
+      const student = students.find(s => s.id === e.studentId);
+      if (!student) return null;
+      return {
+        id: student.id,
+        studentCode: student.studentCode,
+        firstName: student.firstName,
+        lastName: student.lastName,
+        gender: student.gender,
+        dob: student.dob,
+        phone: student.phone,
+        email: student.email,
+        parentName: student.parentName,
+        parentPhone: student.parentPhone,
+        address: student.address,
+        admissionNumber: student.admissionNumber,
+        profilePicUrl: student.profilePicUrl,
+        isActive: student.isActive,
+        classId: e.classId,
+        sectionId: e.sectionId,
+        rollNumber: e.rollNumber,
+        studentEnrollmentId: e.id,
+      };
+    }).filter(Boolean);
   }
 }
 

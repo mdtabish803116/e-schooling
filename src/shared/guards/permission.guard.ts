@@ -45,6 +45,14 @@ export class PermissionGuard implements CanActivate {
       return true;
     }
 
+    // Allow users to view/edit their own profile details
+    if (requiredPermission.resource === 'school_users') {
+      const routeUserId = request.params?.userId;
+      if (routeUserId && routeUserId === user.id) {
+        return true;
+      }
+    }
+
     // School owners bypass granular RBAC checks for their schools
     if (user.actorType === 'school_owner') {
       return true;
