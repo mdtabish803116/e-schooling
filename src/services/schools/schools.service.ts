@@ -176,14 +176,14 @@ export class SchoolsService {
     if (roleIds.length > 0) {
       const permissions = await this.dataSource.getRepository(SchoolRolePermission).createQueryBuilder('rp')
         .innerJoinAndSelect(ModuleOperationPermission, 'p', 'p.id = rp.permission_id')
-        .select(['rp.role_id as role_id', 'p.id as p_id', 'p.key as p_key', 'p.description as p_desc'])
+        .select(['rp.role_id as role_id', 'p.id as p_id', 'p.description as p_desc'])
         .where('rp.role_id IN (:...roleIds)', { roleIds })
         .andWhere('rp.isActive = true')
         .getRawMany();
 
       permissions.forEach(p => {
         if (!rolePermissionMap[p.role_id]) rolePermissionMap[p.role_id] = [];
-        rolePermissionMap[p.role_id].push({ id: p.p_id, key: p.p_key, description: p.p_desc });
+        rolePermissionMap[p.role_id].push({ id: p.p_id, description: p.p_desc });
       });
     }
 
