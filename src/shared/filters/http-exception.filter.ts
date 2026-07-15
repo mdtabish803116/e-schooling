@@ -23,51 +23,79 @@ import type { Request, Response } from 'express';
  * }
  * ```
  */
-@Catch(HttpException)
+@Catch()
 export class GlobalHttpExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(GlobalHttpExceptionFilter.name);
 
-  catch(exception: HttpException, host: ArgumentsHost): void {
+  catch(exception: unknown, host: ArgumentsHost): void {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
     const request = ctx.getRequest<Request>();
 
-    const status = exception.getStatus
-      ? exception.getStatus()
-      : HttpStatus.INTERNAL_SERVER_ERROR;
+    let status = HttpStatus.INTERNAL_SERVER_ERROR;
+    let message: string | string[] = 'Internal server error';
+    let errorCode = 'INTERNAL_SERVER_ERROR';
 
-    const exceptionResponse = exception.getResponse();
+    if (exception instanceof HttpException) {
+      status = exception.getStatus();
+      const exceptionResponse = exception.getResponse();
 
-    let customError: string | undefined;
-    let message: string | string[];
-
-    if (typeof exceptionResponse === 'string') {
-      message = exceptionResponse;
-    } else if (
-      typeof exceptionResponse === 'object' &&
-      exceptionResponse !== null
-    ) {
-      const res = exceptionResponse as Record<string, unknown>;
-
-      if (typeof res['error'] === 'string') {
-        customError = res['error'];
+      if (typeof exceptionResponse === 'string') {
+        message = exceptionResponse;
+      } else if (
+        typeof exceptionResponse === 'object' &&
+        exceptionResponse !== null
+      ) {
+        const res = exceptionResponse as Record<string, unknown>;
+        if (typeof res['error'] === 'string') {
+          errorCode = res['error'];
+        }
+        message = (res['message'] as string | string[]) || exception.message;
+      } else {
+        message = exception.message;
       }
 
-      message = (res['message'] as string | string[]) || exception.message;
+      const msgStr = Array.isArray(message) ? message.join(', ') : (typeof message === 'string' ? message : '');
+      if (
+        msgStr.includes('invalid input syntax for type bigint') ||
+        msgStr.includes('invalid input syntax for integer') ||
+        msgStr.includes('invalid input syntax for type uuid')
+      ) {
+        status = HttpStatus.BAD_REQUEST;
+        errorCode = 'BAD_REQUEST';
+        message = 'Invalid parameter format (expected numeric ID)';
+      }
     } else {
-      message = exception.message;
+      const err = exception as Error;
+      const errMsg = err.message || '';
+
+      if (
+        errMsg.includes('invalid input syntax for type bigint') ||
+        errMsg.includes('invalid input syntax for integer') ||
+        errMsg.includes('invalid input syntax for type uuid')
+      ) {
+        status = HttpStatus.BAD_REQUEST;
+        errorCode = 'BAD_REQUEST';
+        message = 'Invalid parameter format (expected numeric ID)';
+      } else {
+        this.logger.error(err.stack || err);
+        message = err.message || 'Internal server error';
+      }
     }
 
-    const errorCode = customError ?? this.httpStatusToDefaultCode(status);
+    const errorCodeFinal =
+      errorCode === 'INTERNAL_SERVER_ERROR' && exception instanceof HttpException
+        ? this.httpStatusToDefaultCode(status)
+        : errorCode;
 
     this.logger.debug(
-      `[${status}] ${errorCode} ${request.method} ${request.url}: ${Array.isArray(message) ? message.join(', ') : message}`,
+      `[${status}] ${errorCodeFinal} ${request.method} ${request.url}: ${Array.isArray(message) ? message.join(', ') : message}`,
     );
 
     response.status(status).json({
       success: false,
       statusCode: status,
-      error: errorCode,
+      error: errorCodeFinal,
       message,
     });
   }
