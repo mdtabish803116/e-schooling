@@ -24,7 +24,7 @@ export class TeacherSectionAssignment {
 
   @Index()
   @Column({ name: 'section_id', type: 'bigint', nullable: true, comment: 'Reference to Section' })
-  sectionId: string;
+  sectionId: string | null;
 
   @Column({ name: 'is_class_teacher', type: 'boolean', nullable: true, comment: 'Whether this teacher is the class teacher' })
   isClassTeacher: boolean;

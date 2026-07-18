@@ -323,7 +323,7 @@ export class StudentAdmissionsService {
     });
     if (!membership && caller.actorType === 'school_owner') {
       throw new ForbiddenException('You do not have permission to view students of this school');
-    } else if (caller.actorType === 'school_user' && caller.schoolId !== schoolId) {
+    } else if (caller.actorType === 'school_user' && String(caller.schoolId) !== String(schoolId)) {
       throw new ForbiddenException('You do not belong to this school');
     }
 

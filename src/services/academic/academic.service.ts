@@ -3,7 +3,7 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
-import { DataSource, Repository, In } from 'typeorm';
+import { DataSource, Repository, In, IsNull } from 'typeorm';
 import { Class } from '../../models/entities/academic/class.entity';
 import { Section } from '../../models/entities/academic/section.entity';
 import { Subject } from '../../models/entities/academic/subject.entity';
@@ -84,6 +84,42 @@ export class AcademicService {
   }
 
   // ASSIGNMENTS HELPER
+  private async upsertClassTeacher(
+    schoolId: string,
+    classId: string,
+    teacherId: string | null,
+    userId: string,
+  ) {
+    const existingAssignment = await this.assignmentRepo.findOne({
+      where: { classId, schoolId, sectionId: IsNull(), isClassTeacher: true, isDeleted: false },
+    });
+
+    if (teacherId) {
+      if (existingAssignment) {
+        existingAssignment.teacherId = teacherId;
+        existingAssignment.isActive = true;
+        existingAssignment.updatedById = userId;
+        await this.assignmentRepo.save(existingAssignment);
+      } else {
+        const newAssignment = this.assignmentRepo.create({
+          schoolId,
+          classId,
+          sectionId: null,
+          teacherId,
+          isClassTeacher: true,
+          isActive: true,
+          createdById: userId,
+          updatedById: userId,
+        });
+        await this.assignmentRepo.save(newAssignment);
+      }
+    } else if (existingAssignment) {
+      existingAssignment.isActive = false;
+      existingAssignment.updatedById = userId;
+      await this.assignmentRepo.save(existingAssignment);
+    }
+  }
+
   private async upsertSectionTeacher(
     schoolId: string,
     classId: string,
@@ -92,7 +128,7 @@ export class AcademicService {
     userId: string,
   ) {
     const existingAssignment = await this.assignmentRepo.findOne({
-      where: { sectionId, schoolId, isClassTeacher: true, isDeleted: false },
+      where: { sectionId, schoolId, isClassTeacher: false, isDeleted: false },
     });
 
     if (teacherId) {
@@ -107,7 +143,7 @@ export class AcademicService {
           classId,
           sectionId,
           teacherId,
-          isClassTeacher: true,
+          isClassTeacher: false,
           isActive: true,
           createdById: userId,
           updatedById: userId,
@@ -183,17 +219,32 @@ export class AcademicService {
           finalDefaultSectionId = savedSection.id;
         }
 
-        if (data.classTeacherId !== undefined && finalDefaultSectionId) {
-          await this.upsertSectionTeacher(
+        if (data.classTeacherId !== undefined) {
+          await this.upsertClassTeacher(
             schoolId,
             saved.id,
-            finalDefaultSectionId,
             data.classTeacherId || null,
             userId,
           );
+          const activeSections = await this.sectionRepo.find({
+            where: { classId: saved.id, schoolId, isDeleted: false, isActive: true },
+          });
+          const hasOnlyDefaultSection = activeSections.length === 1 && activeSections[0].isDefault;
+          if (finalDefaultSectionId && hasOnlyDefaultSection) {
+            await this.upsertSectionTeacher(
+              schoolId,
+              saved.id,
+              finalDefaultSectionId,
+              data.classTeacherId || null,
+              userId,
+            );
+          }
         }
 
-        return saved;
+        return {
+          ...saved,
+          defaultSection,
+        };
       }
 
       if (!match.isActive) {
@@ -208,7 +259,6 @@ export class AcademicService {
     const newClass = this.classRepo.create({
       ...data,
       schoolId,
-      hasSections: false, // Force false by default, not taken from user input
       createdById: userId,
       updatedById: userId,
     });
@@ -227,6 +277,12 @@ export class AcademicService {
     const savedDefaultSection = await this.sectionRepo.save(newDefaultSection);
 
     if (data.classTeacherId !== undefined) {
+      await this.upsertClassTeacher(
+        schoolId,
+        savedClass.id,
+        data.classTeacherId || null,
+        userId,
+      );
       await this.upsertSectionTeacher(
         schoolId,
         savedClass.id,
@@ -236,7 +292,10 @@ export class AcademicService {
       );
     }
 
-    return savedClass;
+    return {
+      ...savedClass,
+      defaultSection: savedDefaultSection,
+    };
   }
 
   async getClasses(schoolId: string) {
@@ -247,13 +306,12 @@ export class AcademicService {
 
     if (classes.length === 0) return [];
 
-    // Query active non-default sections counts grouped by classId
+    // Query active sections counts grouped by classId
     const sectionCounts = await this.sectionRepo
       .createQueryBuilder('section')
       .select('section.class_id', 'classId')
       .addSelect('COUNT(section.id)', 'count')
       .where('section.schoolId = :schoolId', { schoolId })
-      .andWhere('section.isDefault = false')
       .andWhere('section.isActive = true')
       .andWhere('section.isDeleted = false')
       .groupBy('section.class_id')
@@ -282,15 +340,10 @@ export class AcademicService {
       studentCountMap.set(sc.classId, parseInt(sc.count, 10));
     });
 
-    // Fetch teacher assignments for the school
+    // Fetch teacher assignments for the school (class-level)
     const assignments = await this.assignmentRepo.find({
-      where: { schoolId, isClassTeacher: true, isActive: true, isDeleted: false },
+      where: { schoolId, sectionId: IsNull(), isClassTeacher: true, isActive: true, isDeleted: false },
       relations: ['teacher'],
-    });
-
-    // Fetch default sections to map teachers for classes without sections
-    const defaultSections = await this.sectionRepo.find({
-      where: { schoolId, isDefault: true, isActive: true, isDeleted: false },
     });
 
     return classes.map((cls) => {
@@ -300,15 +353,10 @@ export class AcademicService {
       let classTeacherId: string | null = null;
       let classTeacherName: string | null = null;
 
-      if (!cls.hasSections) {
-        const defSec = defaultSections.find((ds) => ds.classId === cls.id);
-        if (defSec) {
-          const assignment = assignments.find((a) => a.sectionId === defSec.id);
-          if (assignment && assignment.teacher) {
-            classTeacherId = assignment.teacherId;
-            classTeacherName = assignment.teacher.name;
-          }
-        }
+      const assignment = assignments.find((a) => a.classId === cls.id);
+      if (assignment && assignment.teacher) {
+        classTeacherId = assignment.teacherId;
+        classTeacherName = assignment.teacher.name;
       }
 
       return {
@@ -402,14 +450,26 @@ export class AcademicService {
             finalDefaultSectionId = savedSection.id;
           }
 
-          if (data.classTeacherId !== undefined && finalDefaultSectionId) {
-            await this.upsertSectionTeacher(
+          if (data.classTeacherId !== undefined) {
+            await this.upsertClassTeacher(
               schoolId,
               saved.id,
-              finalDefaultSectionId,
               data.classTeacherId || null,
               userId,
             );
+            const activeSections = await this.sectionRepo.find({
+              where: { classId: saved.id, schoolId, isDeleted: false, isActive: true },
+            });
+            const hasOnlyDefaultSection = activeSections.length === 1 && activeSections[0].isDefault;
+            if (finalDefaultSectionId && hasOnlyDefaultSection) {
+              await this.upsertSectionTeacher(
+                schoolId,
+                saved.id,
+                finalDefaultSectionId,
+                data.classTeacherId || null,
+                userId,
+              );
+            }
           }
 
           return saved;
@@ -430,23 +490,35 @@ export class AcademicService {
     const savedClass = await this.classRepo.save(existing);
 
     if (classTeacherId !== undefined) {
-      // Find the default section to assign the teacher
-      const defaultSection = await this.sectionRepo.findOne({
-        where: {
-          classId: existing.id,
-          schoolId,
-          name: 'default',
-          isDefault: true,
-        },
+      await this.upsertClassTeacher(
+        schoolId,
+        existing.id,
+        classTeacherId || null,
+        userId,
+      );
+      const activeSections = await this.sectionRepo.find({
+        where: { classId: existing.id, schoolId, isDeleted: false, isActive: true },
       });
-      if (defaultSection) {
-        await this.upsertSectionTeacher(
-          schoolId,
-          existing.id,
-          defaultSection.id,
-          classTeacherId || null,
-          userId,
-        );
+      const hasOnlyDefaultSection = activeSections.length === 1 && activeSections[0].isDefault;
+      if (hasOnlyDefaultSection) {
+        // Find the default section to assign the teacher
+        const defaultSection = await this.sectionRepo.findOne({
+          where: {
+            classId: existing.id,
+            schoolId,
+            name: 'default',
+            isDefault: true,
+          },
+        });
+        if (defaultSection) {
+          await this.upsertSectionTeacher(
+            schoolId,
+            existing.id,
+            defaultSection.id,
+            classTeacherId || null,
+            userId,
+          );
+        }
       }
     }
     return savedClass;
@@ -524,18 +596,17 @@ export class AcademicService {
       }
     }
 
-    // Fetch active non-default sections allotted to this class
+    // Fetch active sections allotted to this class
     const sections = await this.sectionRepo.find({
-      where: { classId: cls.id, schoolId, isDefault: false, isDeleted: false },
+      where: { classId: cls.id, schoolId, isDeleted: false, isActive: true },
       order: { name: 'ASC' },
     });
 
-    // Fetch assignments for the sections and the default section
+    // Fetch assignments for the class and its sections
     const assignments = await this.assignmentRepo.find({
       where: {
         classId: cls.id,
         schoolId,
-        isClassTeacher: true,
         isDeleted: false,
         isActive: true,
       },
@@ -545,25 +616,12 @@ export class AcademicService {
     let classTeacherId: string | null = null;
     let classTeacherName: string | null = null;
 
-    if (!cls.hasSections) {
-      const defaultSection = await this.sectionRepo.findOne({
-        where: {
-          classId: cls.id,
-          schoolId,
-          name: 'default',
-          isDefault: true,
-          isDeleted: false,
-        },
-      });
-      if (defaultSection) {
-        const assignment = assignments.find(
-          (a) => a.sectionId === defaultSection.id,
-        );
-        if (assignment && assignment.teacher) {
-          classTeacherId = assignment.teacherId;
-          classTeacherName = assignment.teacher.name;
-        }
-      }
+    const classTeacherAssignment = assignments.find(
+      (a) => a.sectionId === null && a.isClassTeacher === true,
+    );
+    if (classTeacherAssignment && classTeacherAssignment.teacher) {
+      classTeacherId = classTeacherAssignment.teacherId;
+      classTeacherName = classTeacherAssignment.teacher.name;
     }
 
     const hasSectionViewAccess = await this.checkModulePermission(
@@ -582,7 +640,6 @@ export class AcademicService {
       classTeacherId,
       classTeacherName,
       dailyAttendanceLimit: cls.dailyAttendanceLimit,
-      hasSections: cls.hasSections,
       isActive: cls.isActive,
       createdById: cls.createdById,
       createdBy: createdByName,
@@ -592,13 +649,19 @@ export class AcademicService {
       updatedAt: cls.updatedAt,
       sections: hasSectionViewAccess
         ? sections.map((s) => {
-            const assignment = assignments.find((a) => a.sectionId === s.id);
+            const assignment = assignments.find(
+              (a) => a.sectionId === s.id && a.isClassTeacher === false,
+            );
             return {
               id: s.id,
               name: s.name,
               capacity: s.capacity || null,
               isDefault: s.isDefault,
               isActive: s.isActive,
+              sectionTeacherId: assignment ? assignment.teacherId : null,
+              sectionTeacherName: assignment?.teacher
+                ? assignment.teacher.name
+                : null,
               classTeacherId: assignment ? assignment.teacherId : null,
               classTeacherName: assignment?.teacher
                 ? assignment.teacher.name
@@ -654,13 +717,6 @@ export class AcademicService {
         match.name = data.name;
         match.updatedById = userId;
 
-        // If the class didn't have sections marked, mark it
-        if (!parentClass.hasSections) {
-          parentClass.hasSections = true;
-          parentClass.updatedById = userId;
-          await this.classRepo.save(parentClass);
-        }
-
         // Check if there was a default section and soft-delete/deactivate it if restoring a custom one
         const defaultSection = await this.sectionRepo.findOne({
           where: {
@@ -709,13 +765,6 @@ export class AcademicService {
         },
       });
 
-      // Mark the Class as having multiple sections
-      if (!parentClass.hasSections) {
-        parentClass.hasSections = true;
-        parentClass.updatedById = userId;
-        await queryRunner.manager.save(Class, parentClass);
-      }
-
       // Create new section
       const section = queryRunner.manager.create(Section, {
         ...data,
@@ -735,7 +784,7 @@ export class AcademicService {
               classId: data.classId,
               sectionId: savedSection.id,
               teacherId: data.classTeacherId,
-              isClassTeacher: true,
+              isClassTeacher: false,
               isActive: true,
               createdById: userId,
               updatedById: userId,
@@ -842,7 +891,7 @@ export class AcademicService {
     const assignmentsPromise = this.assignmentRepo.find({
       where: {
         sectionId: In(sectionIds),
-        isClassTeacher: true,
+        isClassTeacher: false,
         isDeleted: false,
         isActive: true,
       },
@@ -878,6 +927,8 @@ export class AcademicService {
       const stCount = studentCountMap.get(s.id) || 0;
       return {
         ...s,
+        sectionTeacherId: assignment ? assignment.teacherId : null,
+        sectionTeacherName: assignment?.teacher ? assignment.teacher.name : null,
         classTeacherId: assignment ? assignment.teacherId : null,
         classTeacherName: assignment?.teacher ? assignment.teacher.name : null,
         studentsCount: stCount,
@@ -895,6 +946,10 @@ export class AcademicService {
       where: { id, schoolId, isDeleted: false },
     });
     if (!existing) throw new NotFoundException('Section not found');
+
+    if (existing.isDefault && data.isActive === false) {
+      throw new BadRequestException('Cannot deactivate the default section');
+    }
 
     if (data.classTeacherId) {
       const teacher = await this.dataSource.getRepository(SchoolUser).findOne({

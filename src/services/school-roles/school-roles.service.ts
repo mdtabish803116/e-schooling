@@ -41,7 +41,7 @@ export class SchoolRolesService {
         throw new ForbiddenException('You do not have access to this school');
       }
     } else if (caller.actorType === 'school_user') {
-      if (caller.schoolId !== schoolId) {
+      if (String(caller.schoolId) !== String(schoolId)) {
         throw new ForbiddenException('You do not belong to this school');
       }
     } else {

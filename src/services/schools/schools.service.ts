@@ -16,6 +16,7 @@ import { ModuleOperationPermission } from '../../models/entities/rbac/module-ope
 import { PlatformFeature } from '../../models/entities/entitlement/platform-feature.entity';
 import { SubscriptionPlanPlatformFeatureMapping } from '../../models/entities/entitlement/subscription-plan-platform-feature-mapping.entity';
 import { SchoolFeatureOverride } from '../../models/entities/entitlement/school-feature-override.entity';
+import { SchoolUserRole } from '../../models/entities/rbac/school-user-role.entity';
 import { SchoolOwnerRoleEnum, SubscriptionStatusEnum, OverrideTypeEnum, PlanCodeEnum } from '../../models/enums/enums';
 import { AuthContext } from '../../interfaces/auth-context.interface';
 import { CreateSchoolDto } from '../../interfaces/request/school/create-school.dto';
@@ -143,7 +144,7 @@ export class SchoolsService {
     if (caller.actorType === 'school_owner') {
       await this.assertOwnershipOfSchool(caller.id, schoolId);
     } else if (caller.actorType === 'school_user' || caller.actorType === 'student') {
-      if (caller.schoolId !== schoolId) {
+      if (String(caller.schoolId) !== String(schoolId)) {
         throw new ForbiddenException('Access denied to school details');
       }
     }
@@ -297,20 +298,176 @@ export class SchoolsService {
    * Get single school master context details.
    */
   async getSingleSchoolMasterContext(caller: AuthContext, schoolId: string) {
-    // Explicitly verify that this school actually belongs to the caller
-    const member = await this.dataSource.getRepository(SchoolOwnerMember).findOne({
-      where: { schoolOwnerId: caller.id, schoolId, isActive: true },
-    });
-    if (!member) {
-      throw new ForbiddenException('School context not found or access denied');
+    let member: SchoolOwnerMember | null = null;
+    // 1. Verify access
+    if (caller.actorType === 'school_owner') {
+      member = await this.dataSource.getRepository(SchoolOwnerMember).findOne({
+        where: { schoolOwnerId: caller.id, schoolId, isActive: true },
+      });
+      if (!member) {
+        throw new ForbiddenException('School context not found or access denied');
+      }
+    } else if (caller.actorType === 'school_user' || caller.actorType === 'student') {
+      if (String(caller.schoolId) !== String(schoolId)) {
+        throw new ForbiddenException('Access denied to school details');
+      }
+    } else {
+      throw new ForbiddenException('Access denied');
     }
 
-    const context = await this.getOwnerMasterContext(caller);
-    const schoolContext = context.schools.find(s => s.id === schoolId);
-    if (!schoolContext) {
-      throw new NotFoundException('School context details not found');
+    // 2. Fetch all primary assets for this school and platform features in parallel
+    const [school, subscriptions, roles, modules, features, planFeatureMappings, overrides] = await Promise.all([
+      this.dataSource.getRepository(School).findOne({ where: { id: schoolId } }),
+      this.dataSource.getRepository(SchoolSubscription).find({ where: { schoolId }, relations: ['subscriptionPlan'] }),
+      this.dataSource.getRepository(SchoolRole).find({ where: { schoolId, isActive: true, isDeleted: false } }),
+      this.dataSource.getRepository(ModuleMaster).find({ where: { isActive: true }, order: { displayOrder: 'ASC' } }),
+      this.dataSource.getRepository(PlatformFeature).find({ where: { isActive: true } }),
+      this.dataSource.getRepository(SubscriptionPlanPlatformFeatureMapping).find({ where: { isActive: true, isEnabled: true } }),
+      this.dataSource.getRepository(SchoolFeatureOverride).find({ where: { schoolId, isActive: true, isDeleted: false } }),
+    ]);
+
+    if (!school) {
+      throw new NotFoundException('School not found');
     }
-    return schoolContext;
+
+    // 3. Fetch role permissions
+    const roleIds = roles.map(r => r.id);
+    let rolePermissionMap: Record<string, any[]> = {};
+
+    if (roleIds.length > 0) {
+      const permissions = await this.dataSource.getRepository(SchoolRolePermission).createQueryBuilder('rp')
+        .innerJoinAndSelect(ModuleOperationPermission, 'p', 'p.id = rp.permissionId')
+        .select(['rp.role_id as role_id', 'p.id as p_id', 'p.description as p_desc'])
+        .where('rp.role_id IN (:...roleIds)', { roleIds })
+        .andWhere('rp.isActive = true')
+        .getRawMany();
+
+      permissions.forEach(p => {
+        if (!rolePermissionMap[p.role_id]) rolePermissionMap[p.role_id] = [];
+        rolePermissionMap[p.role_id].push({ id: p.p_id, description: p.p_desc });
+      });
+    }
+
+    // 4. Determine subscription status & allowed features
+    const schoolSub = subscriptions.find(s => s.schoolId === school.id);
+    const schoolRoles = roles.filter(r => r.schoolId === school.id);
+
+    let isExpired = true;
+    let isTrialExpired = false;
+    let canAccessTrial = true;
+
+    const now = new Date();
+
+    if (schoolSub) {
+      canAccessTrial = false;
+      if (schoolSub.subscriptionState === SubscriptionStatusEnum.TRIAL) {
+        const hasExpired = schoolSub.trialEndAt && schoolSub.trialEndAt < now;
+        isExpired = !!hasExpired;
+        isTrialExpired = !!hasExpired;
+      } else if (schoolSub.subscriptionState === SubscriptionStatusEnum.ACTIVE) {
+        const hasExpired = schoolSub.currentPeriodEnd && schoolSub.currentPeriodEnd < now;
+        isExpired = !!hasExpired;
+      } else {
+        isExpired = true;
+      }
+    }
+
+    const allowedFeatureIds = new Set<string>();
+
+    if (!isExpired && schoolSub) {
+      const planMappings = planFeatureMappings.filter(m => m.subscriptionPlanId === schoolSub.subscriptionPlanId);
+      const planFeatureIds = new Set(planMappings.map(m => m.platformFeatureId));
+      const schoolOverrides = overrides.filter(o => o.schoolId === school.id);
+
+      features.forEach(f => {
+        const activeOverride = schoolOverrides
+          .filter(o => o.platformFeatureId === f.id && (!o.startDate || o.startDate <= now) && (!o.endDate || o.endDate >= now))
+          .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
+
+        if (activeOverride) {
+          if (activeOverride.overrideType !== OverrideTypeEnum.DISABLE && activeOverride.isEnabled) {
+            allowedFeatureIds.add(f.id);
+          }
+        } else {
+          if (planFeatureIds.has(f.id)) {
+            allowedFeatureIds.add(f.id);
+          }
+        }
+      });
+    }
+
+    let filteredModules = isExpired ? [] : modules.filter(module => {
+      if (!module.platformFeatureId) {
+        return true;
+      }
+      return allowedFeatureIds.has(module.platformFeatureId);
+    });
+
+    // 5. If caller is staff (school_user), filter by their granular permissions
+    if (caller.actorType === 'school_user') {
+      const userRoles = await this.dataSource.getRepository(SchoolUserRole).find({
+        where: { userId: caller.id, isActive: true, isDeleted: false },
+      });
+      const userRoleIds = userRoles.map(ur => ur.roleId);
+      const permittedModuleCodes = new Set<string>();
+
+      if (userRoleIds.length > 0) {
+        const userPermissions = await this.dataSource
+          .getRepository(SchoolRolePermission)
+          .createQueryBuilder('rp')
+          .innerJoin(ModuleOperationPermission, 'p', 'p.id = rp.permissionId')
+          .innerJoin(ModuleMaster, 'm', 'm.id = p.moduleId')
+          .select(['LOWER(m.code) as modulecode'])
+          .where('rp.roleId IN (:...userRoleIds)', { userRoleIds })
+          .andWhere('rp.isActive = true')
+          .andWhere('rp.isDeleted = false')
+          .andWhere('p.isActive = true')
+          .andWhere('p.isDeleted = false')
+          .andWhere('m.isActive = true')
+          .getRawMany();
+        userPermissions.forEach(p => permittedModuleCodes.add(p.modulecode.toLowerCase()));
+      }
+
+      filteredModules = filteredModules.filter(module => {
+        const codeLower = module.code.toLowerCase();
+        if (codeLower === 'dashboard' || codeLower === 'home') return true;
+        return permittedModuleCodes.has(codeLower);
+      });
+    }
+
+    return {
+      id: school.id,
+      name: school.schoolName,
+      code: school.internalSchoolCode,
+      email: school.email,
+      phone: school.phone,
+      isPrimaryOwner: caller.actorType === 'school_owner' ? (member?.isPrimaryOwner ?? false) : false,
+      subscription: schoolSub ? {
+        planId: schoolSub.subscriptionPlanId,
+        planName: schoolSub.subscriptionPlan?.name,
+        planCode: schoolSub.subscriptionPlan?.code,
+        status: schoolSub.subscriptionState,
+        expiryDate: schoolSub.subscriptionState === SubscriptionStatusEnum.TRIAL ? schoolSub.trialEndAt : schoolSub.currentPeriodEnd,
+        isExpired,
+        isTrialExpired,
+        canAccessTrial,
+      } : {
+        planId: null,
+        planName: null,
+        planCode: null,
+        status: null,
+        expiryDate: null,
+        isExpired: true,
+        isTrialExpired: false,
+        canAccessTrial: true,
+      },
+      roles: schoolRoles.map(r => ({
+        id: r.id,
+        name: r.name,
+        permissions: rolePermissionMap[r.id] || [],
+      })),
+      sidebarModules: filteredModules,
+    };
   }
 
   async getGlobalOwnerAnalytics(caller: AuthContext, query: SchoolAnalyticsQueryDto) {
@@ -445,7 +602,7 @@ export class SchoolsService {
         throw new ForbiddenException('School context not found or access denied');
       }
     } else {
-      if (caller.schoolId !== schoolId) {
+      if (String(caller.schoolId) !== String(schoolId)) {
         throw new ForbiddenException('Access denied to this school\'s analytics');
       }
     }

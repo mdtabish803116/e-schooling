@@ -173,7 +173,7 @@ export class AuthService {
     });
 
     if (userRoles.length === 0) {
-      throw new ForbiddenException('Login failed: No roles assigned to your account. Please contact your school administrator.');
+      throw new ForbiddenException('You have not assigned any role, please contact school owner');
     }
 
     // Get role names
@@ -201,6 +201,7 @@ export class AuthService {
         username: user.username,
         userType: user.userType,
         roles: roleNames,
+        schoolId: user.schoolId,
       }
     };
   }
@@ -254,6 +255,7 @@ export class AuthService {
         firstName: student.firstName,
         lastName: student.lastName,
         roles: roleNames,
+        schoolId: student.schoolId,
       }
     };
   }
