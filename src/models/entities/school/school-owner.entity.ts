@@ -31,6 +31,12 @@ export class SchoolOwner {
   @Column({ name: 'last_login_at', type: 'timestamp', nullable: true, comment: 'Last successful login timestamp' })
   lastLoginAt: Date;
 
+  @Column({ name: 'reset_token', type: 'varchar', nullable: true, comment: 'Token/OTP used for password reset verification' })
+  resetToken: string;
+
+  @Column({ name: 'reset_token_expires', type: 'timestamp', nullable: true, comment: 'Expiration timestamp for password reset token' })
+  resetTokenExpires: Date;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamp', comment: 'Record creation timestamp' })
   createdAt: Date;
 

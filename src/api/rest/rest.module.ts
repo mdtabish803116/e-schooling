@@ -12,9 +12,25 @@ import { StudentModule } from './v1/student/student.module';
 import { SystemModule } from './v1/system/system.module';
 import { PlatformModule } from './v1/platform/platform.module';
 import { AttendanceModule } from './v1/attendance/attendance.module';
+import { TimetableModule } from './v1/timetable/timetable.module';
 
 @Module({
-  imports: [StorageModule, AuthModule, SchoolsModule, SchoolUsersModule, SchoolRolesModule, SubscriptionModule, EntitlementModule, GeoModule, AcademicModule, StudentModule, SystemModule, PlatformModule, AttendanceModule],
+  imports: [
+    StorageModule,
+    AuthModule,
+    SchoolsModule,
+    SchoolUsersModule,
+    SchoolRolesModule,
+    SubscriptionModule,
+    EntitlementModule,
+    GeoModule,
+    AcademicModule,
+    StudentModule,
+    SystemModule,
+    PlatformModule,
+    AttendanceModule,
+    TimetableModule,
+  ],
   controllers: [],
   providers: [],
 })

@@ -316,7 +316,7 @@ export class StudentAdmissionsService {
   async getStudents(
     caller: AuthContext,
     schoolId: string,
-    query: { classId?: string; sectionId?: string },
+    query: { classId?: string; sectionId?: string; search?: string; page?: number; limit?: number },
   ) {
     const membership = await this.dataSource.getRepository(SchoolOwnerMember).findOne({
       where: { schoolOwnerId: caller.id, schoolId }
@@ -327,22 +327,68 @@ export class StudentAdmissionsService {
       throw new ForbiddenException('You do not belong to this school');
     }
 
+    const studentRepo = this.dataSource.getRepository(Student);
     const enrollmentRepo = this.dataSource.getRepository(StudentEnrollment);
-    const where: any = { schoolId, isCurrent: true, isActive: true, isDeleted: false };
-    if (query.classId) where.classId = query.classId;
-    if (query.sectionId) where.sectionId = query.sectionId;
 
-    const enrollments = await enrollmentRepo.find({ where });
-    if (enrollments.length === 0) return [];
+    const page = query.page ? Math.max(1, parseInt(String(query.page), 10)) : 1;
+    const limit = query.limit ? Math.max(1, parseInt(String(query.limit), 10)) : 10;
+    const skip = (page - 1) * limit;
 
-    const studentIds = enrollments.map(e => e.studentId);
-    const students = await this.dataSource.getRepository(Student).find({
-      where: { id: In(studentIds), isDeleted: false }
-    });
+    // Create query builder starting from Student table
+    const queryBuilder = studentRepo.createQueryBuilder('student')
+      .where('student.schoolId = :schoolId', { schoolId })
+      .andWhere('student.isDeleted = :isDeleted', { isDeleted: false });
 
-    return enrollments.map(e => {
-      const student = students.find(s => s.id === e.studentId);
-      if (!student) return null;
+    // Join with StudentEnrollment only if classId or sectionId is provided
+    if (query.classId || query.sectionId) {
+      queryBuilder.innerJoin(
+        StudentEnrollment,
+        'enrollment',
+        'enrollment.studentId = student.id AND enrollment.isCurrent = :isCurrent AND enrollment.isDeleted = :enrollmentDeleted',
+        { isCurrent: true, enrollmentDeleted: false }
+      );
+      if (query.classId) {
+        queryBuilder.andWhere('enrollment.classId = :classId', { classId: query.classId });
+      }
+      if (query.sectionId) {
+        queryBuilder.andWhere('enrollment.sectionId = :sectionId', { sectionId: query.sectionId });
+      }
+    }
+
+    if (query.search) {
+      const searchTerm = `%${query.search}%`;
+      queryBuilder.andWhere(
+        '(LOWER(student.firstName) LIKE LOWER(:searchTerm) OR LOWER(student.lastName) LIKE LOWER(:searchTerm) OR LOWER(student.admissionNumber) LIKE LOWER(:searchTerm) OR LOWER(student.studentCode) LIKE LOWER(:searchTerm))',
+        { searchTerm }
+      );
+    }
+
+    const total = await queryBuilder.getCount();
+    const students = await queryBuilder
+      .orderBy('student.createdAt', 'DESC')
+      .skip(skip)
+      .take(limit)
+      .getMany();
+
+    const studentIds = students.map(s => s.id);
+    const enrollments = studentIds.length > 0
+      ? await enrollmentRepo.find({
+          where: { studentId: In(studentIds), schoolId, isCurrent: true, isDeleted: false }
+        })
+      : [];
+
+    const classes = studentIds.length > 0
+      ? await this.dataSource.getRepository(Class).find({ where: { schoolId, isDeleted: false } })
+      : [];
+
+    const sections = studentIds.length > 0
+      ? await this.dataSource.getRepository(Section).find({ where: { schoolId, isDeleted: false } })
+      : [];
+
+    const data = students.map(student => {
+      const e = enrollments.find(env => env.studentId === student.id);
+      const cls = e ? classes.find(c => String(c.id) === String(e.classId)) : null;
+      const sec = e ? sections.find(s => String(s.id) === String(e.sectionId)) : null;
       return {
         id: student.id,
         studentCode: student.studentCode,
@@ -358,12 +404,115 @@ export class StudentAdmissionsService {
         admissionNumber: student.admissionNumber,
         profilePicUrl: student.profilePicUrl,
         isActive: student.isActive,
-        classId: e.classId,
-        sectionId: e.sectionId,
-        rollNumber: e.rollNumber,
-        studentEnrollmentId: e.id,
+        classId: e?.classId || null,
+        className: cls?.name || null,
+        sectionId: e?.sectionId || null,
+        sectionName: sec?.name || null,
+        rollNumber: e?.rollNumber || null,
+        studentEnrollmentId: e?.id || null,
       };
-    }).filter(Boolean);
+    });
+
+    return {
+      data,
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      }
+    };
+  }
+
+  async getStudentById(caller: AuthContext, schoolId: string, studentId: string) {
+    const membership = await this.dataSource.getRepository(SchoolOwnerMember).findOne({
+      where: { schoolOwnerId: caller.id, schoolId }
+    });
+    if (!membership && caller.actorType === 'school_owner') {
+      throw new ForbiddenException('You do not have permission to view students of this school');
+    } else if (caller.actorType === 'school_user' && String(caller.schoolId) !== String(schoolId)) {
+      throw new ForbiddenException('You do not belong to this school');
+    }
+
+    const student = await this.dataSource.getRepository(Student).findOne({
+      where: { id: studentId, schoolId, isDeleted: false }
+    });
+    if (!student) throw new NotFoundException('Student not found');
+
+    // Try current enrollment first, then fall back to latest enrollment
+    let enrollment = await this.dataSource.getRepository(StudentEnrollment).findOne({
+      where: { studentId, schoolId, isCurrent: true, isDeleted: false }
+    });
+    if (!enrollment) {
+      enrollment = await this.dataSource.getRepository(StudentEnrollment).findOne({
+        where: { studentId, schoolId, isDeleted: false },
+        order: { createdAt: 'DESC' }
+      });
+    }
+
+    const cls = enrollment?.classId ? await this.dataSource.getRepository(Class).findOne({ where: { id: enrollment.classId } }) : null;
+    const sec = enrollment?.sectionId ? await this.dataSource.getRepository(Section).findOne({ where: { id: enrollment.sectionId } }) : null;
+
+    return {
+      id: student.id,
+      studentCode: student.studentCode,
+      // Personal Info
+      firstName: student.firstName,
+      lastName: student.lastName,
+      gender: student.gender,
+      dob: student.dob,
+      // Contact Info
+      phone: student.phone,
+      email: student.email,
+      address: student.address,
+      // Parent Info
+      parentName: student.parentName,
+      parentPhone: student.parentPhone,
+      // Admission Info
+      admissionNumber: student.admissionNumber,
+      profilePicUrl: student.profilePicUrl,
+      // Status
+      isActive: student.isActive,
+      status: student.isActive ? 'ACTIVE' : 'INACTIVE',
+      // Enrollment - class & section
+      classId: enrollment?.classId || null,
+      className: cls?.name || null,
+      sectionId: enrollment?.sectionId || null,
+      sectionName: sec?.name || null,
+      rollNumber: enrollment?.rollNumber || null,
+      studentEnrollmentId: enrollment?.id || null,
+      academicSessionId: enrollment?.academicSessionId || null,
+      enrollmentType: enrollment?.enrollmentType || null,
+      enrollmentState: enrollment?.enrollmentState || null,
+      // Timestamps
+      createdAt: student.createdAt,
+      updatedAt: student.updatedAt,
+    };
+  }
+
+  async updateStudentPhoto(caller: AuthContext, schoolId: string, studentId: string, profilePicUrl: string) {
+    const membership = await this.dataSource.getRepository(SchoolOwnerMember).findOne({
+      where: { schoolOwnerId: caller.id, schoolId }
+    });
+    if (!membership && caller.actorType === 'school_owner') {
+      throw new ForbiddenException('You do not have permission to update student photo');
+    } else if (caller.actorType === 'school_user' && String(caller.schoolId) !== String(schoolId)) {
+      throw new ForbiddenException('You do not belong to this school');
+    }
+
+    const student = await this.dataSource.getRepository(Student).findOne({
+      where: { id: studentId, schoolId, isDeleted: false }
+    });
+    if (!student) throw new NotFoundException('Student not found');
+
+    student.profilePicUrl = profilePicUrl;
+    student.updatedById = caller.id;
+    await this.dataSource.getRepository(Student).save(student);
+
+    return {
+      message: 'Student photo updated successfully',
+      profilePicUrl: student.profilePicUrl,
+      studentId: student.id,
+    };
   }
 }
-

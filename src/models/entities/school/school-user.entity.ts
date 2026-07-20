@@ -54,6 +54,12 @@ export class SchoolUser {
   @Column({ name: 'district_id', type: 'bigint', nullable: true, comment: 'Reference to parent District' })
   districtId: string;
 
+  @Column({ name: 'reset_token', type: 'varchar', nullable: true, comment: 'Token/OTP used for password reset verification' })
+  resetToken: string;
+
+  @Column({ name: 'reset_token_expires', type: 'timestamp', nullable: true, comment: 'Expiration timestamp for password reset token' })
+  resetTokenExpires: Date;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamp', comment: 'Creation timestamp' })
   createdAt: Date;
 

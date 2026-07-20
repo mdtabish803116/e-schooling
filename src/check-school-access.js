@@ -6,7 +6,7 @@ async function run() {
     port: 5433,
     user: 'postgres',
     password: 'Demo1234',
-    database: 'e_schooling'
+    database: 'e_schooling',
   });
 
   try {
@@ -20,8 +20,7 @@ async function run() {
       WHERE table_schema = 'e_schooling' AND table_name = 'school_feature_overrides';
     `);
     console.log('\n--- COLUMNS IN school_feature_overrides ---');
-    console.log(cols.rows.map(c => `${c.column_name} (${c.data_type})`));
-
+    console.log(cols.rows.map((c) => `${c.column_name} (${c.data_type})`));
   } catch (err) {
     console.error('Inspection error:', err);
   } finally {

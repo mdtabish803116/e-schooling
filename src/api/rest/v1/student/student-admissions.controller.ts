@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Query, Body, Param, UseGuards } from '@nestjs/common';
+import { Controller, Post, Get, Patch, Query, Body, Param, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { StudentAdmissionsService } from '../../../../services/student/student-admissions.service';
 import { StudentAdmissionDto } from '../../../../interfaces/request/student/student-admission.dto';
@@ -58,8 +58,23 @@ export class StudentAdmissionsController {
     @Param('schoolId') schoolId: string,
     @Query('classId') classId?: string,
     @Query('sectionId') sectionId?: string,
+    @Query('search') search?: string,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
   ) {
-    return this.admissionsService.getStudents(caller, schoolId, { classId, sectionId });
+    return this.admissionsService.getStudents(caller, schoolId, { classId, sectionId, search, page, limit });
+  }
+
+  @ApiOperation({ summary: 'Get student by ID' })
+  @Get(':studentId')
+  @Permission(ResourceEnum.STUDENTS, ActionEnum.VIEW)
+  @Feature('STUDENT_MANAGEMENT')
+  async getStudentById(
+    @CurrentUser() caller: AuthContext,
+    @Param('schoolId') schoolId: string,
+    @Param('studentId') studentId: string,
+  ) {
+    return this.admissionsService.getStudentById(caller, schoolId, studentId);
   }
 
   @ApiOperation({ summary: 'Bulk promote, demote, or repeat students' })
@@ -97,5 +112,18 @@ export class StudentAdmissionsController {
       jobId: job.jobId,
       status: job.status,
     };
+  }
+
+  @ApiOperation({ summary: 'Update student profile photo' })
+  @Patch(':studentId/photo')
+  @Permission(ResourceEnum.STUDENTS, ActionEnum.UPDATE)
+  @Feature('STUDENT_MANAGEMENT')
+  async updateStudentPhoto(
+    @CurrentUser() caller: AuthContext,
+    @Param('schoolId') schoolId: string,
+    @Param('studentId') studentId: string,
+    @Body() body: { profilePicUrl: string },
+  ) {
+    return this.admissionsService.updateStudentPhoto(caller, schoolId, studentId, body.profilePicUrl);
   }
 }

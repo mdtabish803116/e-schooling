@@ -76,6 +76,29 @@ export class AcademicController {
     return this.academicService.updateClass(schoolId, id, dto, user.id);
   }
 
+  @ApiOperation({ summary: 'Delete a class' })
+  @Permission(ResourceEnum.CLASSES, ActionEnum.DELETE)
+  @Delete('classes/:id')
+  async deleteClass(
+    @Param('schoolId') schoolId: string,
+    @Param('id') id: string,
+    @CurrentUser() user: AuthContext,
+  ) {
+    return this.academicService.deleteClass(schoolId, id, user.id);
+  }
+
+  @ApiOperation({ summary: 'Assign Class Teacher' })
+  @Permission(ResourceEnum.CLASSES, ActionEnum.UPDATE)
+  @Post('classes/:id/assign-class-teacher')
+  async assignClassTeacher(
+    @Param('schoolId') schoolId: string,
+    @Param('id') id: string,
+    @CurrentUser() user: AuthContext,
+    @Body() body: { teacherId: string | null },
+  ) {
+    return this.academicService.assignClassTeacher(schoolId, id, body.teacherId, user.id);
+  }
+
   // SECTIONS
   @ApiOperation({ summary: 'Create a new section' })
   @Permission(ResourceEnum.SECTIONS, ActionEnum.CREATE)
@@ -108,6 +131,29 @@ export class AcademicController {
     @Body() dto: UpdateSectionDto,
   ) {
     return this.academicService.updateSection(schoolId, id, dto, user.id);
+  }
+
+  @ApiOperation({ summary: 'Delete a section' })
+  @Permission(ResourceEnum.SECTIONS, ActionEnum.DELETE)
+  @Delete('sections/:id')
+  async deleteSection(
+    @Param('schoolId') schoolId: string,
+    @Param('id') id: string,
+    @CurrentUser() user: AuthContext,
+  ) {
+    return this.academicService.deleteSection(schoolId, id, user.id);
+  }
+
+  @ApiOperation({ summary: 'Assign Section Teacher' })
+  @Permission(ResourceEnum.SECTIONS, ActionEnum.UPDATE)
+  @Post('sections/:id/assign-teacher')
+  async assignSectionTeacher(
+    @Param('schoolId') schoolId: string,
+    @Param('id') id: string,
+    @CurrentUser() user: AuthContext,
+    @Body() body: { classTeacherId: string | null },
+  ) {
+    return this.academicService.assignSectionTeacher(schoolId, id, body.classTeacherId, user.id);
   }
 
   @ApiOperation({ summary: 'Bulk transfer students to a section' })

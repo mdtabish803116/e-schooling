@@ -524,6 +524,52 @@ export class AcademicService {
     return savedClass;
   }
 
+  async deleteClass(schoolId: string, id: string, userId: string) {
+    const existing = await this.classRepo.findOne({
+      where: { id, schoolId, isDeleted: false },
+    });
+    if (!existing) throw new NotFoundException('Class not found');
+
+    // Soft-delete the class
+    existing.isDeleted = true;
+    existing.isActive = false;
+    existing.updatedById = userId;
+    await this.classRepo.save(existing);
+
+    // Also soft-delete all sections in this class
+    const sections = await this.sectionRepo.find({
+      where: { classId: id, schoolId, isDeleted: false },
+    });
+    for (const section of sections) {
+      section.isDeleted = true;
+      section.isActive = false;
+      section.updatedById = userId;
+      await this.sectionRepo.save(section);
+    }
+
+    return { success: true, message: 'Class deleted and unlinked all sections' };
+  }
+
+  async assignClassTeacher(schoolId: string, classId: string, teacherId: string | null, userId: string) {
+    const cls = await this.classRepo.findOne({
+      where: { id: classId, schoolId, isDeleted: false },
+    });
+    if (!cls) throw new NotFoundException('Class not found');
+
+    await this.upsertClassTeacher(schoolId, classId, teacherId, userId);
+    return { success: true, teacherId };
+  }
+
+  async assignSectionTeacher(schoolId: string, sectionId: string, teacherId: string | null, userId: string) {
+    const sec = await this.sectionRepo.findOne({
+      where: { id: sectionId, schoolId, isDeleted: false },
+    });
+    if (!sec) throw new NotFoundException('Section not found');
+
+    await this.upsertSectionTeacher(schoolId, sec.classId, sectionId, teacherId, userId);
+    return { success: true, teacherId };
+  }
+
   async getClassDetails(
     schoolId: string,
     classId: string,
@@ -656,6 +702,7 @@ export class AcademicService {
               id: s.id,
               name: s.name,
               capacity: s.capacity || null,
+              room: s.room || null,
               isDefault: s.isDefault,
               isActive: s.isActive,
               sectionTeacherId: assignment ? assignment.teacherId : null,
@@ -715,6 +762,8 @@ export class AcademicService {
         match.isDeleted = false;
         match.isActive = true;
         match.name = data.name;
+        if (data.capacity !== undefined) match.capacity = data.capacity;
+        if (data.room !== undefined) match.room = data.room;
         match.updatedById = userId;
 
         // Check if there was a default section and soft-delete/deactivate it if restoring a custom one
@@ -983,6 +1032,7 @@ export class AcademicService {
           match.isActive = true;
           match.name = data.name;
           if (data.capacity !== undefined) match.capacity = data.capacity;
+          if (data.room !== undefined) match.room = data.room;
           match.updatedById = userId;
           const savedSection = await this.sectionRepo.save(match);
 
@@ -1024,6 +1074,24 @@ export class AcademicService {
       );
     }
     return savedSection;
+  }
+
+  async deleteSection(schoolId: string, id: string, userId: string) {
+    const existing = await this.sectionRepo.findOne({
+      where: { id, schoolId, isDeleted: false },
+    });
+    if (!existing) throw new NotFoundException('Section not found');
+
+    if (existing.isDefault) {
+      throw new BadRequestException('Cannot delete the default section of a class');
+    }
+
+    existing.isDeleted = true;
+    existing.isActive = false;
+    existing.updatedById = userId;
+    await this.sectionRepo.save(existing);
+
+    return { success: true, message: 'Section deleted successfully' };
   }
 
   async transferStudents(

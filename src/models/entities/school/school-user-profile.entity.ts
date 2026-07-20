@@ -41,6 +41,39 @@ export class SchoolUserProfile {
   @Column({ name: 'subjects', type: 'text', nullable: true, comment: 'Subjects handled (comma separated)' })
   subjects: string;
 
+  @Column({ name: 'first_name', type: 'varchar', nullable: true, comment: 'First name' })
+  firstName: string;
+
+  @Column({ name: 'last_name', type: 'varchar', nullable: true, comment: 'Last name' })
+  lastName: string;
+
+  @Column({ name: 'email', type: 'varchar', nullable: true, comment: 'Primary contact email' })
+  email: string;
+
+  @Column({ name: 'designation', type: 'varchar', nullable: true, comment: 'Job designation' })
+  designation: string;
+
+  @Column({ name: 'joining_date', type: 'date', nullable: true, comment: 'Date of joining the school' })
+  joiningDate: string;
+
+  @Column({ name: 'department_name', type: 'varchar', nullable: true, comment: 'Department name' })
+  departmentName: string;
+
+  @Column({ name: 'qualifications', type: 'jsonb', nullable: true, default: '[]', comment: 'Academic qualifications history' })
+  qualifications: any;
+
+  @Column({ name: 'experience', type: 'jsonb', nullable: true, default: '[]', comment: 'Professional experience history' })
+  experience: any;
+
+  @Column({ name: 'documents', type: 'jsonb', nullable: true, default: '[]', comment: 'Uploaded staff verification documents' })
+  documents: any;
+
+  @Column({ name: 'assigned_classes', type: 'jsonb', nullable: true, default: '[]', comment: 'Assigned classes list' })
+  assignedClasses: any;
+
+  @Column({ name: 'assigned_subjects', type: 'jsonb', nullable: true, default: '[]', comment: 'Assigned subjects list' })
+  assignedSubjects: any;
+
   @Column({ name: 'is_active', type: 'boolean', nullable: false, default: true, comment: 'Active status toggle' })
   isActive: boolean;
 
