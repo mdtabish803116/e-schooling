@@ -121,6 +121,18 @@ export class AcademicController {
     return this.academicService.getSections(schoolId, classId);
   }
 
+  @ApiOperation({ summary: 'Get section details by ID' })
+  @Permission(ResourceEnum.SECTIONS, ActionEnum.VIEW)
+  @Get('sections/:id')
+  async getSectionDetails(
+    @Param('schoolId') schoolId: string,
+    @Param('id') id: string,
+    @CurrentUser() user: AuthContext,
+  ) {
+    return this.academicService.getSectionDetails(schoolId, id, user);
+  }
+
+
   @ApiOperation({ summary: 'Update a section' })
   @Permission(ResourceEnum.SECTIONS, ActionEnum.UPDATE)
   @Patch('sections/:id')
