@@ -58,11 +58,23 @@ export class PermissionGuard implements CanActivate {
       return true;
     }
 
-    const hasPermission = await this.rbacService.hasPermission(
+    let hasPermission = await this.rbacService.hasPermission(
       user.id,
       requiredPermission.resource,
       requiredPermission.action,
     );
+
+    // Fallback: If route requires 'view' and user doesn't have it, check if they have 'view_assigned'
+    if (!hasPermission && requiredPermission.action === 'view') {
+      const hasViewAssigned = await this.rbacService.hasPermission(
+        user.id,
+        requiredPermission.resource,
+        'view_assigned',
+      );
+      if (hasViewAssigned) {
+        hasPermission = true;
+      }
+    }
 
     if (!hasPermission) {
       throw new ForbiddenException({

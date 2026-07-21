@@ -47,6 +47,7 @@ export enum ActionEnum {
   CREATE = 'create',
   UPDATE = 'update',
   DELETE = 'delete',
+  VIEW_ASSIGNED = 'view_assigned',
 }
 
 

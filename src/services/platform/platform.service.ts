@@ -613,6 +613,28 @@ export class PlatformService {
           parentName: null,
           showInSidebar: true,
         },
+        {
+          name: 'Announcements',
+          route: '/announcements',
+          icon: 'bell',
+          description: 'Create, publish, and view school announcements and notices',
+          displayOrder: 16,
+          isMenuGroup: false,
+          featureCode: null,
+          parentName: null,
+          showInSidebar: true,
+        },
+        {
+          name: 'Tasks',
+          route: '/tasks',
+          icon: 'check_square',
+          description: 'Assign, track, and complete operational tasks and checklists',
+          displayOrder: 17,
+          isMenuGroup: false,
+          featureCode: null,
+          parentName: null,
+          showInSidebar: true,
+        },
 
         {
           name: 'Administration',
@@ -750,6 +772,7 @@ export class PlatformService {
         m.name = md.name;
         m.routePath = md.route;
         m.icon = md.icon;
+        m.description = (md as any).description || null;
         m.displayOrder = md.displayOrder;
         m.showInSidebar = md.showInSidebar !== false;
         m.isMenuGroup = md.isMenuGroup;
@@ -777,6 +800,7 @@ export class PlatformService {
         { name: 'create', desc: 'Allows creating new records' },
         { name: 'update', desc: 'Allows modifying existing records' },
         { name: 'delete', desc: 'Allows soft-deleting/revoking records' },
+        { name: 'view_assigned', desc: 'Allows viewing only assigned records (e.g. assigned classes/sections)' },
       ];
       const seededOps: Record<string, OperationMaster> = {};
       for (const od of opsData) {
@@ -803,6 +827,7 @@ export class PlatformService {
         { modCode: 'ATTENDANCE', opCode: 'DELETE' },
 
         { modCode: 'CLASSES', opCode: 'VIEW' },
+        { modCode: 'CLASSES', opCode: 'VIEW_ASSIGNED' },
         { modCode: 'CLASSES', opCode: 'CREATE' },
         { modCode: 'CLASSES', opCode: 'UPDATE' },
         { modCode: 'CLASSES', opCode: 'DELETE' },
@@ -813,6 +838,7 @@ export class PlatformService {
         { modCode: 'SUBJECTS', opCode: 'DELETE' },
 
         { modCode: 'SECTIONS', opCode: 'VIEW' },
+        { modCode: 'SECTIONS', opCode: 'VIEW_ASSIGNED' },
         { modCode: 'SECTIONS', opCode: 'CREATE' },
         { modCode: 'SECTIONS', opCode: 'UPDATE' },
         { modCode: 'SECTIONS', opCode: 'DELETE' },
@@ -843,6 +869,16 @@ export class PlatformService {
         { modCode: 'EXAMS', opCode: 'DELETE' },
 
         { modCode: 'REPORTS', opCode: 'VIEW' },
+
+        { modCode: 'ANNOUNCEMENTS', opCode: 'VIEW' },
+        { modCode: 'ANNOUNCEMENTS', opCode: 'CREATE' },
+        { modCode: 'ANNOUNCEMENTS', opCode: 'UPDATE' },
+        { modCode: 'ANNOUNCEMENTS', opCode: 'DELETE' },
+
+        { modCode: 'TASKS', opCode: 'VIEW' },
+        { modCode: 'TASKS', opCode: 'CREATE' },
+        { modCode: 'TASKS', opCode: 'UPDATE' },
+        { modCode: 'TASKS', opCode: 'DELETE' },
 
         { modCode: 'SCHOOL_ROLES', opCode: 'VIEW' },
         { modCode: 'SCHOOL_ROLES', opCode: 'CREATE' },

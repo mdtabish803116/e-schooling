@@ -49,8 +49,11 @@ export class AcademicController {
   @ApiOperation({ summary: 'Get all classes' })
   @Permission(ResourceEnum.CLASSES, ActionEnum.VIEW)
   @Get('classes')
-  async getClasses(@Param('schoolId') schoolId: string) {
-    return this.academicService.getClasses(schoolId);
+  async getClasses(
+    @Param('schoolId') schoolId: string,
+    @CurrentUser() user: AuthContext,
+  ) {
+    return this.academicService.getClasses(schoolId, user);
   }
 
   @ApiOperation({ summary: 'Get class details by ID' })
@@ -116,9 +119,10 @@ export class AcademicController {
   @Get('sections')
   async getSections(
     @Param('schoolId') schoolId: string,
+    @CurrentUser() user: AuthContext,
     @Query('classId') classId?: string,
   ) {
-    return this.academicService.getSections(schoolId, classId);
+    return this.academicService.getSections(schoolId, user, classId);
   }
 
   @ApiOperation({ summary: 'Update a section' })

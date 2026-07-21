@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { DataSource, Repository, In, IsNull } from 'typeorm';
 import { Class } from '../../models/entities/academic/class.entity';
@@ -81,6 +82,29 @@ export class AcademicService {
       .getOne();
 
     return !!permission;
+  }
+
+  private async getAssignedClassesAndSections(
+    schoolId: string,
+    callerId: string,
+  ): Promise<{ classIds: string[]; sectionIds: string[] }> {
+    const assignments = await this.assignmentRepo.find({
+      where: {
+        teacherId: callerId,
+        schoolId,
+        isActive: true,
+        isDeleted: false,
+      },
+    });
+
+    const classIds = [...new Set(assignments.map((a) => a.classId))];
+    const sectionIds = [
+      ...new Set(
+        assignments.filter((a) => a.sectionId !== null).map((a) => a.sectionId as string),
+      ),
+    ];
+
+    return { classIds, sectionIds };
   }
 
   // ASSIGNMENTS HELPER
@@ -298,11 +322,27 @@ export class AcademicService {
     };
   }
 
-  async getClasses(schoolId: string) {
-    const classes = await this.classRepo.find({
+  async getClasses(schoolId: string, caller?: AuthContext) {
+    let classes = await this.classRepo.find({
       where: { schoolId, isDeleted: false },
       order: { createdAt: 'ASC' },
     });
+
+    if (classes.length === 0) return [];
+
+    // Filter by assigned classes if caller is not owner and only has view_assigned permission
+    if (caller && caller.actorType !== 'school_owner') {
+      const hasFullView = await this.checkModulePermission(caller, schoolId, 'classes', 'view');
+      if (!hasFullView) {
+        const hasViewAssigned = await this.checkModulePermission(caller, schoolId, 'classes', 'view_assigned');
+        if (hasViewAssigned) {
+          const { classIds } = await this.getAssignedClassesAndSections(schoolId, caller.id);
+          classes = classes.filter((cls) => classIds.includes(cls.id));
+        } else {
+          return [];
+        }
+      }
+    }
 
     if (classes.length === 0) return [];
 
@@ -575,6 +615,22 @@ export class AcademicService {
     classId: string,
     caller: AuthContext,
   ) {
+    // Check permission restriction
+    if (caller.actorType !== 'school_owner') {
+      const hasFullView = await this.checkModulePermission(caller, schoolId, 'classes', 'view');
+      if (!hasFullView) {
+        const hasViewAssigned = await this.checkModulePermission(caller, schoolId, 'classes', 'view_assigned');
+        if (hasViewAssigned) {
+          const { classIds } = await this.getAssignedClassesAndSections(schoolId, caller.id);
+          if (!classIds.includes(classId)) {
+            throw new ForbiddenException('Access to this class is denied');
+          }
+        } else {
+          throw new ForbiddenException('Access to class details is denied');
+        }
+      }
+    }
+
     const cls = await this.classRepo.findOne({
       where: { id: classId, schoolId, isDeleted: false },
     });
@@ -927,10 +983,28 @@ export class AcademicService {
     }
   }
 
-  async getSections(schoolId: string, classId?: string) {
+  async getSections(schoolId: string, caller?: AuthContext, classId?: string) {
     const where: any = { schoolId, isDeleted: false };
     if (classId) where.classId = classId;
-    const sections = await this.sectionRepo.find({ where });
+    let sections = await this.sectionRepo.find({ where });
+
+    if (sections.length === 0) return [];
+
+    // Filter by assigned sections if caller is not owner and only has view_assigned permission
+    if (caller && caller.actorType !== 'school_owner') {
+      const hasFullView = await this.checkModulePermission(caller, schoolId, 'sections', 'view');
+      if (!hasFullView) {
+        const hasViewAssigned = await this.checkModulePermission(caller, schoolId, 'sections', 'view_assigned');
+        if (hasViewAssigned) {
+          const { classIds, sectionIds } = await this.getAssignedClassesAndSections(schoolId, caller.id);
+          sections = sections.filter(
+            (s) => sectionIds.includes(s.id) || classIds.includes(s.classId),
+          );
+        } else {
+          return [];
+        }
+      }
+    }
 
     if (sections.length === 0) return [];
 
