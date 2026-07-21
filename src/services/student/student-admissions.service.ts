@@ -485,8 +485,27 @@ export class StudentAdmissionsService implements OnModuleInit {
     if (!targetClass) throw new NotFoundException('Target class not found');
     const targetSection = await this.dataSource.getRepository(Section).findOne({ where: { id: dto.targetSectionId, schoolId } });
     if (!targetSection) throw new NotFoundException('Target section not found');
-    const targetSession = await this.dataSource.getRepository(AcademicSession).findOne({ where: { id: dto.targetSessionId, schoolId } });
-    if (!targetSession) throw new NotFoundException('Target academic session not found');
+
+    // Auto-resolve active academic session if not supplied
+    let resolvedSessionId = dto.targetSessionId;
+    if (!resolvedSessionId) {
+      const sessionRepo = this.dataSource.getRepository(AcademicSession);
+      let activeSession = await sessionRepo.findOne({ where: { schoolId, isCurrent: true, isDeleted: false } });
+      if (!activeSession) {
+        activeSession = await sessionRepo.findOne({ where: { schoolId, isDeleted: false }, order: { createdAt: 'DESC' } });
+      }
+      if (!activeSession) {
+        // Create a default session if none exists
+        const newSession = sessionRepo.create({ schoolId, name: '2025-2026', startDate: '2025-04-01', endDate: '2026-03-31', isCurrent: true, isActive: true });
+        const savedSession = await sessionRepo.save(newSession);
+        resolvedSessionId = savedSession.id;
+      } else {
+        resolvedSessionId = activeSession.id;
+      }
+    } else {
+      const targetSession = await this.dataSource.getRepository(AcademicSession).findOne({ where: { id: resolvedSessionId, schoolId } });
+      if (!targetSession) throw new NotFoundException('Target academic session not found');
+    }
 
     let enrollmentType: EnrollmentTypeEnum;
     let oldEnrollmentState: EnrollmentStatusEnum;
@@ -523,7 +542,7 @@ export class StudentAdmissionsService implements OnModuleInit {
         const newEnrollment = new StudentEnrollment();
         newEnrollment.schoolId = schoolId;
         newEnrollment.studentId = studentId;
-        newEnrollment.academicSessionId = dto.targetSessionId;
+        newEnrollment.academicSessionId = resolvedSessionId;
         newEnrollment.classId = dto.targetClassId;
         newEnrollment.sectionId = dto.targetSectionId;
         newEnrollment.enrollmentType = enrollmentType;

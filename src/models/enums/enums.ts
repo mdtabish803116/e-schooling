@@ -31,6 +31,8 @@ export enum ResourceEnum {
   REPORTS = 'reports',
   SCHOOL_USERS = 'school_users',
   SCHOOL_ROLES = 'school_roles',
+  STUDENT_CREDENTIALS = 'student_credentials',
+  STAFF_CREDENTIALS = 'staff_credentials',
   PLATFORM_SCHOOLS = 'platform:schools',
   PLATFORM_OWNERS = 'platform:owners',
   PLATFORM_STUDENTS = 'platform:students',

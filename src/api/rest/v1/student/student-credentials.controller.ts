@@ -1,6 +1,11 @@
 import { Controller, Get, Post, Patch, Param, Body, UseGuards, NotFoundException, HttpCode } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../../../shared/guards/jwt-auth.guard';
+import { FeatureGuard } from '../../../../shared/guards/feature.guard';
+import { PermissionGuard } from '../../../../shared/guards/permission.guard';
+import { Feature } from '../../../../shared/decorators/feature.decorator';
+import { Permission } from '../../../../shared/decorators/permission.decorator';
+import { ResourceEnum, ActionEnum } from '../../../../models/enums/enums';
 import { DataSource, In } from 'typeorm';
 import { Student } from '../../../../models/entities/student/student.entity';
 import * as bcrypt from 'bcrypt';
@@ -8,7 +13,8 @@ import * as bcrypt from 'bcrypt';
 @ApiTags('Student Credentials')
 @ApiBearerAuth('JWT-auth')
 @Controller('student-credentials')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, FeatureGuard, PermissionGuard)
+@Feature('STUDENT_MANAGEMENT')
 export class StudentCredentialsController {
   constructor(private dataSource: DataSource) {}
 
@@ -23,6 +29,7 @@ export class StudentCredentialsController {
   }
 
   @ApiOperation({ summary: 'Get student credentials' })
+  @Permission(ResourceEnum.STUDENT_CREDENTIALS, ActionEnum.VIEW)
   @Get(':studentId')
   async getCredential(@Param('studentId') studentId: string) {
     const student = await this.dataSource.getRepository(Student).findOne({ where: { id: studentId } });
@@ -42,6 +49,7 @@ export class StudentCredentialsController {
   }
 
   @ApiOperation({ summary: 'Generate credentials' })
+  @Permission(ResourceEnum.STUDENT_CREDENTIALS, ActionEnum.CREATE)
   @Post('generate')
   async generateCredential(@Body() body: { studentId: string }) {
     const { studentId } = body;
@@ -77,6 +85,7 @@ export class StudentCredentialsController {
   }
 
   @ApiOperation({ summary: 'Reset password' })
+  @Permission(ResourceEnum.STUDENT_CREDENTIALS, ActionEnum.UPDATE)
   @Post(':studentId/reset-password')
   @HttpCode(200)
   async resetPassword(@Param('studentId') studentId: string, @Body() body?: { password?: string }) {
@@ -98,6 +107,7 @@ export class StudentCredentialsController {
   }
 
   @ApiOperation({ summary: 'Lock account' })
+  @Permission(ResourceEnum.STUDENT_CREDENTIALS, ActionEnum.UPDATE)
   @Patch(':studentId/lock')
   async lockAccount(@Param('studentId') studentId: string) {
     const student = await this.dataSource.getRepository(Student).findOne({ where: { id: studentId } });
@@ -112,6 +122,7 @@ export class StudentCredentialsController {
   }
 
   @ApiOperation({ summary: 'Unlock account' })
+  @Permission(ResourceEnum.STUDENT_CREDENTIALS, ActionEnum.UPDATE)
   @Patch(':studentId/unlock')
   async unlockAccount(@Param('studentId') studentId: string) {
     const student = await this.dataSource.getRepository(Student).findOne({ where: { id: studentId } });
@@ -126,6 +137,7 @@ export class StudentCredentialsController {
   }
 
   @ApiOperation({ summary: 'Activate account' })
+  @Permission(ResourceEnum.STUDENT_CREDENTIALS, ActionEnum.UPDATE)
   @Patch(':studentId/activate')
   async activateAccount(@Param('studentId') studentId: string) {
     const student = await this.dataSource.getRepository(Student).findOne({ where: { id: studentId } });
@@ -140,6 +152,7 @@ export class StudentCredentialsController {
   }
 
   @ApiOperation({ summary: 'Deactivate account' })
+  @Permission(ResourceEnum.STUDENT_CREDENTIALS, ActionEnum.UPDATE)
   @Patch(':studentId/deactivate')
   async deactivateAccount(@Param('studentId') studentId: string) {
     const student = await this.dataSource.getRepository(Student).findOne({ where: { id: studentId } });
@@ -154,6 +167,7 @@ export class StudentCredentialsController {
   }
 
   @ApiOperation({ summary: 'Bulk generate credentials' })
+  @Permission(ResourceEnum.STUDENT_CREDENTIALS, ActionEnum.CREATE)
   @Post('bulk-generate')
   @HttpCode(200)
   async bulkGenerate(@Body() body: { studentIds: string[] }) {
@@ -184,6 +198,7 @@ export class StudentCredentialsController {
   }
 
   @ApiOperation({ summary: 'Bulk reset passwords' })
+  @Permission(ResourceEnum.STUDENT_CREDENTIALS, ActionEnum.UPDATE)
   @Post('bulk-reset-password')
   @HttpCode(200)
   async bulkReset(@Body() body: { studentIds: string[] }) {

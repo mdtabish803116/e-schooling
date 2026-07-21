@@ -9,10 +9,10 @@ export class BulkProgressionDto {
   @IsNotEmpty({ each: true })
   studentIds: string[];
 
-  @ApiProperty({ example: '1', description: 'ID of the target academic session' })
+  @ApiProperty({ example: '1', description: 'ID of the target academic session (auto-resolved if omitted)', required: false })
   @IsString()
-  @IsNotEmpty()
-  targetSessionId: string;
+  @IsOptional()
+  targetSessionId?: string;
 
   @ApiProperty({ example: '1', description: 'ID of the target class' })
   @IsString()
