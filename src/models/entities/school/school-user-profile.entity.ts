@@ -74,6 +74,42 @@ export class SchoolUserProfile {
   @Column({ name: 'assigned_subjects', type: 'jsonb', nullable: true, default: '[]', comment: 'Assigned subjects list' })
   assignedSubjects: any;
 
+  @Column({ name: 'timetable_assignments', type: 'jsonb', nullable: true, default: '[]', comment: 'Timetable slots and period allocations' })
+  timetableAssignments: any;
+
+  @Column({ name: 'gender', type: 'varchar', nullable: true, comment: 'Male | Female | Other' })
+  gender: string;
+
+  @Column({ name: 'emergency_contact', type: 'varchar', nullable: true, comment: 'Emergency contact number' })
+  emergencyContact: string;
+
+  @Column({ name: 'address', type: 'text', nullable: true, comment: 'Residential address' })
+  address: string;
+
+  @Column({ name: 'employment_status', type: 'varchar', nullable: true, comment: 'Full-time | Part-time | Contract' })
+  employmentStatus: string;
+
+  @Column({ name: 'salary_type', type: 'varchar', nullable: true, comment: 'Monthly | Hourly' })
+  salaryType: string;
+
+  @Column({ name: 'base_salary', type: 'numeric', nullable: true, comment: 'Base salary amount' })
+  baseSalary: number;
+
+  @Column({ name: 'allowances', type: 'numeric', nullable: true, comment: 'Additional allowances' })
+  allowances: number;
+
+  @Column({ name: 'bank_name', type: 'varchar', nullable: true, comment: 'Bank name for payroll' })
+  bankName: string;
+
+  @Column({ name: 'account_number', type: 'varchar', nullable: true, comment: 'Bank account number' })
+  accountNumber: string;
+
+  @Column({ name: 'ifsc_code', type: 'varchar', nullable: true, comment: 'Bank IFSC code' })
+  ifscCode: string;
+
+  @Column({ name: 'pan_number', type: 'varchar', nullable: true, comment: 'PAN card number' })
+  panNumber: string;
+
   @Column({ name: 'is_active', type: 'boolean', nullable: false, default: true, comment: 'Active status toggle' })
   isActive: boolean;
 

@@ -1050,6 +1050,7 @@ export class AcademicService {
       const stCount = studentCountMap.get(s.id) || 0;
       return {
         ...s,
+        status: s.isActive ? "ACTIVE" : "INACTIVE",
         sectionTeacherId: assignment ? assignment.teacherId : null,
         sectionTeacherName: assignment?.teacher ? assignment.teacher.name : null,
         classTeacherId: assignment ? assignment.teacherId : null,
@@ -1058,6 +1059,58 @@ export class AcademicService {
       };
     });
   }
+
+  async getSectionDetails(
+    schoolId: string,
+    sectionId: string,
+    caller: AuthContext,
+  ) {
+    const sec = await this.sectionRepo.findOne({
+      where: { id: sectionId, schoolId, isDeleted: false },
+      relations: ['class'],
+    });
+    if (!sec) {
+      throw new NotFoundException('Section not found');
+    }
+
+    const assignment = await this.assignmentRepo.findOne({
+      where: { sectionId: sec.id, isClassTeacher: false, isDeleted: false, isActive: true },
+      relations: ['teacher'],
+    });
+
+    const studentCount = await this.dataSource
+      .getRepository(StudentEnrollment)
+      .count({
+        where: {
+          schoolId,
+          sectionId: sec.id,
+          isCurrent: true,
+          isActive: true,
+          isDeleted: false,
+        },
+      });
+
+    return {
+      id: sec.id,
+      schoolId: sec.schoolId,
+      classId: sec.classId,
+      className: sec.class?.name || 'Class',
+      name: sec.name,
+      capacity: sec.capacity || 40,
+      room: sec.room || null,
+      isDefault: sec.isDefault,
+      isActive: sec.isActive,
+      status: sec.isActive ? 'ACTIVE' : 'INACTIVE',
+      sectionTeacherId: assignment ? assignment.teacherId : null,
+      sectionTeacherName: assignment?.teacher ? assignment.teacher.name : null,
+      classTeacherId: assignment ? assignment.teacherId : null,
+      classTeacherName: assignment?.teacher ? assignment.teacher.name : null,
+      studentsCount: studentCount,
+      createdAt: sec.createdAt,
+      updatedAt: sec.updatedAt,
+    };
+  }
+
 
   async updateSection(
     schoolId: string,

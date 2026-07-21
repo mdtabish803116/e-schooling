@@ -1,7 +1,8 @@
-import { Controller, Post, Get, Patch, Query, Body, Param, UseGuards } from '@nestjs/common';
+import { Controller, Post, Get, Patch, Delete, Query, Body, Param, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { StudentAdmissionsService } from '../../../../services/student/student-admissions.service';
 import { StudentAdmissionDto } from '../../../../interfaces/request/student/student-admission.dto';
+import { UpdateStudentDto } from '../../../../interfaces/request/student/update-student.dto';
 import { BulkProgressionDto } from '../../../../interfaces/request/student/bulk-progression.dto';
 import { JwtAuthGuard } from '../../../../shared/guards/jwt-auth.guard';
 import { FeatureGuard } from '../../../../shared/guards/feature.guard';
@@ -77,6 +78,19 @@ export class StudentAdmissionsController {
     return this.admissionsService.getStudentById(caller, schoolId, studentId);
   }
 
+  @ApiOperation({ summary: 'Update student profile' })
+  @Patch(':studentId')
+  @Permission(ResourceEnum.STUDENTS, ActionEnum.UPDATE)
+  @Feature('STUDENT_MANAGEMENT')
+  async updateStudent(
+    @CurrentUser() caller: AuthContext,
+    @Param('schoolId') schoolId: string,
+    @Param('studentId') studentId: string,
+    @Body() dto: UpdateStudentDto,
+  ) {
+    return this.admissionsService.updateStudent(caller, schoolId, studentId, dto);
+  }
+
   @ApiOperation({ summary: 'Bulk promote, demote, or repeat students' })
   @Post('progress')
   @Permission(ResourceEnum.STUDENTS, ActionEnum.UPDATE)
@@ -125,5 +139,53 @@ export class StudentAdmissionsController {
     @Body() body: { profilePicUrl: string },
   ) {
     return this.admissionsService.updateStudentPhoto(caller, schoolId, studentId, body.profilePicUrl);
+  }
+
+  @ApiOperation({ summary: 'Get student documents' })
+  @Get(':studentId/documents')
+  @Permission(ResourceEnum.STUDENTS, ActionEnum.VIEW)
+  @Feature('STUDENT_MANAGEMENT')
+  async getStudentDocuments(
+    @CurrentUser() caller: AuthContext,
+    @Param('schoolId') schoolId: string,
+    @Param('studentId') studentId: string,
+  ) {
+    return this.admissionsService.getStudentDocuments(caller, schoolId, studentId);
+  }
+
+  @ApiOperation({ summary: 'Upload document for student' })
+  @Post(':studentId/documents')
+  @Permission(ResourceEnum.STUDENTS, ActionEnum.UPDATE)
+  @Feature('STUDENT_MANAGEMENT')
+  async uploadStudentDocument(
+    @CurrentUser() caller: AuthContext,
+    @Param('schoolId') schoolId: string,
+    @Param('studentId') studentId: string,
+    @Body() body: { file: string; type: string; name?: string; originalName?: string },
+  ) {
+    return this.admissionsService.uploadStudentDocument(caller, schoolId, studentId, body);
+  }
+
+  @ApiOperation({ summary: 'Delete document for student' })
+  @Delete(':studentId/documents/:documentId')
+  @Permission(ResourceEnum.STUDENTS, ActionEnum.UPDATE)
+  @Feature('STUDENT_MANAGEMENT')
+  async deleteStudentDocument(
+    @CurrentUser() caller: AuthContext,
+    @Param('schoolId') schoolId: string,
+    @Param('studentId') studentId: string,
+    @Param('documentId') documentId: string,
+  ) {
+    return this.admissionsService.deleteStudentDocument(caller, schoolId, studentId, documentId);
+  }
+
+  @ApiOperation({ summary: 'Seed sample students across all classes and sections for testing' })
+  @Post('seed')
+  @Permission(ResourceEnum.STUDENTS, ActionEnum.CREATE)
+  @Feature('STUDENT_MANAGEMENT')
+  async seedStudents(
+    @Param('schoolId') schoolId: string,
+  ) {
+    return this.admissionsService.seedStudentsForSchool(schoolId);
   }
 }

@@ -112,4 +112,31 @@ export class SchoolUsersController {
   ) {
     return this.schoolUsersService.getUserProfile(caller, schoolId, userId);
   }
+
+  @ApiOperation({ summary: 'Change current logged in staff user password (requires old password)' })
+  @Post('me/change-password')
+  async changeMyPassword(
+    @Param('schoolId') schoolId: string,
+    @CurrentUser() caller: AuthContext,
+    @Body() body: { oldPassword?: string; newPassword?: string },
+  ) {
+    return this.schoolUsersService.changeMyPassword(caller, schoolId, body);
+  }
+
+  @ApiOperation({ summary: 'Admin/Owner reset user password' })
+  @Permission(ResourceEnum.SCHOOL_USERS, ActionEnum.UPDATE)
+  @Post(':userId/reset-password')
+  async resetUserPassword(
+    @Param('schoolId') schoolId: string,
+    @Param('userId') userId: string,
+    @CurrentUser() caller: AuthContext,
+    @Body() body?: { newPassword?: string },
+  ) {
+    return this.schoolUsersService.resetUserPassword(
+      caller,
+      schoolId,
+      userId,
+      body?.newPassword,
+    );
+  }
 }

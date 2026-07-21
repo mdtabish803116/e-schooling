@@ -10,6 +10,7 @@ import { AttendanceService } from '../../../../services/attendance/attendance.se
 import type { AuthContext } from '../../../../interfaces/auth-context.interface';
 import { TakeAttendanceDto } from '../../../../interfaces/request/attendance/take-attendance.dto';
 import { UpdateAttendanceDto } from '../../../../interfaces/request/attendance/update-attendance.dto';
+import { LockAttendanceDto, UnlockAttendanceDto } from '../../../../interfaces/request/attendance/lock-attendance.dto';
 import { ResourceEnum, ActionEnum } from '../../../../models/enums/enums';
 
 @ApiTags('Attendance Management')
@@ -39,6 +40,38 @@ export class AttendanceController {
     });
   }
 
+  @ApiOperation({ summary: 'Lock attendance for a specific date' })
+  @Permission(ResourceEnum.ATTENDANCE, ActionEnum.UPDATE)
+  @Post('lock')
+  async lockAttendance(
+    @Param('schoolId') schoolId: string,
+    @CurrentUser() caller: AuthContext,
+    @Body() dto: LockAttendanceDto,
+  ) {
+    return this.attendanceService.lockAttendance(caller, schoolId, dto);
+  }
+
+  @ApiOperation({ summary: 'Unlock attendance for a specific date' })
+  @Permission(ResourceEnum.ATTENDANCE, ActionEnum.UPDATE)
+  @Post('unlock')
+  async unlockAttendance(
+    @Param('schoolId') schoolId: string,
+    @CurrentUser() caller: AuthContext,
+    @Body() dto: UnlockAttendanceDto,
+  ) {
+    return this.attendanceService.unlockAttendance(caller, schoolId, dto);
+  }
+
+  @ApiOperation({ summary: 'Get list of locked attendance dates' })
+  @Permission(ResourceEnum.ATTENDANCE, ActionEnum.VIEW)
+  @Get('locks')
+  async getAttendanceLocks(
+    @Param('schoolId') schoolId: string,
+    @CurrentUser() caller: AuthContext,
+  ) {
+    return this.attendanceService.getAttendanceLocks(caller, schoolId);
+  }
+
   @ApiOperation({ summary: 'Take class/section student attendance in bulk' })
   @Permission(ResourceEnum.ATTENDANCE, ActionEnum.CREATE)
   @Post()
@@ -48,6 +81,40 @@ export class AttendanceController {
     @Body() dto: TakeAttendanceDto,
   ) {
     return this.attendanceService.takeAttendance(caller, schoolId, dto);
+  }
+
+  @ApiOperation({ summary: 'Get list of real students for attendance marking' })
+  @Permission(ResourceEnum.ATTENDANCE, ActionEnum.VIEW)
+  @Get('students')
+  async getAttendanceStudents(
+    @Param('schoolId') schoolId: string,
+    @CurrentUser() caller: AuthContext,
+    @Query('classId') classId?: string,
+    @Query('sectionId') sectionId?: string,
+  ) {
+    return this.attendanceService.getAttendanceStudents(caller, schoolId, { classId, sectionId });
+  }
+
+  @ApiOperation({ summary: 'Get attendance dashboard analytics summary' })
+  @Permission(ResourceEnum.ATTENDANCE, ActionEnum.VIEW)
+  @Get('dashboard')
+  async getAttendanceDashboard(
+    @Param('schoolId') schoolId: string,
+    @CurrentUser() caller: AuthContext,
+    @Query('date') date?: string,
+  ) {
+    return this.attendanceService.getAttendanceDashboard(caller, schoolId, date);
+  }
+
+  @ApiOperation({ summary: 'Get low attendance defaulters report' })
+  @Permission(ResourceEnum.ATTENDANCE, ActionEnum.VIEW)
+  @Get('reports/defaulters')
+  async getDefaultersReport(
+    @Param('schoolId') schoolId: string,
+    @CurrentUser() caller: AuthContext,
+    @Query('threshold') threshold?: number,
+  ) {
+    return this.attendanceService.getDefaultersReport(caller, schoolId, Number(threshold) || 75);
   }
 
   @ApiOperation({ summary: 'Bulk update specific student attendance marks' })

@@ -6,7 +6,7 @@ import { StorageService } from '../../shared/storage/storage.service';
 export class CloudinaryService extends StorageService {
   async uploadFile(file: Express.Multer.File): Promise<string> {
     return new Promise((resolve, reject) => {
-      const uploadOptions = { folder: 'e-school' };
+      const uploadOptions: any = { folder: 'e-school', resource_type: 'auto' };
 
       if (file.path) {
         cloudinary.uploader.upload(file.path, uploadOptions, (error, result) => {
