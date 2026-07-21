@@ -1,6 +1,7 @@
-import { IsEnum, IsNotEmpty, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsArray, IsEnum, IsNotEmpty, IsObject, IsOptional, IsString, MinLength } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { UserTypeEnum } from '../../../models/enums/enums';
+import { UpdateSchoolUserProfileDto } from './update-school-user-profile.dto';
 
 export class CreateSchoolUserDto {
   @ApiProperty({ example: 'Priya Sharma', description: 'Full name of the user' })
@@ -33,4 +34,13 @@ export class CreateSchoolUserDto {
   @IsEnum([UserTypeEnum.ACADEMIC, UserTypeEnum.NON_ACADEMIC])
   userType: UserTypeEnum;
 
+  @ApiPropertyOptional({ description: 'Optional list of role IDs to assign' })
+  @IsOptional()
+  @IsArray()
+  roleIds?: string[];
+
+  @ApiPropertyOptional({ description: 'Optional initial profile details' })
+  @IsOptional()
+  @IsObject()
+  profile?: UpdateSchoolUserProfileDto;
 }
