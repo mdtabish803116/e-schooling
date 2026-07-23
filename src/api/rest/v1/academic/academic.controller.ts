@@ -25,6 +25,8 @@ import { CreateSectionDto } from '../../../../interfaces/request/academic/create
 import { UpdateSectionDto } from '../../../../interfaces/request/academic/update-section.dto';
 import { UpdateSubjectDto } from '../../../../interfaces/request/academic/update-subject.dto';
 import { TransferStudentsDto } from '../../../../interfaces/request/academic/transfer-students.dto';
+import { CreateAcademicSessionDto } from '../../../../interfaces/request/academic/create-academic-session.dto';
+import { UpdateAcademicSessionDto } from '../../../../interfaces/request/academic/update-academic-session.dto';
 
 @ApiTags('Academic Management')
 @ApiBearerAuth('JWT-auth')
@@ -242,10 +244,65 @@ export class AcademicController {
   }
 
   // ACADEMIC SESSIONS
+  @ApiOperation({ summary: 'Create a new academic session' })
+  @Permission(ResourceEnum.ACADEMIC_SESSIONS, ActionEnum.CREATE)
+  @Post('sessions')
+  async createAcademicSession(
+    @Param('schoolId') schoolId: string,
+    @CurrentUser() user: AuthContext,
+    @Body() dto: CreateAcademicSessionDto,
+  ) {
+    return this.academicService.createAcademicSession(schoolId, dto, user.id);
+  }
+
   @ApiOperation({ summary: 'Get all academic sessions for a school' })
-  @Permission(ResourceEnum.CLASSES, ActionEnum.VIEW)
+  @Permission(ResourceEnum.ACADEMIC_SESSIONS, ActionEnum.VIEW)
   @Get('sessions')
   async getAcademicSessions(@Param('schoolId') schoolId: string) {
     return this.academicService.getAcademicSessions(schoolId);
+  }
+
+  @ApiOperation({ summary: 'Get academic session details by ID' })
+  @Permission(ResourceEnum.ACADEMIC_SESSIONS, ActionEnum.VIEW)
+  @Get('sessions/:id')
+  async getAcademicSessionDetails(
+    @Param('schoolId') schoolId: string,
+    @Param('id') id: string,
+  ) {
+    return this.academicService.getAcademicSessionDetails(schoolId, id);
+  }
+
+  @ApiOperation({ summary: 'Update an academic session' })
+  @Permission(ResourceEnum.ACADEMIC_SESSIONS, ActionEnum.UPDATE)
+  @Patch('sessions/:id')
+  async updateAcademicSession(
+    @Param('schoolId') schoolId: string,
+    @Param('id') id: string,
+    @CurrentUser() user: AuthContext,
+    @Body() dto: UpdateAcademicSessionDto,
+  ) {
+    return this.academicService.updateAcademicSession(schoolId, id, dto, user.id);
+  }
+
+  @ApiOperation({ summary: 'Delete an academic session' })
+  @Permission(ResourceEnum.ACADEMIC_SESSIONS, ActionEnum.DELETE)
+  @Delete('sessions/:id')
+  async deleteAcademicSession(
+    @Param('schoolId') schoolId: string,
+    @Param('id') id: string,
+    @CurrentUser() user: AuthContext,
+  ) {
+    return this.academicService.deleteAcademicSession(schoolId, id, user.id);
+  }
+
+  @ApiOperation({ summary: 'Set an academic session as the current active session' })
+  @Permission(ResourceEnum.ACADEMIC_SESSIONS, ActionEnum.UPDATE)
+  @Patch('sessions/:id/set-current')
+  async setAsCurrentAcademicSession(
+    @Param('schoolId') schoolId: string,
+    @Param('id') id: string,
+    @CurrentUser() user: AuthContext,
+  ) {
+    return this.academicService.setAsCurrentAcademicSession(schoolId, id, user.id);
   }
 }

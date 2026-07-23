@@ -552,6 +552,16 @@ export class PlatformService {
           parentName: 'Academics',
           showInSidebar: true,
         },
+        {
+          name: 'Academic Sessions',
+          route: '/academics/sessions',
+          icon: 'date_range',
+          displayOrder: 6,
+          isMenuGroup: false,
+          featureCode: 'ACADEMIC_MANAGEMENT',
+          parentName: 'Academics',
+          showInSidebar: true,
+        },
 
         {
           name: 'Students',
@@ -868,6 +878,11 @@ export class PlatformService {
         { modCode: 'ACADEMIC_MAPPING', opCode: 'UPDATE' },
         { modCode: 'ACADEMIC_MAPPING', opCode: 'DELETE' },
 
+        { modCode: 'ACADEMIC_SESSIONS', opCode: 'VIEW' },
+        { modCode: 'ACADEMIC_SESSIONS', opCode: 'CREATE' },
+        { modCode: 'ACADEMIC_SESSIONS', opCode: 'UPDATE' },
+        { modCode: 'ACADEMIC_SESSIONS', opCode: 'DELETE' },
+
         { modCode: 'STUDENTS', opCode: 'VIEW' },
         { modCode: 'STUDENTS', opCode: 'CREATE' },
         { modCode: 'STUDENTS', opCode: 'UPDATE' },
@@ -909,6 +924,16 @@ export class PlatformService {
         { modCode: 'SCHOOL_USERS', opCode: 'CREATE' },
         { modCode: 'SCHOOL_USERS', opCode: 'UPDATE' },
         { modCode: 'SCHOOL_USERS', opCode: 'DELETE' },
+
+        { modCode: 'STUDENT_CREDENTIALS', opCode: 'VIEW' },
+        { modCode: 'STUDENT_CREDENTIALS', opCode: 'CREATE' },
+        { modCode: 'STUDENT_CREDENTIALS', opCode: 'UPDATE' },
+        { modCode: 'STUDENT_CREDENTIALS', opCode: 'DELETE' },
+
+        { modCode: 'STAFF_CREDENTIALS', opCode: 'VIEW' },
+        { modCode: 'STAFF_CREDENTIALS', opCode: 'CREATE' },
+        { modCode: 'STAFF_CREDENTIALS', opCode: 'UPDATE' },
+        { modCode: 'STAFF_CREDENTIALS', opCode: 'DELETE' },
 
         { modCode: 'SUBSCRIPTION', opCode: 'VIEW' },
         { modCode: 'SUBSCRIPTION', opCode: 'CREATE' },

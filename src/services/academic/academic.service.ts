@@ -16,6 +16,8 @@ import { UpdateClassDto } from '../../interfaces/request/academic/update-class.d
 import { CreateSectionDto } from '../../interfaces/request/academic/create-section.dto';
 import { UpdateSectionDto } from '../../interfaces/request/academic/update-section.dto';
 import { UpdateSubjectDto } from '../../interfaces/request/academic/update-subject.dto';
+import { CreateAcademicSessionDto } from '../../interfaces/request/academic/create-academic-session.dto';
+import { UpdateAcademicSessionDto } from '../../interfaces/request/academic/update-academic-session.dto';
 import { TransferStudentsDto } from '../../interfaces/request/academic/transfer-students.dto';
 import { StudentEnrollment } from '../../models/entities/student/student-enrollment.entity';
 import { SectionTransferHistory } from '../../models/entities/student/section-transfer-history.entity';
@@ -36,6 +38,7 @@ export class AcademicService {
   private subjectRepo: Repository<Subject>;
   private mappingRepo: Repository<ClassSectionSubject>;
   private assignmentRepo: Repository<TeacherSectionAssignment>;
+  private sessionRepo: Repository<AcademicSession>;
 
   constructor(private dataSource: DataSource) {
     this.classRepo = this.dataSource.getRepository(Class);
@@ -45,6 +48,7 @@ export class AcademicService {
     this.assignmentRepo = this.dataSource.getRepository(
       TeacherSectionAssignment,
     );
+    this.sessionRepo = this.dataSource.getRepository(AcademicSession);
   }
 
   private async checkModulePermission(
@@ -346,13 +350,12 @@ export class AcademicService {
 
     if (classes.length === 0) return [];
 
-    // Query active sections counts grouped by classId
+    // Query sections counts grouped by classId
     const sectionCounts = await this.sectionRepo
       .createQueryBuilder('section')
       .select('section.class_id', 'classId')
       .addSelect('COUNT(section.id)', 'count')
       .where('section.schoolId = :schoolId', { schoolId })
-      .andWhere('section.isActive = true')
       .andWhere('section.isDeleted = false')
       .groupBy('section.class_id')
       .getRawMany();
@@ -698,9 +701,9 @@ export class AcademicService {
       }
     }
 
-    // Fetch active sections allotted to this class
+    // Fetch sections allotted to this class (including inactive, excluding soft-deleted)
     const sections = await this.sectionRepo.find({
-      where: { classId: cls.id, schoolId, isDeleted: false, isActive: true },
+      where: { classId: cls.id, schoolId, isDeleted: false },
       order: { name: 'ASC' },
     });
 
@@ -726,12 +729,64 @@ export class AcademicService {
       classTeacherName = classTeacherAssignment.teacher.name;
     }
 
-    const hasSectionViewAccess = await this.checkModulePermission(
+    // Check permissions for nested modules
+    let hasSectionViewAccess = await this.checkModulePermission(
       caller,
       schoolId,
       'sections',
       'view',
     );
+    let hasSectionViewAssigned = false;
+    if (!hasSectionViewAccess) {
+      hasSectionViewAssigned = await this.checkModulePermission(
+        caller,
+        schoolId,
+        'sections',
+        'view_assigned',
+      );
+    }
+
+    const hasStudentsViewAccess = await this.checkModulePermission(
+      caller,
+      schoolId,
+      'students',
+      'view',
+    );
+    const hasTimetableAccess = await this.checkModulePermission(
+      caller,
+      schoolId,
+      'timetable',
+      'view',
+    );
+    const hasFeesAccess = await this.checkModulePermission(
+      caller,
+      schoolId,
+      'fees',
+      'view',
+    );
+
+    let displaySections = sections;
+    if (!hasSectionViewAccess && hasSectionViewAssigned) {
+      const { sectionIds } = await this.getAssignedClassesAndSections(
+        schoolId,
+        caller.id,
+      );
+      displaySections = sections.filter((s) => sectionIds.includes(s.id));
+    }
+
+    const studentCount = hasStudentsViewAccess
+      ? await this.dataSource.getRepository(StudentEnrollment).count({
+          where: {
+            schoolId,
+            classId: cls.id,
+            isCurrent: true,
+            isActive: true,
+            isDeleted: false,
+          },
+        })
+      : null;
+
+    const canViewSections = hasSectionViewAccess || hasSectionViewAssigned;
 
     return {
       id: cls.id,
@@ -749,8 +804,10 @@ export class AcademicService {
       updatedBy: updatedByName,
       createdAt: cls.createdAt,
       updatedAt: cls.updatedAt,
-      sections: hasSectionViewAccess
-        ? sections.map((s) => {
+
+      // Sections access
+      sections: canViewSections
+        ? displaySections.map((s) => {
             const assignment = assignments.find(
               (a) => a.sectionId === s.id && a.isClassTeacher === false,
             );
@@ -765,17 +822,33 @@ export class AcademicService {
               sectionTeacherName: assignment?.teacher
                 ? assignment.teacher.name
                 : null,
-              classTeacherId: assignment ? assignment.teacherId : null,
-              classTeacherName: assignment?.teacher
-                ? assignment.teacher.name
-                : null,
             };
           })
-        : [],
+        : null,
       sectionCount: sections.length,
-      sectionMessage: hasSectionViewAccess
+      sectionsAccess: canViewSections,
+      sectionsMessage: canViewSections
         ? undefined
         : 'You do not have permission to view sections for this class.',
+
+      // Students access
+      studentsCount: studentCount,
+      studentsAccess: hasStudentsViewAccess,
+      studentsMessage: hasStudentsViewAccess
+        ? undefined
+        : 'You do not have permission to view student records for this class.',
+
+      // Timetable access
+      timetableAccess: hasTimetableAccess,
+      timetableMessage: hasTimetableAccess
+        ? undefined
+        : 'You do not have permission to view timetable for this class.',
+
+      // Fees access
+      feesAccess: hasFeesAccess,
+      feesMessage: hasFeesAccess
+        ? undefined
+        : 'You do not have permission to view fee structures for this class.',
     };
   }
 
@@ -1073,22 +1146,56 @@ export class AcademicService {
       throw new NotFoundException('Section not found');
     }
 
+    if (caller.actorType !== 'school_owner') {
+      const hasFullView = await this.checkModulePermission(caller, schoolId, 'sections', 'view');
+      if (!hasFullView) {
+        const hasViewAssigned = await this.checkModulePermission(caller, schoolId, 'sections', 'view_assigned');
+        if (hasViewAssigned) {
+          const { classIds, sectionIds } = await this.getAssignedClassesAndSections(schoolId, caller.id);
+          if (!sectionIds.includes(sectionId) && !classIds.includes(sec.classId)) {
+            throw new ForbiddenException('Access to this section is denied');
+          }
+        } else {
+          throw new ForbiddenException('Access to section details is denied');
+        }
+      }
+    }
+
     const assignment = await this.assignmentRepo.findOne({
       where: { sectionId: sec.id, isClassTeacher: false, isDeleted: false, isActive: true },
       relations: ['teacher'],
     });
 
-    const studentCount = await this.dataSource
-      .getRepository(StudentEnrollment)
-      .count({
-        where: {
-          schoolId,
-          sectionId: sec.id,
-          isCurrent: true,
-          isActive: true,
-          isDeleted: false,
-        },
-      });
+    const hasStudentsViewAccess = await this.checkModulePermission(
+      caller,
+      schoolId,
+      'students',
+      'view',
+    );
+    const hasTimetableAccess = await this.checkModulePermission(
+      caller,
+      schoolId,
+      'timetable',
+      'view',
+    );
+    const hasFeesAccess = await this.checkModulePermission(
+      caller,
+      schoolId,
+      'fees',
+      'view',
+    );
+
+    const studentCount = hasStudentsViewAccess
+      ? await this.dataSource.getRepository(StudentEnrollment).count({
+          where: {
+            schoolId,
+            sectionId: sec.id,
+            isCurrent: true,
+            isActive: true,
+            isDeleted: false,
+          },
+        })
+      : null;
 
     return {
       id: sec.id,
@@ -1105,9 +1212,27 @@ export class AcademicService {
       sectionTeacherName: assignment?.teacher ? assignment.teacher.name : null,
       classTeacherId: assignment ? assignment.teacherId : null,
       classTeacherName: assignment?.teacher ? assignment.teacher.name : null,
-      studentsCount: studentCount,
       createdAt: sec.createdAt,
       updatedAt: sec.updatedAt,
+
+      // Students access
+      studentsCount: studentCount,
+      studentsAccess: hasStudentsViewAccess,
+      studentsMessage: hasStudentsViewAccess
+        ? undefined
+        : 'You do not have permission to view student records for this section.',
+
+      // Timetable access
+      timetableAccess: hasTimetableAccess,
+      timetableMessage: hasTimetableAccess
+        ? undefined
+        : 'You do not have permission to view timetable for this section.',
+
+      // Fees access
+      feesAccess: hasFeesAccess,
+      feesMessage: hasFeesAccess
+        ? undefined
+        : 'You do not have permission to view fee structures for this section.',
     };
   }
 
@@ -1480,10 +1605,160 @@ export class AcademicService {
     });
   }
 
-  async getAcademicSessions(schoolId: string) {
-    return await this.dataSource.getRepository(AcademicSession).find({
-      where: { schoolId, isActive: true, isDeleted: false },
-      order: { startDate: 'DESC' },
+  // ACADEMIC SESSIONS CRUD
+  async createAcademicSession(
+    schoolId: string,
+    dto: CreateAcademicSessionDto,
+    userId: string,
+  ) {
+    // Check duplicate name for the school
+    const normalizedName = dto.name.replace(/\s+/g, '').toLowerCase();
+    const existingSessions = await this.sessionRepo.find({
+      where: { schoolId, isDeleted: false },
     });
+    const match = existingSessions.find(
+      (s) => s.name.replace(/\s+/g, '').toLowerCase() === normalizedName,
+    );
+    if (match) {
+      throw new BadRequestException(
+        `Academic session '${dto.name}' already exists for this school`,
+      );
+    }
+
+    // If marked as current or if this is the first session, unset isCurrent on all existing
+    const isFirstSession = existingSessions.length === 0;
+    const shouldBeCurrent = dto.isCurrent ?? isFirstSession;
+
+    if (shouldBeCurrent) {
+      await this.sessionRepo.update(
+        { schoolId, isDeleted: false },
+        { isCurrent: false },
+      );
+    }
+
+    const session = this.sessionRepo.create({
+      schoolId,
+      name: dto.name,
+      startDate: dto.startDate,
+      endDate: dto.endDate,
+      isCurrent: shouldBeCurrent,
+      isActive: dto.isActive !== false,
+      isDeleted: false,
+      createdById: userId,
+      updatedById: userId,
+    });
+
+    return await this.sessionRepo.save(session);
+  }
+
+  async getAcademicSessions(schoolId: string) {
+    return await this.sessionRepo.find({
+      where: { schoolId, isDeleted: false },
+      order: { startDate: 'DESC', createdAt: 'DESC' },
+    });
+  }
+
+  async getAcademicSessionDetails(schoolId: string, id: string) {
+    const session = await this.sessionRepo.findOne({
+      where: { id, schoolId, isDeleted: false },
+    });
+    if (!session) {
+      throw new NotFoundException('Academic session not found');
+    }
+    return session;
+  }
+
+  async updateAcademicSession(
+    schoolId: string,
+    id: string,
+    dto: UpdateAcademicSessionDto,
+    userId: string,
+  ) {
+    const session = await this.sessionRepo.findOne({
+      where: { id, schoolId, isDeleted: false },
+    });
+    if (!session) {
+      throw new NotFoundException('Academic session not found');
+    }
+
+    if (dto.name && dto.name !== session.name) {
+      const normalizedName = dto.name.replace(/\s+/g, '').toLowerCase();
+      const existingSessions = await this.sessionRepo.find({
+        where: { schoolId, isDeleted: false },
+      });
+      const match = existingSessions.find(
+        (s) =>
+          s.id !== id &&
+          s.name.replace(/\s+/g, '').toLowerCase() === normalizedName,
+      );
+      if (match) {
+        throw new BadRequestException(
+          `Academic session '${dto.name}' already exists for this school`,
+        );
+      }
+    }
+
+    if (dto.isCurrent === true) {
+      await this.sessionRepo.update(
+        { schoolId, isDeleted: false },
+        { isCurrent: false },
+      );
+    }
+
+    Object.assign(session, {
+      ...dto,
+      updatedById: userId,
+    });
+
+    return await this.sessionRepo.save(session);
+  }
+
+  async deleteAcademicSession(schoolId: string, id: string, userId: string) {
+    const session = await this.sessionRepo.findOne({
+      where: { id, schoolId, isDeleted: false },
+    });
+    if (!session) {
+      throw new NotFoundException('Academic session not found');
+    }
+
+    if (session.isCurrent) {
+      throw new BadRequestException(
+        'Cannot delete the current active academic session. Please set another session as current first.',
+      );
+    }
+
+    session.isDeleted = true;
+    session.isActive = false;
+    session.updatedById = userId;
+    await this.sessionRepo.save(session);
+
+    return {
+      success: true,
+      message: 'Academic session deleted successfully',
+    };
+  }
+
+  async setAsCurrentAcademicSession(
+    schoolId: string,
+    id: string,
+    userId: string,
+  ) {
+    const session = await this.sessionRepo.findOne({
+      where: { id, schoolId, isDeleted: false },
+    });
+    if (!session) {
+      throw new NotFoundException('Academic session not found');
+    }
+
+    // Unset all other sessions
+    await this.sessionRepo.update(
+      { schoolId, isDeleted: false },
+      { isCurrent: false },
+    );
+
+    session.isCurrent = true;
+    session.isActive = true;
+    session.updatedById = userId;
+    return await this.sessionRepo.save(session);
   }
 }

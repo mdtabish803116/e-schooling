@@ -336,10 +336,10 @@ export class SchoolsService {
 
     if (roleIds.length > 0) {
       const permissions = await this.dataSource.getRepository(SchoolRolePermission).createQueryBuilder('rp')
-        .innerJoinAndSelect(ModuleOperationPermission, 'p', 'p.id = rp.permissionId')
+        .innerJoinAndSelect(ModuleOperationPermission, 'p', 'p.id = rp.permission_id')
         .select(['rp.role_id as role_id', 'p.id as p_id', 'p.description as p_desc'])
         .where('rp.role_id IN (:...roleIds)', { roleIds })
-        .andWhere('rp.isActive = true')
+        .andWhere('rp.is_active = true')
         .getRawMany();
 
       permissions.forEach(p => {
@@ -415,15 +415,15 @@ export class SchoolsService {
         const userPermissions = await this.dataSource
           .getRepository(SchoolRolePermission)
           .createQueryBuilder('rp')
-          .innerJoin(ModuleOperationPermission, 'p', 'p.id = rp.permissionId')
-          .innerJoin(ModuleMaster, 'm', 'm.id = p.moduleId')
+          .innerJoin(ModuleOperationPermission, 'p', 'p.id = rp.permission_id')
+          .innerJoin(ModuleMaster, 'm', 'm.id = p.module_id')
           .select(['LOWER(m.code) as modulecode'])
-          .where('rp.roleId IN (:...userRoleIds)', { userRoleIds })
-          .andWhere('rp.isActive = true')
-          .andWhere('rp.isDeleted = false')
-          .andWhere('p.isActive = true')
-          .andWhere('p.isDeleted = false')
-          .andWhere('m.isActive = true')
+          .where('rp.role_id IN (:...userRoleIds)', { userRoleIds })
+          .andWhere('rp.is_active = true')
+          .andWhere('rp.is_delete = false')
+          .andWhere('p.is_active = true')
+          .andWhere('p.is_delete = false')
+          .andWhere('m.is_active = true')
           .getRawMany();
         userPermissions.forEach(p => permittedModuleCodes.add(p.modulecode.toLowerCase()));
       }

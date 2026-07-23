@@ -60,7 +60,7 @@ export class RBACService {
       .andWhere('m.is_delete = false')
       .andWhere('o.is_active = true')
       .andWhere('o.is_delete = false')
-      .andWhere("LOWER(o.code) = 'view'")
+      .andWhere("LOWER(o.code) IN ('view', 'view_assigned')")
       .getRawMany();
 
     return new Set(rows.map(r => r.moduleCode));
