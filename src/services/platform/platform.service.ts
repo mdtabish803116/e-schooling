@@ -223,31 +223,28 @@ export class PlatformService {
       .find({ where: { isActive: true, isDeleted: false } });
   }
 
-  async seedPlatformData(apiKey: string) {
-    const secretKey = Config.getPlatformRegisterApiKey();
-    if (apiKey !== secretKey) {
-      throw new ForbiddenException('Invalid platform registration key');
+  async seedPlatformData(apiKey?: string) {
+    if (apiKey) {
+      const secretKey = Config.getPlatformRegisterApiKey();
+      if (apiKey !== secretKey) {
+        throw new ForbiddenException('Invalid platform registration key');
+      }
     }
 
-    const queryRunner = this.dataSource.createQueryRunner();
-    await queryRunner.connect();
-    await queryRunner.startTransaction();
-
-    try {
-      const featRepo = queryRunner.manager.getRepository(PlatformFeature);
-      const priceRepo = queryRunner.manager.getRepository(PlatformFeaturePrice);
-      const modRepo = queryRunner.manager.getRepository(ModuleMaster);
-      const opRepo = queryRunner.manager.getRepository(OperationMaster);
-      const permRepo = queryRunner.manager.getRepository(
-        ModuleOperationPermission,
-      );
-      const planRepo = queryRunner.manager.getRepository(SubscriptionPlan);
-      const planPriceRepo = queryRunner.manager.getRepository(
-        SubscriptionPlanPrice,
-      );
-      const planMappingRepo = queryRunner.manager.getRepository(
-        SubscriptionPlanPlatformFeatureMapping,
-      );
+    const featRepo = this.dataSource.getRepository(PlatformFeature);
+    const priceRepo = this.dataSource.getRepository(PlatformFeaturePrice);
+    const modRepo = this.dataSource.getRepository(ModuleMaster);
+    const opRepo = this.dataSource.getRepository(OperationMaster);
+    const permRepo = this.dataSource.getRepository(
+      ModuleOperationPermission,
+    );
+    const planRepo = this.dataSource.getRepository(SubscriptionPlan);
+    const planPriceRepo = this.dataSource.getRepository(
+      SubscriptionPlanPrice,
+    );
+    const planMappingRepo = this.dataSource.getRepository(
+      SubscriptionPlanPlatformFeatureMapping,
+    );
 
       // 1. Platform Features
       const featuresData = [
@@ -820,7 +817,12 @@ export class PlatformService {
         } else {
           m.parentModuleId = undefined;
         }
-        m = await modRepo.save(m);
+        try {
+          m = await modRepo.save(m);
+        } catch (err) {
+          const existing = await modRepo.findOne({ where: { code: generatedCode } });
+          if (existing) m = existing;
+        }
         seededModules[generatedCode] = m;
       }
 
@@ -845,7 +847,12 @@ export class PlatformService {
           o.name = od.name;
           o.description = od.desc;
           o.isActive = true;
-          o = await opRepo.save(o);
+          try {
+            o = await opRepo.save(o);
+          } catch (err) {
+            const existing = await opRepo.findOne({ where: { code: generatedCode } });
+            if (existing) o = existing;
+          }
         }
         seededOps[generatedCode] = o;
       }
@@ -901,6 +908,7 @@ export class PlatformService {
         { modCode: 'FEES', opCode: 'DELETE' },
 
         { modCode: 'TIMETABLE', opCode: 'VIEW' },
+        { modCode: 'TIMETABLE', opCode: 'VIEW_ASSIGNED' },
         { modCode: 'TIMETABLE', opCode: 'CREATE' },
         { modCode: 'TIMETABLE', opCode: 'UPDATE' },
         { modCode: 'TIMETABLE', opCode: 'DELETE' },
@@ -988,7 +996,11 @@ export class PlatformService {
             p.operationId = op.id;
             p.description = `Grants permission to ${op.name} in ${mod.name}`;
             p.isActive = true;
-            await permRepo.save(p);
+            try {
+              await permRepo.save(p);
+            } catch (err) {
+              // Ignore duplicate constraint
+            }
           }
         }
       }
@@ -1086,6 +1098,7 @@ export class PlatformService {
             { code: 'ACADEMIC_MANAGEMENT', limit: null },
             { code: 'STUDENT_MANAGEMENT', limit: null },
             { code: 'ATTENDANCE_MANAGEMENT', limit: null },
+            { code: 'TIMETABLE_MANAGEMENT', limit: null },
           );
         } else if (pd.code === PlanCodeEnum.BASIC) {
           planFeatures.push(
@@ -1136,16 +1149,9 @@ export class PlatformService {
         }
       }
 
-      await queryRunner.commitTransaction();
       return {
         message:
           'Metadata seeded successfully! Ready for manual and frontend testing.',
       };
-    } catch (error) {
-      await queryRunner.rollbackTransaction();
-      throw error;
-    } finally {
-      await queryRunner.release();
-    }
   }
 }

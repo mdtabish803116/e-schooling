@@ -210,3 +210,22 @@ export enum FeatureBillingCycleEnum {
   ONE_TIME = 'ONE_TIME',
 }
 
+export enum TimetableStatusEnum {
+  DRAFT = 'Draft',
+  PUBLISHED = 'Published',
+  ARCHIVED = 'Archived',
+}
+
+export enum PeriodTypeEnum {
+  TEACHING = 'Teaching',
+  BREAK = 'Break',
+  ASSEMBLY = 'Assembly',
+}
+
+export enum TimetableEventTypeEnum {
+  CLASS = 'class',
+  EXAM = 'exam',
+  EVENT = 'event',
+  HOLIDAY = 'holiday',
+}
+
