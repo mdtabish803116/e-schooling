@@ -552,6 +552,16 @@ export class PlatformService {
           parentName: 'Academics',
           showInSidebar: true,
         },
+        {
+          name: 'Academic Years',
+          route: '/academics/academic-years',
+          icon: 'calendar_today',
+          displayOrder: 6.5,
+          isMenuGroup: false,
+          featureCode: 'ACADEMIC_MANAGEMENT',
+          parentName: 'Academics',
+          showInSidebar: true,
+        },
 
         {
           name: 'Students',
@@ -867,6 +877,10 @@ export class PlatformService {
         { modCode: 'ACADEMIC_MAPPING', opCode: 'CREATE' },
         { modCode: 'ACADEMIC_MAPPING', opCode: 'UPDATE' },
         { modCode: 'ACADEMIC_MAPPING', opCode: 'DELETE' },
+        { modCode: 'ACADEMIC_YEARS', opCode: 'VIEW' },
+        { modCode: 'ACADEMIC_YEARS', opCode: 'CREATE' },
+        { modCode: 'ACADEMIC_YEARS', opCode: 'UPDATE' },
+        { modCode: 'ACADEMIC_YEARS', opCode: 'DELETE' },
 
         { modCode: 'STUDENTS', opCode: 'VIEW' },
         { modCode: 'STUDENTS', opCode: 'CREATE' },
