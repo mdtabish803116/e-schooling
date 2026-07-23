@@ -211,12 +211,10 @@ export class PlatformService {
   }
 
   async listModules() {
-    return this.dataSource
-      .getRepository(ModuleMaster)
-      .find({
-        where: { isActive: true, isDeleted: false },
-        order: { displayOrder: 'ASC' },
-      });
+    return this.dataSource.getRepository(ModuleMaster).find({
+      where: { isActive: true, isDeleted: false },
+      order: { displayOrder: 'ASC' },
+    });
   }
 
   async listOperations() {
@@ -553,10 +551,10 @@ export class PlatformService {
           showInSidebar: true,
         },
         {
-          name: 'Academic Years',
-          route: '/academics/academic-years',
-          icon: 'calendar_today',
-          displayOrder: 6.5,
+          name: 'Academic Sessions',
+          route: '/academics/sessions',
+          icon: 'date_range',
+          displayOrder: 6,
           isMenuGroup: false,
           featureCode: 'ACADEMIC_MANAGEMENT',
           parentName: 'Academics',
@@ -627,7 +625,8 @@ export class PlatformService {
           name: 'Announcements',
           route: '/announcements',
           icon: 'bell',
-          description: 'Create, publish, and view school announcements and notices',
+          description:
+            'Create, publish, and view school announcements and notices',
           displayOrder: 16,
           isMenuGroup: false,
           featureCode: null,
@@ -638,7 +637,8 @@ export class PlatformService {
           name: 'Tasks',
           route: '/tasks',
           icon: 'check_square',
-          description: 'Assign, track, and complete operational tasks and checklists',
+          description:
+            'Assign, track, and complete operational tasks and checklists',
           displayOrder: 17,
           isMenuGroup: false,
           featureCode: null,
@@ -830,7 +830,10 @@ export class PlatformService {
         { name: 'create', desc: 'Allows creating new records' },
         { name: 'update', desc: 'Allows modifying existing records' },
         { name: 'delete', desc: 'Allows soft-deleting/revoking records' },
-        { name: 'view_assigned', desc: 'Allows viewing only assigned records (e.g. assigned classes/sections)' },
+        {
+          name: 'view_assigned',
+          desc: 'Allows viewing only assigned records (e.g. assigned classes/sections)',
+        },
       ];
       const seededOps: Record<string, OperationMaster> = {};
       for (const od of opsData) {
@@ -882,6 +885,11 @@ export class PlatformService {
         { modCode: 'ACADEMIC_YEARS', opCode: 'UPDATE' },
         { modCode: 'ACADEMIC_YEARS', opCode: 'DELETE' },
 
+        { modCode: 'ACADEMIC_SESSIONS', opCode: 'VIEW' },
+        { modCode: 'ACADEMIC_SESSIONS', opCode: 'CREATE' },
+        { modCode: 'ACADEMIC_SESSIONS', opCode: 'UPDATE' },
+        { modCode: 'ACADEMIC_SESSIONS', opCode: 'DELETE' },
+
         { modCode: 'STUDENTS', opCode: 'VIEW' },
         { modCode: 'STUDENTS', opCode: 'CREATE' },
         { modCode: 'STUDENTS', opCode: 'UPDATE' },
@@ -923,6 +931,16 @@ export class PlatformService {
         { modCode: 'SCHOOL_USERS', opCode: 'CREATE' },
         { modCode: 'SCHOOL_USERS', opCode: 'UPDATE' },
         { modCode: 'SCHOOL_USERS', opCode: 'DELETE' },
+
+        { modCode: 'STUDENT_CREDENTIALS', opCode: 'VIEW' },
+        { modCode: 'STUDENT_CREDENTIALS', opCode: 'CREATE' },
+        { modCode: 'STUDENT_CREDENTIALS', opCode: 'UPDATE' },
+        { modCode: 'STUDENT_CREDENTIALS', opCode: 'DELETE' },
+
+        { modCode: 'STAFF_CREDENTIALS', opCode: 'VIEW' },
+        { modCode: 'STAFF_CREDENTIALS', opCode: 'CREATE' },
+        { modCode: 'STAFF_CREDENTIALS', opCode: 'UPDATE' },
+        { modCode: 'STAFF_CREDENTIALS', opCode: 'DELETE' },
 
         { modCode: 'SUBSCRIPTION', opCode: 'VIEW' },
         { modCode: 'SUBSCRIPTION', opCode: 'CREATE' },
