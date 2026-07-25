@@ -11,6 +11,7 @@ import { Subject } from '../../models/entities/academic/subject.entity';
 import { ClassSectionSubject } from '../../models/entities/academic/class-section-subject.entity';
 import { TeacherSectionAssignment } from '../../models/entities/academic/teacher-section-assignment.entity';
 import { AcademicSession } from '../../models/entities/academic/academic-session.entity';
+import { Room } from '../../models/entities/academic/room.entity';
 import { CreateClassDto } from '../../interfaces/request/academic/create-class.dto';
 import { UpdateClassDto } from '../../interfaces/request/academic/update-class.dto';
 import { CreateSectionDto } from '../../interfaces/request/academic/create-section.dto';
@@ -18,6 +19,9 @@ import { UpdateSectionDto } from '../../interfaces/request/academic/update-secti
 import { UpdateSubjectDto } from '../../interfaces/request/academic/update-subject.dto';
 import { CreateAcademicSessionDto } from '../../interfaces/request/academic/create-academic-session.dto';
 import { UpdateAcademicSessionDto } from '../../interfaces/request/academic/update-academic-session.dto';
+import { CreateRoomDto } from '../../interfaces/request/academic/create-room.dto';
+import { UpdateRoomDto } from '../../interfaces/request/academic/update-room.dto';
+import { AllocateRoomDto } from '../../interfaces/request/academic/allocate-room.dto';
 import { TransferStudentsDto } from '../../interfaces/request/academic/transfer-students.dto';
 import { StudentEnrollment } from '../../models/entities/student/student-enrollment.entity';
 import { SectionTransferHistory } from '../../models/entities/student/section-transfer-history.entity';
@@ -39,6 +43,7 @@ export class AcademicService {
   private mappingRepo: Repository<ClassSectionSubject>;
   private assignmentRepo: Repository<TeacherSectionAssignment>;
   private sessionRepo: Repository<AcademicSession>;
+  private roomRepo: Repository<Room>;
 
   constructor(private dataSource: DataSource) {
     this.classRepo = this.dataSource.getRepository(Class);
@@ -49,6 +54,7 @@ export class AcademicService {
       TeacherSectionAssignment,
     );
     this.sessionRepo = this.dataSource.getRepository(AcademicSession);
+    this.roomRepo = this.dataSource.getRepository(Room);
   }
 
   private async checkModulePermission(
@@ -1760,5 +1766,189 @@ export class AcademicService {
     session.isActive = true;
     session.updatedById = userId;
     return await this.sessionRepo.save(session);
+  }
+
+  // ROOMS / CLASSROOMSPersisted DB Methods
+  async createRoom(schoolId: string, dto: CreateRoomDto, userId: string) {
+    const existing = await this.roomRepo.findOne({
+      where: { schoolId, name: dto.name, isDeleted: false },
+    });
+    if (existing) {
+      throw new BadRequestException(`Room "${dto.name}" already exists in this school.`);
+    }
+
+    const room = this.roomRepo.create({
+      schoolId,
+      name: dto.name,
+      block: dto.block || 'Main Block',
+      floor: dto.floor !== undefined ? dto.floor : 1,
+      capacity: dto.capacity !== undefined ? dto.capacity : 40,
+      equipment: dto.equipment || ['Smartboard', 'AC'],
+      assignedSectionId: null,
+      createdById: userId,
+      updatedById: userId,
+    });
+
+    return await this.roomRepo.save(room);
+  }
+
+  async getRooms(schoolId: string) {
+    try {
+      if (!this.roomRepo) {
+        this.roomRepo = this.dataSource.getRepository(Room);
+      }
+      const rooms = await this.roomRepo.find({
+        where: { schoolId, isDeleted: false },
+        order: { name: 'ASC' },
+      });
+
+      const sections = await this.sectionRepo.find({
+        where: { schoolId, isDeleted: false },
+        relations: ['class'],
+      });
+
+      const sectionMap = new Map(sections.map((s) => [String(s.id), s]));
+
+      return rooms.map((room) => {
+        let assignedSectionName: string | undefined = undefined;
+        let occupancy = 0;
+
+        if (room.assignedSectionId) {
+          const sec = sectionMap.get(String(room.assignedSectionId));
+          if (sec) {
+            assignedSectionName = `${sec.class?.name || 'Class'} - ${sec.name}`;
+            occupancy = sec.capacity || 30;
+          }
+        }
+
+        return {
+          ...room,
+          occupancy,
+          assignedSectionName,
+        };
+      });
+    } catch (e) {
+      console.error('Error fetching rooms from DB:', e);
+      return [];
+    }
+  }
+
+  async getRoomById(schoolId: string, roomId: string) {
+    const room = await this.roomRepo.findOne({
+      where: { id: roomId, schoolId, isDeleted: false },
+    });
+    if (!room) {
+      throw new NotFoundException('Room not found');
+    }
+    return room;
+  }
+
+  async updateRoom(schoolId: string, roomId: string, dto: UpdateRoomDto, userId: string) {
+    const room = await this.getRoomById(schoolId, roomId);
+
+    if (dto.name && dto.name !== room.name) {
+      const existing = await this.roomRepo.findOne({
+        where: { schoolId, name: dto.name, isDeleted: false },
+      });
+      if (existing && existing.id !== roomId) {
+        throw new BadRequestException(`Room "${dto.name}" already exists.`);
+      }
+    }
+
+    if (dto.name !== undefined) room.name = dto.name;
+    if (dto.block !== undefined) room.block = dto.block;
+    if (dto.floor !== undefined) room.floor = dto.floor;
+    if (dto.capacity !== undefined) room.capacity = dto.capacity;
+    if (dto.equipment !== undefined) room.equipment = dto.equipment;
+    if (dto.isActive !== undefined) room.isActive = dto.isActive;
+    room.updatedById = userId;
+
+    return await this.roomRepo.save(room);
+  }
+
+  async deleteRoom(schoolId: string, roomId: string, userId: string) {
+    const room = await this.getRoomById(schoolId, roomId);
+
+    // Unassign section if currently allocated
+    if (room.assignedSectionId) {
+      const sec = await this.sectionRepo.findOne({
+        where: { id: room.assignedSectionId, schoolId },
+      });
+      if (sec && sec.room === room.name) {
+        sec.room = '';
+        sec.updatedById = userId;
+        await this.sectionRepo.save(sec);
+      }
+    }
+
+    room.isDeleted = true;
+    room.assignedSectionId = null;
+    room.updatedById = userId;
+    await this.roomRepo.save(room);
+
+    return { success: true, message: 'Room deleted successfully' };
+  }
+
+  async allocateRoom(schoolId: string, roomId: string, dto: AllocateRoomDto, userId: string) {
+    const room = await this.getRoomById(schoolId, roomId);
+
+    if (!dto.sectionId) {
+      // UNASSIGN ROOM
+      if (room.assignedSectionId) {
+        const oldSec = await this.sectionRepo.findOne({
+          where: { id: room.assignedSectionId, schoolId },
+        });
+        if (oldSec) {
+          oldSec.room = '';
+          oldSec.updatedById = userId;
+          await this.sectionRepo.save(oldSec);
+        }
+      }
+
+      room.assignedSectionId = null;
+      room.updatedById = userId;
+      return await this.roomRepo.save(room);
+    }
+
+    // ASSIGN ROOM TO SECTION
+    const section = await this.sectionRepo.findOne({
+      where: { id: dto.sectionId, schoolId, isDeleted: false },
+      relations: ['class'],
+    });
+    if (!section) {
+      throw new NotFoundException('Section not found');
+    }
+
+    // Conflict Check 1: Check if target section is ALREADY allocated to another room
+    const existingRoomForSection = await this.roomRepo.findOne({
+      where: { schoolId, assignedSectionId: section.id, isDeleted: false },
+    });
+    if (existingRoomForSection && existingRoomForSection.id !== roomId) {
+      throw new BadRequestException(
+        `Section "${section.class?.name || 'Class'} - ${section.name}" is already allocated to Room "${existingRoomForSection.name}". Unassign it first.`,
+      );
+    }
+
+    // Conflict Check 2: If this room already had another section, clear that section's room property
+    if (room.assignedSectionId && room.assignedSectionId !== section.id) {
+      const prevSec = await this.sectionRepo.findOne({
+        where: { id: room.assignedSectionId, schoolId },
+      });
+      if (prevSec) {
+        prevSec.room = '';
+        prevSec.updatedById = userId;
+        await this.sectionRepo.save(prevSec);
+      }
+    }
+
+    // Perform allocation
+    room.assignedSectionId = section.id;
+    room.updatedById = userId;
+
+    section.room = room.name;
+    section.updatedById = userId;
+
+    await this.sectionRepo.save(section);
+    return await this.roomRepo.save(room);
   }
 }

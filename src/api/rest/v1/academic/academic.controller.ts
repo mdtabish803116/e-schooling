@@ -27,6 +27,9 @@ import { UpdateSubjectDto } from '../../../../interfaces/request/academic/update
 import { TransferStudentsDto } from '../../../../interfaces/request/academic/transfer-students.dto';
 import { CreateAcademicSessionDto } from '../../../../interfaces/request/academic/create-academic-session.dto';
 import { UpdateAcademicSessionDto } from '../../../../interfaces/request/academic/update-academic-session.dto';
+import { CreateRoomDto } from '../../../../interfaces/request/academic/create-room.dto';
+import { UpdateRoomDto } from '../../../../interfaces/request/academic/update-room.dto';
+import { AllocateRoomDto } from '../../../../interfaces/request/academic/allocate-room.dto';
 
 @ApiTags('Academic Management')
 @ApiBearerAuth('JWT-auth')
@@ -304,5 +307,69 @@ export class AcademicController {
     @CurrentUser() user: AuthContext,
   ) {
     return this.academicService.setAsCurrentAcademicSession(schoolId, id, user.id);
+  }
+
+  // ROOMS / CLASSROOMS
+  @ApiOperation({ summary: 'Create a new room' })
+  @Permission(ResourceEnum.CLASSES, ActionEnum.CREATE)
+  @Post('rooms')
+  async createRoom(
+    @Param('schoolId') schoolId: string,
+    @CurrentUser() user: AuthContext,
+    @Body() dto: CreateRoomDto,
+  ) {
+    return this.academicService.createRoom(schoolId, dto, user.id);
+  }
+
+  @ApiOperation({ summary: 'Get all rooms for a school' })
+  @Permission(ResourceEnum.CLASSES, ActionEnum.VIEW)
+  @Get('rooms')
+  async getRooms(@Param('schoolId') schoolId: string) {
+    return this.academicService.getRooms(schoolId);
+  }
+
+  @ApiOperation({ summary: 'Get room details by ID' })
+  @Permission(ResourceEnum.CLASSES, ActionEnum.VIEW)
+  @Get('rooms/:id')
+  async getRoomDetails(
+    @Param('schoolId') schoolId: string,
+    @Param('id') id: string,
+  ) {
+    return this.academicService.getRoomById(schoolId, id);
+  }
+
+  @ApiOperation({ summary: 'Update a room' })
+  @Permission(ResourceEnum.CLASSES, ActionEnum.UPDATE)
+  @Patch('rooms/:id')
+  async updateRoom(
+    @Param('schoolId') schoolId: string,
+    @Param('id') id: string,
+    @CurrentUser() user: AuthContext,
+    @Body() dto: UpdateRoomDto,
+  ) {
+    return this.academicService.updateRoom(schoolId, id, dto, user.id);
+  }
+
+  @ApiOperation({ summary: 'Delete a room' })
+  @Permission(ResourceEnum.CLASSES, ActionEnum.DELETE)
+  @Delete('rooms/:id')
+  async deleteRoom(
+    @Param('schoolId') schoolId: string,
+    @Param('id') id: string,
+    @CurrentUser() user: AuthContext,
+  ) {
+    return this.academicService.deleteRoom(schoolId, id, user.id);
+  }
+
+  @ApiOperation({ summary: 'Allocate or unassign a room to a section' })
+  @Permission(ResourceEnum.CLASSES, ActionEnum.UPDATE)
+  @Post('rooms/:id/allocate')
+  async allocateRoom(
+    @Param('schoolId') schoolId: string,
+    @Param('id') id: string,
+    @CurrentUser() user: AuthContext,
+    @Body() dto: AllocateRoomDto,
+  ) {
+    return this.academicService.allocateRoom(schoolId, id, dto, user.id);
   }
 }

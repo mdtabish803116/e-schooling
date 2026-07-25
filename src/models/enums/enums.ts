@@ -22,6 +22,7 @@ export enum ResourceEnum {
   ATTENDANCE = 'attendance',
   CLASSES = 'classes',
   SECTIONS = 'sections',
+  ROOMS = 'rooms',
   SUBJECTS = 'subjects',
   ACADEMIC_MAPPING = 'academic_mapping',
   ACADEMIC_SESSIONS = 'academic_sessions',
