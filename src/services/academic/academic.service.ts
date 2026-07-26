@@ -110,7 +110,9 @@ export class AcademicService {
     const classIds = [...new Set(assignments.map((a) => a.classId))];
     const sectionIds = [
       ...new Set(
-        assignments.filter((a) => a.sectionId !== null).map((a) => a.sectionId as string),
+        assignments
+          .filter((a) => a.sectionId !== null)
+          .map((a) => a.sectionId as string),
       ),
     ];
 
@@ -125,7 +127,13 @@ export class AcademicService {
     userId: string,
   ) {
     const existingAssignment = await this.assignmentRepo.findOne({
-      where: { classId, schoolId, sectionId: IsNull(), isClassTeacher: true, isDeleted: false },
+      where: {
+        classId,
+        schoolId,
+        sectionId: IsNull(),
+        isClassTeacher: true,
+        isDeleted: false,
+      },
     });
 
     if (teacherId) {
@@ -261,9 +269,15 @@ export class AcademicService {
             userId,
           );
           const activeSections = await this.sectionRepo.find({
-            where: { classId: saved.id, schoolId, isDeleted: false, isActive: true },
+            where: {
+              classId: saved.id,
+              schoolId,
+              isDeleted: false,
+              isActive: true,
+            },
           });
-          const hasOnlyDefaultSection = activeSections.length === 1 && activeSections[0].isDefault;
+          const hasOnlyDefaultSection =
+            activeSections.length === 1 && activeSections[0].isDefault;
           if (finalDefaultSectionId && hasOnlyDefaultSection) {
             await this.upsertSectionTeacher(
               schoolId,
@@ -342,11 +356,24 @@ export class AcademicService {
 
     // Filter by assigned classes if caller is not owner and only has view_assigned permission
     if (caller && caller.actorType !== 'school_owner') {
-      const hasFullView = await this.checkModulePermission(caller, schoolId, 'classes', 'view');
+      const hasFullView = await this.checkModulePermission(
+        caller,
+        schoolId,
+        'classes',
+        'view',
+      );
       if (!hasFullView) {
-        const hasViewAssigned = await this.checkModulePermission(caller, schoolId, 'classes', 'view_assigned');
+        const hasViewAssigned = await this.checkModulePermission(
+          caller,
+          schoolId,
+          'classes',
+          'view_assigned',
+        );
         if (hasViewAssigned) {
-          const { classIds } = await this.getAssignedClassesAndSections(schoolId, caller.id);
+          const { classIds } = await this.getAssignedClassesAndSections(
+            schoolId,
+            caller.id,
+          );
           classes = classes.filter((cls) => classIds.includes(cls.id));
         } else {
           return [];
@@ -391,7 +418,13 @@ export class AcademicService {
 
     // Fetch teacher assignments for the school (class-level)
     const assignments = await this.assignmentRepo.find({
-      where: { schoolId, sectionId: IsNull(), isClassTeacher: true, isActive: true, isDeleted: false },
+      where: {
+        schoolId,
+        sectionId: IsNull(),
+        isClassTeacher: true,
+        isActive: true,
+        isDeleted: false,
+      },
       relations: ['teacher'],
     });
 
@@ -507,9 +540,15 @@ export class AcademicService {
               userId,
             );
             const activeSections = await this.sectionRepo.find({
-              where: { classId: saved.id, schoolId, isDeleted: false, isActive: true },
+              where: {
+                classId: saved.id,
+                schoolId,
+                isDeleted: false,
+                isActive: true,
+              },
             });
-            const hasOnlyDefaultSection = activeSections.length === 1 && activeSections[0].isDefault;
+            const hasOnlyDefaultSection =
+              activeSections.length === 1 && activeSections[0].isDefault;
             if (finalDefaultSectionId && hasOnlyDefaultSection) {
               await this.upsertSectionTeacher(
                 schoolId,
@@ -546,9 +585,15 @@ export class AcademicService {
         userId,
       );
       const activeSections = await this.sectionRepo.find({
-        where: { classId: existing.id, schoolId, isDeleted: false, isActive: true },
+        where: {
+          classId: existing.id,
+          schoolId,
+          isDeleted: false,
+          isActive: true,
+        },
       });
-      const hasOnlyDefaultSection = activeSections.length === 1 && activeSections[0].isDefault;
+      const hasOnlyDefaultSection =
+        activeSections.length === 1 && activeSections[0].isDefault;
       if (hasOnlyDefaultSection) {
         // Find the default section to assign the teacher
         const defaultSection = await this.sectionRepo.findOne({
@@ -596,10 +641,18 @@ export class AcademicService {
       await this.sectionRepo.save(section);
     }
 
-    return { success: true, message: 'Class deleted and unlinked all sections' };
+    return {
+      success: true,
+      message: 'Class deleted and unlinked all sections',
+    };
   }
 
-  async assignClassTeacher(schoolId: string, classId: string, teacherId: string | null, userId: string) {
+  async assignClassTeacher(
+    schoolId: string,
+    classId: string,
+    teacherId: string | null,
+    userId: string,
+  ) {
     const cls = await this.classRepo.findOne({
       where: { id: classId, schoolId, isDeleted: false },
     });
@@ -609,13 +662,24 @@ export class AcademicService {
     return { success: true, teacherId };
   }
 
-  async assignSectionTeacher(schoolId: string, sectionId: string, teacherId: string | null, userId: string) {
+  async assignSectionTeacher(
+    schoolId: string,
+    sectionId: string,
+    teacherId: string | null,
+    userId: string,
+  ) {
     const sec = await this.sectionRepo.findOne({
       where: { id: sectionId, schoolId, isDeleted: false },
     });
     if (!sec) throw new NotFoundException('Section not found');
 
-    await this.upsertSectionTeacher(schoolId, sec.classId, sectionId, teacherId, userId);
+    await this.upsertSectionTeacher(
+      schoolId,
+      sec.classId,
+      sectionId,
+      teacherId,
+      userId,
+    );
     return { success: true, teacherId };
   }
 
@@ -626,11 +690,24 @@ export class AcademicService {
   ) {
     // Check permission restriction
     if (caller.actorType !== 'school_owner') {
-      const hasFullView = await this.checkModulePermission(caller, schoolId, 'classes', 'view');
+      const hasFullView = await this.checkModulePermission(
+        caller,
+        schoolId,
+        'classes',
+        'view',
+      );
       if (!hasFullView) {
-        const hasViewAssigned = await this.checkModulePermission(caller, schoolId, 'classes', 'view_assigned');
+        const hasViewAssigned = await this.checkModulePermission(
+          caller,
+          schoolId,
+          'classes',
+          'view_assigned',
+        );
         if (hasViewAssigned) {
-          const { classIds } = await this.getAssignedClassesAndSections(schoolId, caller.id);
+          const { classIds } = await this.getAssignedClassesAndSections(
+            schoolId,
+            caller.id,
+          );
           if (!classIds.includes(classId)) {
             throw new ForbiddenException('Access to this class is denied');
           }
@@ -1071,11 +1148,22 @@ export class AcademicService {
 
     // Filter by assigned sections if caller is not owner and only has view_assigned permission
     if (caller && caller.actorType !== 'school_owner') {
-      const hasFullView = await this.checkModulePermission(caller, schoolId, 'sections', 'view');
+      const hasFullView = await this.checkModulePermission(
+        caller,
+        schoolId,
+        'sections',
+        'view',
+      );
       if (!hasFullView) {
-        const hasViewAssigned = await this.checkModulePermission(caller, schoolId, 'sections', 'view_assigned');
+        const hasViewAssigned = await this.checkModulePermission(
+          caller,
+          schoolId,
+          'sections',
+          'view_assigned',
+        );
         if (hasViewAssigned) {
-          const { classIds, sectionIds } = await this.getAssignedClassesAndSections(schoolId, caller.id);
+          const { classIds, sectionIds } =
+            await this.getAssignedClassesAndSections(schoolId, caller.id);
           sections = sections.filter(
             (s) => sectionIds.includes(s.id) || classIds.includes(s.classId),
           );
@@ -1129,9 +1217,11 @@ export class AcademicService {
       const stCount = studentCountMap.get(s.id) || 0;
       return {
         ...s,
-        status: s.isActive ? "ACTIVE" : "INACTIVE",
+        status: s.isActive ? 'ACTIVE' : 'INACTIVE',
         sectionTeacherId: assignment ? assignment.teacherId : null,
-        sectionTeacherName: assignment?.teacher ? assignment.teacher.name : null,
+        sectionTeacherName: assignment?.teacher
+          ? assignment.teacher.name
+          : null,
         classTeacherId: assignment ? assignment.teacherId : null,
         classTeacherName: assignment?.teacher ? assignment.teacher.name : null,
         studentsCount: stCount,
@@ -1153,12 +1243,26 @@ export class AcademicService {
     }
 
     if (caller.actorType !== 'school_owner') {
-      const hasFullView = await this.checkModulePermission(caller, schoolId, 'sections', 'view');
+      const hasFullView = await this.checkModulePermission(
+        caller,
+        schoolId,
+        'sections',
+        'view',
+      );
       if (!hasFullView) {
-        const hasViewAssigned = await this.checkModulePermission(caller, schoolId, 'sections', 'view_assigned');
+        const hasViewAssigned = await this.checkModulePermission(
+          caller,
+          schoolId,
+          'sections',
+          'view_assigned',
+        );
         if (hasViewAssigned) {
-          const { classIds, sectionIds } = await this.getAssignedClassesAndSections(schoolId, caller.id);
-          if (!sectionIds.includes(sectionId) && !classIds.includes(sec.classId)) {
+          const { classIds, sectionIds } =
+            await this.getAssignedClassesAndSections(schoolId, caller.id);
+          if (
+            !sectionIds.includes(sectionId) &&
+            !classIds.includes(sec.classId)
+          ) {
             throw new ForbiddenException('Access to this section is denied');
           }
         } else {
@@ -1168,7 +1272,12 @@ export class AcademicService {
     }
 
     const assignment = await this.assignmentRepo.findOne({
-      where: { sectionId: sec.id, isClassTeacher: false, isDeleted: false, isActive: true },
+      where: {
+        sectionId: sec.id,
+        isClassTeacher: false,
+        isDeleted: false,
+        isActive: true,
+      },
       relations: ['teacher'],
     });
 
@@ -1241,7 +1350,6 @@ export class AcademicService {
         : 'You do not have permission to view fee structures for this section.',
     };
   }
-
 
   async updateSection(
     schoolId: string,
@@ -1341,7 +1449,9 @@ export class AcademicService {
     if (!existing) throw new NotFoundException('Section not found');
 
     if (existing.isDefault) {
-      throw new BadRequestException('Cannot delete the default section of a class');
+      throw new BadRequestException(
+        'Cannot delete the default section of a class',
+      );
     }
 
     existing.isDeleted = true;
@@ -1790,7 +1900,9 @@ export class AcademicService {
       where: { schoolId, name: dto.name, isDeleted: false },
     });
     if (existing) {
-      throw new BadRequestException(`Room "${dto.name}" already exists in this school.`);
+      throw new BadRequestException(
+        `Room "${dto.name}" already exists in this school.`,
+      );
     }
 
     const room = this.roomRepo.create({
@@ -1859,7 +1971,12 @@ export class AcademicService {
     return room;
   }
 
-  async updateRoom(schoolId: string, roomId: string, dto: UpdateRoomDto, userId: string) {
+  async updateRoom(
+    schoolId: string,
+    roomId: string,
+    dto: UpdateRoomDto,
+    userId: string,
+  ) {
     const room = await this.getRoomById(schoolId, roomId);
 
     if (dto.name && dto.name !== room.name) {
@@ -1905,7 +2022,12 @@ export class AcademicService {
     return { success: true, message: 'Room deleted successfully' };
   }
 
-  async allocateRoom(schoolId: string, roomId: string, dto: AllocateRoomDto, userId: string) {
+  async allocateRoom(
+    schoolId: string,
+    roomId: string,
+    dto: AllocateRoomDto,
+    userId: string,
+  ) {
     const room = await this.getRoomById(schoolId, roomId);
 
     if (!dto.sectionId) {
