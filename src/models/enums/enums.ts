@@ -158,7 +158,9 @@ export enum JobTypeEnum {
   SEND_WHATSAPP = 'send_whatsapp',
   SEND_EMAIL = 'send_email',
   DAILY_CLEANUP = 'daily_cleanup',
-  EXPORT_EXCEL = 'export_excel'
+  EXPORT_EXCEL = 'export_excel',
+  GENERIC_IMPORT = 'generic_import',
+  GENERIC_EXPORT = 'generic_export',
 }
 
 export enum JobStatusEnum {

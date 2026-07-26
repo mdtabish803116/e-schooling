@@ -188,4 +188,64 @@ export class StudentAdmissionsController {
   ) {
     return this.admissionsService.seedStudentsForSchool(schoolId);
   }
+
+  @ApiOperation({ summary: 'Queue bulk student CSV import via BullMQ Redis worker' })
+  @Post('import-csv')
+  @Permission(ResourceEnum.STUDENTS, ActionEnum.CREATE)
+  @Feature('STUDENT_MANAGEMENT')
+  async importStudentsCsv(
+    @CurrentUser() caller: AuthContext,
+    @Param('schoolId') schoolId: string,
+    @Body() body: { rows: any[] },
+  ) {
+    const job = await this.queueProducerService.addJob({
+      queueName: QueueNames.IMPORTS_EXPORTS,
+      jobType: JobTypeEnum.STUDENT_IMPORT,
+      payload: {
+        schoolId,
+        caller,
+        rows: body.rows || [],
+      },
+      tenantId: schoolId,
+      createdBy: caller.id,
+    });
+
+    return {
+      message: 'Bulk student CSV import job successfully queued in background worker mode.',
+      jobId: job.jobId,
+      status: job.status,
+    };
+  }
+
+  @ApiOperation({ summary: 'Queue bulk student CSV export via BullMQ Redis worker' })
+  @Post('export-csv')
+  @Permission(ResourceEnum.STUDENTS, ActionEnum.VIEW)
+  @Feature('STUDENT_MANAGEMENT')
+  async exportStudentsCsv(
+    @CurrentUser() caller: AuthContext,
+    @Param('schoolId') schoolId: string,
+    @Query('classId') classId?: string,
+    @Query('sectionId') sectionId?: string,
+    @Query('search') search?: string,
+  ) {
+    const job = await this.queueProducerService.addJob({
+      queueName: QueueNames.IMPORTS_EXPORTS,
+      jobType: JobTypeEnum.EXPORT_EXCEL,
+      payload: {
+        schoolId,
+        caller,
+        classId,
+        sectionId,
+        search,
+      },
+      tenantId: schoolId,
+      createdBy: caller.id,
+    });
+
+    return {
+      message: 'Bulk student CSV export job successfully queued in background worker mode.',
+      jobId: job.jobId,
+      status: job.status,
+    };
+  }
 }
