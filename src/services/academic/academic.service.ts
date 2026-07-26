@@ -1768,6 +1768,22 @@ export class AcademicService {
     return await this.sessionRepo.save(session);
   }
 
+  async getCurrentAcademicSession(schoolId: string) {
+    let session = await this.sessionRepo.findOne({
+      where: { schoolId, isCurrent: true, isDeleted: false },
+    });
+    if (!session) {
+      session = await this.sessionRepo.findOne({
+        where: { schoolId, isDeleted: false },
+        order: { startDate: 'DESC', createdAt: 'DESC' },
+      });
+    }
+    if (!session) {
+      throw new NotFoundException('No active academic session found');
+    }
+    return session;
+  }
+
   // ROOMS / CLASSROOMSPersisted DB Methods
   async createRoom(schoolId: string, dto: CreateRoomDto, userId: string) {
     const existing = await this.roomRepo.findOne({

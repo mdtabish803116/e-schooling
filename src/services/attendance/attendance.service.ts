@@ -8,9 +8,13 @@ import { AttendanceSession } from '../../models/entities/attendance/attendance-s
 import { AttendanceRecord } from '../../models/entities/attendance/attendance-record.entity';
 import { AttendanceLock } from '../../models/entities/attendance/attendance-lock.entity';
 import { Class } from '../../models/entities/academic/class.entity';
+import { Section } from '../../models/entities/academic/section.entity';
+import { TeacherSectionAssignment } from '../../models/entities/academic/teacher-section-assignment.entity';
 import { SchoolOwnerMember } from '../../models/entities/school/school-owner-member.entity';
+import { SchoolUser } from '../../models/entities/school/school-user.entity';
 import { Student } from '../../models/entities/student/student.entity';
 import { StudentEnrollment } from '../../models/entities/student/student-enrollment.entity';
+import { AttendanceStatusEnum } from '../../models/enums/enums';
 
 @Injectable()
 export class AttendanceService implements OnModuleInit {
@@ -38,196 +42,79 @@ export class AttendanceService implements OnModuleInit {
     }
   }
 
+  private parseDateFlexible(input?: string): string {
+    if (!input || input.trim() === '') {
+      return new Date().toISOString().split('T')[0];
+    }
+    const clean = input.trim();
+
+    // YYYY-MM-DD
+    if (/^\d{4}-\d{2}-\d{2}$/.test(clean)) return clean;
+
+    // DD-MM-YYYY
+    if (/^\d{2}-\d{2}-\d{4}$/.test(clean)) {
+      const [d, m, y] = clean.split('-');
+      return `${y}-${m}-${d}`;
+    }
+
+    // YYYYMMDD (8 digits)
+    if (/^\d{8}$/.test(clean) && Number(clean.substring(0, 4)) > 1900) {
+      const y = clean.substring(0, 4);
+      const m = clean.substring(4, 6);
+      const d = clean.substring(6, 8);
+      return `${y}-${m}-${d}`;
+    }
+
+    // DDMMYYYY (8 digits)
+    if (/^\d{8}$/.test(clean)) {
+      const d = clean.substring(0, 2);
+      const m = clean.substring(2, 4);
+      const y = clean.substring(4, 8);
+      return `${y}-${m}-${d}`;
+    }
+
+    return clean;
+  }
+
   async assertDateNotLocked(schoolId: string, date: string): Promise<void> {
     const lock = await this.dataSource.getRepository(AttendanceLock).findOne({
       where: { schoolId, date, isLocked: true },
     });
     if (lock) {
-      const lockedBy = lock.lockedBy || 'Admin';
-      throw new BadRequestException(
-        `Attendance for ${date} is locked by ${lockedBy}. Please ask an administrator to unlock this attendance date before taking or updating attendance.`,
-      );
+      throw {
+        statusCode: 423,
+        error: 'Locked Date',
+        message: `Attendance for date ${date} is locked by ${lock.lockedBy || 'admin'}. Modifications disabled.`,
+      };
     }
   }
 
-  /**
-   * Helper to verify access permissions for school owners and users.
-   */
   private async assertAccessToSchool(caller: AuthContext, schoolId: string): Promise<void> {
-    if (caller.actorType === 'school_owner') {
-      const membership = await this.dataSource
-        .getRepository(SchoolOwnerMember)
-        .findOne({ where: { schoolOwnerId: caller.id, schoolId } });
-      if (!membership) {
-        throw new ForbiddenException('You do not have access to this school');
-      }
-    } else if (caller.actorType === 'school_user') {
-      if (String(caller.schoolId) !== String(schoolId)) {
-        throw new ForbiddenException('You do not belong to this school');
-      }
-    } else {
-      throw new ForbiddenException('Access denied');
-    }
-  }
-
-  /**
-   * Take bulk attendance inside a secure, atomic transaction.
-   */
-  async takeAttendance(caller: AuthContext, schoolId: string, dto: TakeAttendanceDto) {
-    await this.assertAccessToSchool(caller, schoolId);
-    await this.assertDateNotLocked(schoolId, dto.date);
-
-    // 1. Verify Class exists and check Daily Attendance Sessions limit
-    const parentClass = await this.dataSource.getRepository(Class).findOne({
-      where: { id: dto.classId, schoolId, isDeleted: false },
-    });
-    if (!parentClass) {
-      throw new NotFoundException('Class not found');
+    if (caller.roles?.includes('PLATFORM_OWNER') || caller.roles?.includes('SUPER_ADMIN')) {
+      return;
     }
 
-    if (dto.sessionSlot > parentClass.dailyAttendanceLimit) {
-      throw new BadRequestException(
-        `Requested session slot ${dto.sessionSlot} exceeds the class daily attendance limit of ${parentClass.dailyAttendanceLimit}`,
-      );
-    }
-
-    // 2. Prevent duplicate submissions for the same date/slot/class/section
-    const existingSession = await this.dataSource.getRepository(AttendanceSession).findOne({
-      where: {
-        schoolId,
-        classId: dto.classId,
-        sectionId: dto.sectionId,
-        date: dto.date,
-        sessionSlot: dto.sessionSlot,
-        isDeleted: false,
-      },
-    });
-    if (existingSession) {
-      throw new BadRequestException(
-        `Attendance has already been taken for this class, section, date, and slot (${dto.sessionSlot}). Use update attendance to modify it.`,
-      );
-    }
-
-    const queryRunner = this.dataSource.createQueryRunner();
-    await queryRunner.connect();
-    await queryRunner.startTransaction();
-
-    try {
-      // 3. Create & save the Attendance Session
-      const session = queryRunner.manager.create(AttendanceSession, {
-        schoolId,
-        academicSessionId: dto.academicSessionId,
-        classId: dto.classId,
-        sectionId: dto.sectionId,
-        date: dto.date,
-        sessionSlot: dto.sessionSlot,
-        takenBy: caller.id,
-        createdById: caller.id,
-        updatedById: caller.id,
-        isActive: true,
-        isDeleted: false,
+    if (caller.actorType === 'school_owner' || caller.roles?.includes('SCHOOL_OWNER') || caller.roles?.includes('owner')) {
+      const isMember = await this.dataSource.getRepository(SchoolOwnerMember).exist({
+        where: { schoolOwnerId: caller.id, schoolId, isDeleted: false },
       });
-
-      const savedSession = await queryRunner.manager.save(AttendanceSession, session);
-
-      // 4. Create & save granular student records
-      const recordsToInsert = dto.records.map((rec) => {
-        return queryRunner.manager.create(AttendanceRecord, {
-          sessionId: savedSession.id,
-          studentEnrollmentId: rec.studentEnrollmentId,
-          attendanceMark: rec.attendanceMark,
-          remarks: rec.remarks || '',
-          createdById: caller.id,
-          updatedById: caller.id,
-          isActive: true,
-          isDeleted: false,
-        });
-      });
-
-      const savedRecords = await queryRunner.manager.save(AttendanceRecord, recordsToInsert);
-
-      await queryRunner.commitTransaction();
-
-      return {
-        message: 'Attendance submitted successfully',
-        sessionId: savedSession.id,
-        recordsSaved: savedRecords.length,
-      };
-    } catch (error) {
-      await queryRunner.rollbackTransaction();
-      throw error;
-    } finally {
-      await queryRunner.release();
-    }
-  }
-
-  /**
-   * Bulk update student attendance selectively inside a transaction.
-   */
-  async updateAttendance(caller: AuthContext, schoolId: string, sessionId: string, dto: UpdateAttendanceDto) {
-    await this.assertAccessToSchool(caller, schoolId);
-
-    // 1. Confirm session exists
-    const session = await this.dataSource.getRepository(AttendanceSession).findOne({
-      where: { id: sessionId, schoolId, isDeleted: false },
-    });
-    if (!session) {
-      throw new NotFoundException('Attendance session not found');
-    }
-
-    await this.assertDateNotLocked(schoolId, session.date);
-
-    const queryRunner = this.dataSource.createQueryRunner();
-    await queryRunner.connect();
-    await queryRunner.startTransaction();
-
-    try {
-      const recordRepo = queryRunner.manager.getRepository(AttendanceRecord);
-      const updatedCount = dto.records.length;
-
-      // 2. Selectively update specific records
-      for (const rec of dto.records) {
-        const existingRecord = await recordRepo.findOne({
-          where: { id: rec.id, sessionId, isDeleted: false },
-        });
-
-        if (!existingRecord) {
-          throw new NotFoundException(`Attendance record with ID ${rec.id} not found in this session`);
-        }
-
-        if (rec.attendanceMark !== undefined) {
-          existingRecord.attendanceMark = rec.attendanceMark;
-        }
-        if (rec.remarks !== undefined) {
-          existingRecord.remarks = rec.remarks;
-        }
-        if (rec.isActive !== undefined) {
-          existingRecord.isActive = rec.isActive;
-        }
-
-        existingRecord.updatedById = caller.id;
-        await recordRepo.save(existingRecord);
+      if (!isMember) {
+        throw new ForbiddenException('Forbidden: You do not own or manage this school.');
       }
-
-      await queryRunner.commitTransaction();
-
-      return {
-        message: 'Attendance updated successfully',
-        sessionId,
-        recordsUpdatedCount: updatedCount,
-      };
-    } catch (error) {
-      await queryRunner.rollbackTransaction();
-      throw error;
-    } finally {
-      await queryRunner.release();
+      return;
     }
+
+    if (caller.schoolId && String(caller.schoolId) === String(schoolId)) {
+      return;
+    }
+
+    throw new ForbiddenException('Forbidden: You do not have access to this school domain.');
   }
 
   async getAttendanceSession(
     caller: AuthContext,
     schoolId: string,
-    query: { classId: string; sectionId: string; date: string; sessionSlot: number }
+    query: { classId: string; sectionId: string; date: string; sessionSlot?: number },
   ) {
     await this.assertAccessToSchool(caller, schoolId);
 
@@ -237,7 +124,7 @@ export class AttendanceService implements OnModuleInit {
         classId: query.classId,
         sectionId: query.sectionId,
         date: query.date,
-        sessionSlot: Number(query.sessionSlot),
+        sessionSlot: query.sessionSlot || 1,
         isDeleted: false,
       },
     });
@@ -247,47 +134,156 @@ export class AttendanceService implements OnModuleInit {
     }
 
     const records = await this.dataSource.getRepository(AttendanceRecord).find({
-      where: {
-        sessionId: session.id,
-        isDeleted: false,
-      },
+      where: { sessionId: session.id, isDeleted: false },
     });
 
     return {
       session,
-      records,
+      records: records.map((r) => ({
+        id: r.id,
+        sessionId: r.sessionId,
+        studentEnrollmentId: r.studentEnrollmentId,
+        studentId: r.studentEnrollmentId,
+        attendanceMark: r.attendanceMark,
+        status: String(r.attendanceMark).toUpperCase(),
+        remarks: r.remarks,
+      })),
+    };
+  }
+
+  async takeAttendance(caller: AuthContext, schoolId: string, dto: TakeAttendanceDto) {
+    await this.assertAccessToSchool(caller, schoolId);
+    await this.assertDateNotLocked(schoolId, dto.date);
+
+    const sessionRepo = this.dataSource.getRepository(AttendanceSession);
+    const recordRepo = this.dataSource.getRepository(AttendanceRecord);
+
+    let session = await sessionRepo.findOne({
+      where: {
+        schoolId,
+        classId: dto.classId,
+        sectionId: dto.sectionId,
+        date: dto.date,
+        sessionSlot: dto.sessionSlot || 1,
+        isDeleted: false,
+      },
+    });
+
+    if (!session) {
+      session = sessionRepo.create({
+        schoolId,
+        classId: dto.classId,
+        sectionId: dto.sectionId,
+        academicSessionId: dto.academicSessionId || undefined,
+        date: dto.date,
+        sessionSlot: dto.sessionSlot || 1,
+        takenBy: caller.id,
+        createdById: caller.id,
+      });
+      session = await sessionRepo.save(session);
+    } else {
+      session.takenBy = caller.id;
+      session.updatedById = caller.id;
+      session = await sessionRepo.save(session);
+    }
+
+    for (const item of dto.records) {
+      let rec = await recordRepo.findOne({
+        where: { sessionId: session.id, studentEnrollmentId: item.studentEnrollmentId, isDeleted: false },
+      });
+
+      if (!rec) {
+        rec = recordRepo.create({
+          sessionId: session.id,
+          studentEnrollmentId: item.studentEnrollmentId,
+          attendanceMark: item.attendanceMark,
+          remarks: item.remarks || undefined,
+          createdById: caller.id,
+        });
+      } else {
+        rec.attendanceMark = item.attendanceMark;
+        if (item.remarks !== undefined) rec.remarks = item.remarks;
+        rec.updatedById = caller.id;
+      }
+      await recordRepo.save(rec);
+    }
+
+    return {
+      message: 'Attendance recorded successfully',
+      sessionId: session.id,
+      date: dto.date,
+      recordsCount: dto.records.length,
+    };
+  }
+
+  async updateAttendance(
+    caller: AuthContext,
+    schoolId: string,
+    sessionId: string,
+    dto: UpdateAttendanceDto,
+  ) {
+    await this.assertAccessToSchool(caller, schoolId);
+
+    const session = await this.dataSource.getRepository(AttendanceSession).findOne({
+      where: { id: sessionId, schoolId, isDeleted: false },
+    });
+
+    if (!session) {
+      throw new NotFoundException(`Attendance session with ID ${sessionId} not found.`);
+    }
+
+    await this.assertDateNotLocked(schoolId, session.date);
+
+    const recordRepo = this.dataSource.getRepository(AttendanceRecord);
+
+    for (const item of dto.records) {
+      const rec = await recordRepo.findOne({
+        where: { id: item.id, sessionId: session.id, isDeleted: false },
+      });
+
+      if (rec) {
+        if (item.attendanceMark) {
+          rec.attendanceMark = item.attendanceMark;
+        }
+        if (item.remarks !== undefined) {
+          rec.remarks = item.remarks;
+        }
+        rec.updatedById = caller.id;
+        await recordRepo.save(rec);
+      }
+    }
+
+    return {
+      message: 'Attendance records updated successfully',
+      sessionId: session.id,
     };
   }
 
   async getAttendanceStudents(
     caller: AuthContext,
     schoolId: string,
-    query: { classId?: string; sectionId?: string },
+    filter: { classId?: string; sectionId?: string },
   ) {
     await this.assertAccessToSchool(caller, schoolId);
 
-    const studentRepo = this.dataSource.getRepository(Student);
-
-    const qb = studentRepo.createQueryBuilder('student')
+    const qb = this.dataSource
+      .getRepository(Student)
+      .createQueryBuilder('student')
+      .innerJoin(
+        StudentEnrollment,
+        'enrollment',
+        'enrollment.studentId = student.id AND enrollment.isDeleted = false AND enrollment.status = :activeStatus',
+        { activeStatus: 'ACTIVE' },
+      )
       .where('student.schoolId = :schoolId', { schoolId })
-      .andWhere('student.isDeleted = :isDeleted', { isDeleted: false });
+      .andWhere('student.isDeleted = false')
+      .andWhere('student.isActive = true');
 
-    if (query.classId || query.sectionId) {
-      qb.innerJoin(
-        StudentEnrollment,
-        'enrollment',
-        'enrollment.studentId = student.id AND enrollment.isCurrent = :isCurrent AND enrollment.isDeleted = :enrollmentDeleted',
-        { isCurrent: true, enrollmentDeleted: false },
-      );
-      if (query.classId) qb.andWhere('enrollment.classId = :classId', { classId: query.classId });
-      if (query.sectionId) qb.andWhere('enrollment.sectionId = :sectionId', { sectionId: query.sectionId });
-    } else {
-      qb.leftJoin(
-        StudentEnrollment,
-        'enrollment',
-        'enrollment.studentId = student.id AND enrollment.isCurrent = :isCurrent AND enrollment.isDeleted = :enrollmentDeleted',
-        { isCurrent: true, enrollmentDeleted: false },
-      );
+    if (filter.classId) {
+      qb.andWhere('enrollment.classId = :classId', { classId: filter.classId });
+    }
+    if (filter.sectionId) {
+      qb.andWhere('enrollment.sectionId = :sectionId', { sectionId: filter.sectionId });
     }
 
     qb.select([
@@ -295,8 +291,8 @@ export class AttendanceService implements OnModuleInit {
       'student.id AS "studentId"',
       'student.firstName AS "firstName"',
       'student.lastName AS "lastName"',
-      'student.admissionNumber AS "admissionNumber"',
       'student.studentCode AS "studentCode"',
+      'student.admissionNumber AS "admissionNumber"',
       'student.profilePicUrl AS "profilePicUrl"',
       'enrollment.id AS "studentEnrollmentId"',
       'enrollment.rollNumber AS "rollNumber"',
@@ -327,7 +323,7 @@ export class AttendanceService implements OnModuleInit {
         classId: s.classId ? String(s.classId) : null,
         sectionId: s.sectionId ? String(s.sectionId) : null,
         status: 'PRESENT',
-        attendanceMark: 'present',
+        attendanceMark: AttendanceStatusEnum.PRESENT,
       };
     });
   }
@@ -335,7 +331,7 @@ export class AttendanceService implements OnModuleInit {
   async getAttendanceDashboard(caller: AuthContext, schoolId: string, date?: string) {
     await this.assertAccessToSchool(caller, schoolId);
 
-    const targetDate = date || new Date().toISOString().split('T')[0];
+    const targetDate = this.parseDateFlexible(date);
 
     const studentCount = await this.dataSource.getRepository(Student).count({
       where: { schoolId, isDeleted: false, isActive: true },
@@ -344,6 +340,8 @@ export class AttendanceService implements OnModuleInit {
     const sessionsToday = await this.dataSource.getRepository(AttendanceSession).find({
       where: { schoolId, date: targetDate, isDeleted: false },
     });
+
+    const markedSectionIds = new Set(sessionsToday.map((s) => String(s.sectionId)));
 
     const sessionIds = sessionsToday.map((s) => s.id);
     let recordsToday: AttendanceRecord[] = [];
@@ -361,6 +359,39 @@ export class AttendanceService implements OnModuleInit {
     const totalMarked = recordsToday.length || 0;
     const rate = totalMarked > 0 ? Math.round((presentCount / totalMarked) * 100) : 100;
 
+    // Pending Sections Calculation
+    const sections = await this.dataSource.getRepository(Section).find({
+      where: { schoolId, isDeleted: false, isActive: true },
+      relations: ['class'],
+    });
+
+    const teacherAssignments = await this.dataSource.getRepository(TeacherSectionAssignment).find({
+      where: { schoolId, isDeleted: false, isActive: true },
+      relations: ['teacher'],
+    });
+
+    const pendingSections = sections
+      .filter((sec) => !markedSectionIds.has(String(sec.id)))
+      .map((sec) => {
+        const assignment = teacherAssignments.find(
+          (ta) => String(ta.sectionId) === String(sec.id) || String(ta.classId) === String(sec.classId),
+        );
+
+        const teacherName = assignment?.teacher?.name || 'Unassigned Teacher';
+        const teacherPhone = assignment?.teacher?.phone || 'N/A';
+
+        return {
+          sectionId: String(sec.id),
+          sectionName: sec.name || 'A',
+          classId: String(sec.classId || ''),
+          className: sec.class?.name || `Class ${sec.classId}`,
+          classTeacherId: assignment?.teacherId ? String(assignment.teacherId) : null,
+          classTeacherName: teacherName,
+          classTeacherPhone: teacherPhone,
+          status: 'PENDING',
+        };
+      });
+
     return {
       date: targetDate,
       totalStudents: studentCount,
@@ -369,14 +400,18 @@ export class AttendanceService implements OnModuleInit {
       lateStudents: lateCount,
       leaveStudents: leaveCount,
       attendanceRate: rate,
+      pendingSectionsCount: pendingSections.length,
+      pendingSections,
       summary: {
         date: targetDate,
         totalStudents: studentCount,
         presentStudents: presentCount,
         absentStudents: absentCount,
         lateStudents: lateCount,
-        leaveStudents: leaveCount,
+        leaveCount: leaveCount,
         attendanceRate: rate,
+        pendingSectionsCount: pendingSections.length,
+        pendingSections,
       },
     };
   }
@@ -449,13 +484,11 @@ export class AttendanceService implements OnModuleInit {
       lock.isLocked = true;
       if (dto.lockedBy) lock.lockedBy = dto.lockedBy;
     }
-
     await lockRepo.save(lock);
+
     return {
-      message: `Attendance for ${dto.date} successfully locked`,
-      date: dto.date,
-      isLocked: true,
-      lockedBy: lock.lockedBy,
+      message: `Attendance locked successfully for ${dto.date}`,
+      lock,
     };
   }
 
@@ -473,25 +506,16 @@ export class AttendanceService implements OnModuleInit {
     }
 
     return {
-      message: `Attendance for ${dto.date} successfully unlocked`,
+      message: `Attendance unlocked successfully for ${dto.date}`,
       date: dto.date,
-      isLocked: false,
     };
   }
 
   async getAttendanceLocks(caller: AuthContext, schoolId: string) {
     await this.assertAccessToSchool(caller, schoolId);
-    const lockRepo = this.dataSource.getRepository(AttendanceLock);
-    const locks = await lockRepo.find({
+    return this.dataSource.getRepository(AttendanceLock).find({
       where: { schoolId, isLocked: true },
       order: { date: 'DESC' },
     });
-    return locks.map((l) => ({
-      id: String(l.id),
-      date: l.date,
-      isLocked: l.isLocked,
-      lockedBy: l.lockedBy || 'Admin',
-      lockedAt: l.createdAt ? l.createdAt.toISOString() : new Date().toISOString(),
-    }));
   }
 }

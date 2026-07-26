@@ -13,6 +13,7 @@ import { SystemModule } from './v1/system/system.module';
 import { PlatformModule } from './v1/platform/platform.module';
 import { AttendanceModule } from './v1/attendance/attendance.module';
 import { TimetableModule } from './v1/timetable/timetable.module';
+import { DocumentModule } from './v1/document/document.module';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { TimetableModule } from './v1/timetable/timetable.module';
     PlatformModule,
     AttendanceModule,
     TimetableModule,
+    DocumentModule,
   ],
   controllers: [],
   providers: [],
