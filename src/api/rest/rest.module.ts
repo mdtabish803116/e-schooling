@@ -14,6 +14,7 @@ import { PlatformModule } from './v1/platform/platform.module';
 import { AttendanceModule } from './v1/attendance/attendance.module';
 import { TimetableModule } from './v1/timetable/timetable.module';
 import { DocumentModule } from './v1/document/document.module';
+import { ImportExportModule } from './v1/import-export/import-export.module';
 
 @Module({
   imports: [
@@ -32,8 +33,9 @@ import { DocumentModule } from './v1/document/document.module';
     AttendanceModule,
     TimetableModule,
     DocumentModule,
+    ImportExportModule,
   ],
   controllers: [],
   providers: [],
 })
-export class RestModule { }
+export class RestModule {}
