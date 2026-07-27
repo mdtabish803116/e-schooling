@@ -262,9 +262,13 @@ export class AttendanceService implements OnModuleInit {
   async getAttendanceStudents(
     caller: AuthContext,
     schoolId: string,
-    filter: { classId?: string; sectionId?: string },
+    filter: { classId?: string; sectionId?: string; date?: string; page?: number; limit?: number },
   ) {
     await this.assertAccessToSchool(caller, schoolId);
+
+    const page  = Math.max(1, Number(filter.page)  || 1);
+    const limit = Math.min(100, Math.max(1, Number(filter.limit) || 20));
+    const skip  = (page - 1) * limit;
 
     const qb = this.dataSource
       .getRepository(Student)
@@ -272,8 +276,7 @@ export class AttendanceService implements OnModuleInit {
       .innerJoin(
         StudentEnrollment,
         'enrollment',
-        'enrollment.studentId = student.id AND enrollment.isDeleted = false AND enrollment.status = :activeStatus',
-        { activeStatus: 'ACTIVE' },
+        'enrollment.studentId = student.id AND enrollment.isDeleted = false AND enrollment.isCurrent = true',
       )
       .where('student.schoolId = :schoolId', { schoolId })
       .andWhere('student.isDeleted = false')
@@ -289,20 +292,25 @@ export class AttendanceService implements OnModuleInit {
     qb.select([
       'student.id AS "id"',
       'student.id AS "studentId"',
-      'student.firstName AS "firstName"',
-      'student.lastName AS "lastName"',
-      'student.studentCode AS "studentCode"',
-      'student.admissionNumber AS "admissionNumber"',
-      'student.profilePicUrl AS "profilePicUrl"',
+      'student.first_name AS "firstName"',
+      'student.last_name AS "lastName"',
+      'student.student_code AS "studentCode"',
+      'student.admission_number AS "admissionNumber"',
+      'student.profile_pic_url AS "profilePicUrl"',
       'enrollment.id AS "studentEnrollmentId"',
-      'enrollment.rollNumber AS "rollNumber"',
-      'enrollment.classId AS "classId"',
-      'enrollment.sectionId AS "sectionId"',
+      'enrollment.roll_number AS "rollNumber"',
+      'enrollment.class_id AS "classId"',
+      'enrollment.section_id AS "sectionId"',
     ]);
 
-    const rawStudents = await qb.orderBy('student.firstName', 'ASC').getRawMany();
+    // Run count query (same filters, no pagination) and paginated data query in parallel
+    const countQb = qb.clone();
+    const [rawStudents, total] = await Promise.all([
+      qb.orderBy('student.first_name', 'ASC').offset(skip).limit(limit).getRawMany(),
+      countQb.getCount(),
+    ]);
 
-    return rawStudents.map((s, index) => {
+    const data = rawStudents.map((s, index) => {
       const fn = s.firstName || '';
       const ln = s.lastName || '';
       const fullName = `${fn} ${ln}`.trim() || 'Student';
@@ -311,7 +319,7 @@ export class AttendanceService implements OnModuleInit {
         id: String(s.id),
         studentId: String(s.studentId || s.id),
         studentEnrollmentId: String(s.studentEnrollmentId || s.id),
-        rollNumber: s.rollNumber ? String(s.rollNumber) : String(index + 1),
+        rollNumber: s.rollNumber ? String(s.rollNumber) : String(skip + index + 1),
         firstName: fn || 'Student',
         lastName: ln,
         name: fullName,
@@ -326,6 +334,17 @@ export class AttendanceService implements OnModuleInit {
         attendanceMark: AttendanceStatusEnum.PRESENT,
       };
     });
+
+    return {
+      data,
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+        hasNextPage: page < Math.ceil(total / limit),
+      },
+    };
   }
 
   async getAttendanceDashboard(caller: AuthContext, schoolId: string, date?: string) {

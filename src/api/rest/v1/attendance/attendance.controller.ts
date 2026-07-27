@@ -91,8 +91,11 @@ export class AttendanceController {
     @CurrentUser() caller: AuthContext,
     @Query('classId') classId?: string,
     @Query('sectionId') sectionId?: string,
+    @Query('date') date?: string,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
   ) {
-    return this.attendanceService.getAttendanceStudents(caller, schoolId, { classId, sectionId });
+    return this.attendanceService.getAttendanceStudents(caller, schoolId, { classId, sectionId, date, page, limit });
   }
 
   @ApiOperation({ summary: 'Get attendance dashboard analytics summary' })
