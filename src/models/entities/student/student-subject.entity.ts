@@ -10,6 +10,10 @@ export class StudentSubject {
   schoolId: string;
 
   @Index()
+  @Column({ name: 'academic_session_id', type: 'bigint', nullable: true, comment: 'Reference to AcademicSession' })
+  academicSessionId: string | null;
+
+  @Index()
   @Column({ name: 'student_enrollment_id', type: 'bigint', nullable: true, comment: 'Reference to StudentEnrollment' })
   studentEnrollmentId: string;
 

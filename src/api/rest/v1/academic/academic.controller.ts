@@ -28,6 +28,7 @@ import { UpdateSubjectDto } from '../../../../interfaces/request/academic/update
 import { TransferStudentsDto } from '../../../../interfaces/request/academic/transfer-students.dto';
 import { CreateAcademicSessionDto } from '../../../../interfaces/request/academic/create-academic-session.dto';
 import { UpdateAcademicSessionDto } from '../../../../interfaces/request/academic/update-academic-session.dto';
+import { CopyAcademicSessionDataDto } from '../../../../interfaces/request/academic/copy-academic-session-data.dto';
 import { CreateRoomDto } from '../../../../interfaces/request/academic/create-room.dto';
 import { UpdateRoomDto } from '../../../../interfaces/request/academic/update-room.dto';
 import { AllocateRoomDto } from '../../../../interfaces/request/academic/allocate-room.dto';
@@ -129,9 +130,12 @@ export class AcademicController {
   async getSections(
     @Param('schoolId') schoolId: string,
     @CurrentUser() user: AuthContext,
+    @CurrentAcademicSession() sessionFromHeader: string | null,
     @Query('classId') classId?: string,
+    @Query('academicSessionId') querySessionId?: string,
   ) {
-    return this.academicService.getSections(schoolId, user, classId);
+    const academicSessionId = querySessionId || sessionFromHeader || undefined;
+    return this.academicService.getSections(schoolId, user, classId, academicSessionId);
   }
 
   @ApiOperation({ summary: 'Get section details by ID' })
@@ -144,7 +148,6 @@ export class AcademicController {
   ) {
     return this.academicService.getSectionDetails(schoolId, id, user);
   }
-
 
   @ApiOperation({ summary: 'Update a section' })
   @Permission(ResourceEnum.SECTIONS, ActionEnum.UPDATE)
@@ -207,8 +210,13 @@ export class AcademicController {
   @ApiOperation({ summary: 'Get all subjects' })
   @Permission(ResourceEnum.SUBJECTS, ActionEnum.VIEW)
   @Get('subjects')
-  async getSubjects(@Param('schoolId') schoolId: string) {
-    return this.academicService.getSubjects(schoolId);
+  async getSubjects(
+    @Param('schoolId') schoolId: string,
+    @CurrentAcademicSession() sessionFromHeader: string | null,
+    @Query('academicSessionId') querySessionId?: string,
+  ) {
+    const academicSessionId = querySessionId || sessionFromHeader || undefined;
+    return this.academicService.getSubjects(schoolId, academicSessionId);
   }
 
   @ApiOperation({ summary: 'Update a subject' })
@@ -244,10 +252,13 @@ export class AcademicController {
   @Get('mappings')
   async getMappings(
     @Param('schoolId') schoolId: string,
+    @CurrentAcademicSession() sessionFromHeader: string | null,
     @Query('classId') classId?: string,
     @Query('sectionId') sectionId?: string,
+    @Query('academicSessionId') querySessionId?: string,
   ) {
-    return this.academicService.getMappings(schoolId, classId, sectionId);
+    const academicSessionId = querySessionId || sessionFromHeader || undefined;
+    return this.academicService.getMappings(schoolId, classId, sectionId, academicSessionId);
   }
 
   // ACADEMIC SESSIONS
@@ -260,6 +271,17 @@ export class AcademicController {
     @Body() dto: CreateAcademicSessionDto,
   ) {
     return this.academicService.createAcademicSession(schoolId, dto, user.id);
+  }
+
+  @ApiOperation({ summary: 'Copy academic session data (classes, sections, subjects, etc.) from previous session' })
+  @Permission(ResourceEnum.ACADEMIC_SESSIONS, ActionEnum.CREATE)
+  @Post('sessions/copy-data')
+  async copyAcademicSessionData(
+    @Param('schoolId') schoolId: string,
+    @CurrentUser() user: AuthContext,
+    @Body() dto: CopyAcademicSessionDataDto,
+  ) {
+    return this.academicService.copyAcademicSessionData(schoolId, dto, user.id);
   }
 
   @ApiOperation({ summary: 'Get all academic sessions for a school' })
@@ -328,8 +350,13 @@ export class AcademicController {
   @ApiOperation({ summary: 'Get all rooms for a school' })
   @Permission(ResourceEnum.CLASSES, ActionEnum.VIEW)
   @Get('rooms')
-  async getRooms(@Param('schoolId') schoolId: string) {
-    return this.academicService.getRooms(schoolId);
+  async getRooms(
+    @Param('schoolId') schoolId: string,
+    @CurrentAcademicSession() sessionFromHeader: string | null,
+    @Query('academicSessionId') querySessionId?: string,
+  ) {
+    const academicSessionId = querySessionId || sessionFromHeader || undefined;
+    return this.academicService.getRooms(schoolId, academicSessionId);
   }
 
   @ApiOperation({ summary: 'Get room details by ID' })

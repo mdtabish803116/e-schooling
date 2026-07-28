@@ -9,6 +9,10 @@ export class Class {
   @Column({ name: 'school_id', type: 'bigint', nullable: true, comment: 'Reference to School' })
   schoolId: string;
 
+  @Index()
+  @Column({ name: 'academic_session_id', type: 'bigint', nullable: true, comment: 'Reference to AcademicSession' })
+  academicSessionId: string | null;
+
   @Column({ name: 'name', type: 'varchar', nullable: true, comment: 'Class name' })
   name: string;
 

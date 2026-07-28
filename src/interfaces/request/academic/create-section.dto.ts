@@ -27,4 +27,9 @@ export class CreateSectionDto {
   @IsOptional()
   @IsString()
   room?: string;
+
+  @ApiPropertyOptional({ example: '1', description: 'Academic Session ID' })
+  @IsOptional()
+  @IsString()
+  academicSessionId?: string;
 }

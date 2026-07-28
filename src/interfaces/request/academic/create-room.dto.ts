@@ -29,4 +29,9 @@ export class CreateRoomDto {
   @IsString({ each: true })
   @IsOptional()
   equipment?: string[];
+
+  @ApiProperty({ example: '1', required: false, description: 'Academic Session ID' })
+  @IsString()
+  @IsOptional()
+  academicSessionId?: string;
 }

@@ -16,6 +16,10 @@ export class Room {
   @Column({ name: 'school_id', type: 'bigint', nullable: false, comment: 'Reference to School' })
   schoolId: string;
 
+  @Index()
+  @Column({ name: 'academic_session_id', type: 'bigint', nullable: true, comment: 'Reference to AcademicSession' })
+  academicSessionId: string | null;
+
   @Column({ name: 'name', type: 'varchar', nullable: false, comment: 'Room name or number (e.g. Room 101, Science Lab A)' })
   name: string;
 
