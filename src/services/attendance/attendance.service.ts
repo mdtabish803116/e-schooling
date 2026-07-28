@@ -1,19 +1,18 @@
-import { Injectable, OnModuleInit, ForbiddenException, NotFoundException, BadRequestException } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
 import { DataSource, In } from 'typeorm';
 import { AuthContext } from '../../interfaces/auth-context.interface';
+import { LockAttendanceDto, UnlockAttendanceDto } from '../../interfaces/request/attendance/lock-attendance.dto';
 import { TakeAttendanceDto } from '../../interfaces/request/attendance/take-attendance.dto';
 import { UpdateAttendanceDto } from '../../interfaces/request/attendance/update-attendance.dto';
-import { LockAttendanceDto, UnlockAttendanceDto } from '../../interfaces/request/attendance/lock-attendance.dto';
-import { AttendanceSession } from '../../models/entities/attendance/attendance-session.entity';
-import { AttendanceRecord } from '../../models/entities/attendance/attendance-record.entity';
-import { AttendanceLock } from '../../models/entities/attendance/attendance-lock.entity';
 import { Class } from '../../models/entities/academic/class.entity';
 import { Section } from '../../models/entities/academic/section.entity';
 import { TeacherSectionAssignment } from '../../models/entities/academic/teacher-section-assignment.entity';
+import { AttendanceLock } from '../../models/entities/attendance/attendance-lock.entity';
+import { AttendanceRecord } from '../../models/entities/attendance/attendance-record.entity';
+import { AttendanceSession } from '../../models/entities/attendance/attendance-session.entity';
 import { SchoolOwnerMember } from '../../models/entities/school/school-owner-member.entity';
-import { SchoolUser } from '../../models/entities/school/school-user.entity';
-import { Student } from '../../models/entities/student/student.entity';
 import { StudentEnrollment } from '../../models/entities/student/student-enrollment.entity';
+import { Student } from '../../models/entities/student/student.entity';
 import { AttendanceStatusEnum } from '../../models/enums/enums';
 
 @Injectable()
@@ -114,7 +113,7 @@ export class AttendanceService implements OnModuleInit {
   async getAttendanceSession(
     caller: AuthContext,
     schoolId: string,
-    query: { classId: string; sectionId: string; date: string; sessionSlot?: number },
+    query: { classId: string; sectionId: string; date: string; sessionSlot?: number; academicSessionId?: string },
   ) {
     await this.assertAccessToSchool(caller, schoolId);
 
@@ -126,6 +125,7 @@ export class AttendanceService implements OnModuleInit {
         date: query.date,
         sessionSlot: query.sessionSlot || 1,
         isDeleted: false,
+        ...(query.academicSessionId ? { academicSessionId: query.academicSessionId } : {}),
       },
     });
 
@@ -262,7 +262,7 @@ export class AttendanceService implements OnModuleInit {
   async getAttendanceStudents(
     caller: AuthContext,
     schoolId: string,
-    filter: { classId?: string; sectionId?: string; date?: string; page?: number; limit?: number },
+    filter: { classId?: string; sectionId?: string; academicSessionId?: string; date?: string; page?: number; limit?: number },
   ) {
     await this.assertAccessToSchool(caller, schoolId);
 
@@ -273,20 +273,23 @@ export class AttendanceService implements OnModuleInit {
     const qb = this.dataSource
       .getRepository(Student)
       .createQueryBuilder('student')
-      .innerJoin(
+      .leftJoin(
         StudentEnrollment,
         'enrollment',
-        'enrollment.studentId = student.id AND enrollment.isDeleted = false AND enrollment.isCurrent = true',
+        'enrollment.student_id = student.id AND enrollment.is_deleted = false AND enrollment.is_current = true',
       )
-      .where('student.schoolId = :schoolId', { schoolId })
-      .andWhere('student.isDeleted = false')
-      .andWhere('student.isActive = true');
+      .where('student.school_id = :schoolId', { schoolId: String(schoolId) })
+      .andWhere('student.is_deleted = false')
+      .andWhere('student.is_active = true');
 
     if (filter.classId) {
-      qb.andWhere('enrollment.classId = :classId', { classId: filter.classId });
+      qb.andWhere('enrollment.class_id = :classId', { classId: String(filter.classId) });
     }
     if (filter.sectionId) {
-      qb.andWhere('enrollment.sectionId = :sectionId', { sectionId: filter.sectionId });
+      qb.andWhere('enrollment.section_id = :sectionId', { sectionId: String(filter.sectionId) });
+    }
+    if (filter.academicSessionId) {
+      qb.andWhere('enrollment.academic_session_id = :academicSessionId', { academicSessionId: String(filter.academicSessionId) });
     }
 
     qb.select([
@@ -303,35 +306,70 @@ export class AttendanceService implements OnModuleInit {
       'enrollment.section_id AS "sectionId"',
     ]);
 
-    // Run count query (same filters, no pagination) and paginated data query in parallel
     const countQb = qb.clone();
     const [rawStudents, total] = await Promise.all([
       qb.orderBy('student.first_name', 'ASC').offset(skip).limit(limit).getRawMany(),
       countQb.getCount(),
     ]);
 
+    // If date filter is provided, lookup saved session records for this date
+    let savedRecordsMap = new Map<string, { attendanceMark: string; remarks?: string }>();
+    if (filter.date) {
+      const targetDate = this.parseDateFlexible(filter.date);
+      const sessionQb = this.dataSource
+        .getRepository(AttendanceSession)
+        .createQueryBuilder('session')
+        .where('session.schoolId = :schoolId', { schoolId: String(schoolId) })
+        .andWhere('session.date = :targetDate', { targetDate })
+        .andWhere('session.is_delete = false');
+
+      if (filter.classId) {
+        sessionQb.andWhere('session.classId = :classId', { classId: String(filter.classId) });
+      }
+      if (filter.sectionId) {
+        sessionQb.andWhere('session.sectionId = :sectionId', { sectionId: String(filter.sectionId) });
+      }
+
+      const session = await sessionQb.getOne();
+      if (session) {
+        const records = await this.dataSource.getRepository(AttendanceRecord).find({
+          where: { sessionId: session.id, isDeleted: false },
+        });
+        for (const r of records) {
+          const markObj = { attendanceMark: String(r.attendanceMark).toUpperCase(), remarks: r.remarks || '' };
+          savedRecordsMap.set(String(r.studentEnrollmentId), markObj);
+        }
+      }
+    }
+
     const data = rawStudents.map((s, index) => {
       const fn = s.firstName || '';
       const ln = s.lastName || '';
       const fullName = `${fn} ${ln}`.trim() || 'Student';
+      const studentId = String(s.studentId || s.id);
+      const studentEnrollmentId = String(s.studentEnrollmentId || s.id);
+
+      const savedMark = savedRecordsMap.get(studentEnrollmentId) || savedRecordsMap.get(studentId);
+      const finalStatus = savedMark ? savedMark.attendanceMark : 'PRESENT';
 
       return {
-        id: String(s.id),
-        studentId: String(s.studentId || s.id),
-        studentEnrollmentId: String(s.studentEnrollmentId || s.id),
+        id: studentId,
+        studentId: studentId,
+        studentEnrollmentId,
         rollNumber: s.rollNumber ? String(s.rollNumber) : String(skip + index + 1),
         firstName: fn || 'Student',
         lastName: ln,
         name: fullName,
         fullName: fullName,
-        admissionNumber: s.admissionNumber || s.studentCode || `ADM-${s.id}`,
+        admissionNumber: s.admissionNumber || s.studentCode || `ADM-${studentId}`,
         studentCode: s.studentCode || '',
         profilePicUrl: s.profilePicUrl || null,
         avatar: s.profilePicUrl || null,
         classId: s.classId ? String(s.classId) : null,
         sectionId: s.sectionId ? String(s.sectionId) : null,
-        status: 'PRESENT',
-        attendanceMark: AttendanceStatusEnum.PRESENT,
+        status: finalStatus,
+        attendanceMark: finalStatus,
+        remarks: savedMark?.remarks || '',
       };
     });
 
@@ -347,17 +385,36 @@ export class AttendanceService implements OnModuleInit {
     };
   }
 
-  async getAttendanceDashboard(caller: AuthContext, schoolId: string, date?: string) {
+  async getAttendanceDashboard(caller: AuthContext, schoolId: string, date?: string, academicSessionId?: string) {
     await this.assertAccessToSchool(caller, schoolId);
 
     const targetDate = this.parseDateFlexible(date);
 
-    const studentCount = await this.dataSource.getRepository(Student).count({
-      where: { schoolId, isDeleted: false, isActive: true },
-    });
+    const studentQb = this.dataSource
+      .getRepository(Student)
+      .createQueryBuilder('student')
+      .innerJoin(
+        StudentEnrollment,
+        'enrollment',
+        'enrollment.student_id = student.id AND enrollment.is_deleted = false AND enrollment.is_current = true',
+      )
+      .where('student.school_id = :schoolId', { schoolId: String(schoolId) })
+      .andWhere('student.is_deleted = false')
+      .andWhere('student.is_active = true');
+
+    if (academicSessionId) {
+      studentQb.andWhere('enrollment.academic_session_id = :academicSessionId', { academicSessionId: String(academicSessionId) });
+    }
+
+    const studentCount = await studentQb.getCount();
 
     const sessionsToday = await this.dataSource.getRepository(AttendanceSession).find({
-      where: { schoolId, date: targetDate, isDeleted: false },
+      where: {
+        schoolId: String(schoolId),
+        date: targetDate,
+        isDeleted: false,
+        ...(academicSessionId ? { academicSessionId: String(academicSessionId) } : {}),
+      },
     });
 
     const markedSectionIds = new Set(sessionsToday.map((s) => String(s.sectionId)));
@@ -380,12 +437,12 @@ export class AttendanceService implements OnModuleInit {
 
     // Pending Sections Calculation
     const sections = await this.dataSource.getRepository(Section).find({
-      where: { schoolId, isDeleted: false, isActive: true },
+      where: { schoolId: String(schoolId), isDeleted: false, isActive: true },
       relations: ['class'],
     });
 
     const teacherAssignments = await this.dataSource.getRepository(TeacherSectionAssignment).find({
-      where: { schoolId, isDeleted: false, isActive: true },
+      where: { schoolId: String(schoolId), isDeleted: false, isActive: true },
       relations: ['teacher'],
     });
 
@@ -435,16 +492,46 @@ export class AttendanceService implements OnModuleInit {
     };
   }
 
-  async getDefaultersReport(caller: AuthContext, schoolId: string, threshold: number = 75) {
+  async getDefaultersReport(caller: AuthContext, schoolId: string, threshold: number = 75, academicSessionId?: string) {
     await this.assertAccessToSchool(caller, schoolId);
 
-    const studentRepo = this.dataSource.getRepository(Student);
-    const students = await studentRepo.find({
-      where: { schoolId, isDeleted: false, isActive: true },
-    });
+    const qb = this.dataSource
+      .getRepository(Student)
+      .createQueryBuilder('student')
+      .leftJoin(
+        StudentEnrollment,
+        'enrollment',
+        'enrollment.student_id = student.id AND enrollment.is_deleted = false AND enrollment.is_current = true',
+      )
+      .leftJoin(Class, 'class', 'class.id = enrollment.class_id')
+      .leftJoin(Section, 'section', 'section.id = enrollment.section_id')
+      .where('student.school_id = :schoolId', { schoolId: String(schoolId) })
+      .andWhere('student.is_deleted = false')
+      .andWhere('student.is_active = true');
+
+    if (academicSessionId) {
+      qb.andWhere('enrollment.academic_session_id = :academicSessionId', { academicSessionId: String(academicSessionId) });
+    }
+
+    qb.select([
+      'student.id AS "id"',
+      'student.first_name AS "firstName"',
+      'student.last_name AS "lastName"',
+      'student.student_code AS "studentCode"',
+      'enrollment.id AS "studentEnrollmentId"',
+      'class.name AS "className"',
+      'section.name AS "sectionName"',
+    ]);
+
+    const rawStudents = await qb.getRawMany();
+    if (!rawStudents.length) return [];
 
     const sessions = await this.dataSource.getRepository(AttendanceSession).find({
-      where: { schoolId, isDeleted: false },
+      where: {
+        schoolId: String(schoolId),
+        isDeleted: false,
+        ...(academicSessionId ? { academicSessionId: String(academicSessionId) } : {}),
+      },
     });
 
     const sessionIds = sessions.map((s) => s.id);
@@ -457,28 +544,38 @@ export class AttendanceService implements OnModuleInit {
 
     const totalSessions = sessions.length || 1;
 
-    const defaulters = students.map((student) => {
-      const studentRecords = allRecords.filter(
-        (r) => String(r.studentEnrollmentId) === String(student.id),
-      );
-      const totalClasses = studentRecords.length || totalSessions;
-      const attendedClasses = studentRecords.filter(
-        (r) => String(r.attendanceMark).toLowerCase() === 'present',
-      ).length;
+    const defaulters = rawStudents
+      .map((s) => {
+        const studentId = String(s.id);
+        const enrollmentId = String(s.studentEnrollmentId || s.id);
 
-      const percentage = totalClasses > 0 ? Math.round((attendedClasses / totalClasses) * 100) : 100;
+        const studentRecords = allRecords.filter(
+          (r) => String(r.studentEnrollmentId) === enrollmentId || String(r.studentEnrollmentId) === studentId,
+        );
 
-      return {
-        studentId: String(student.id),
-        studentName: `${student.firstName || ''} ${student.lastName || ''}`.trim() || 'Student',
-        studentCode: student.studentCode || `STU-${student.id}`,
-        className: 'Class 10',
-        sectionName: 'A',
-        totalClasses,
-        attendedClasses,
-        attendancePercentage: percentage,
-      };
-    }).filter((d) => d.attendancePercentage < threshold);
+        const totalClasses = studentRecords.length || totalSessions;
+        const attendedClasses = studentRecords.filter(
+          (r) => String(r.attendanceMark).toLowerCase() === 'present',
+        ).length;
+
+        const percentage = totalClasses > 0 ? Math.round((attendedClasses / totalClasses) * 100) : 100;
+
+        const fn = s.firstName || '';
+        const ln = s.lastName || '';
+        const studentName = `${fn} ${ln}`.trim() || 'Student';
+
+        return {
+          studentId,
+          studentName,
+          studentCode: s.studentCode || `STU-${studentId}`,
+          className: s.className || 'General',
+          sectionName: s.sectionName || 'A',
+          totalClasses,
+          attendedClasses,
+          attendancePercentage: percentage,
+        };
+      })
+      .filter((d) => d.attendancePercentage < threshold);
 
     return defaulters;
   }
@@ -530,11 +627,85 @@ export class AttendanceService implements OnModuleInit {
     };
   }
 
-  async getAttendanceLocks(caller: AuthContext, schoolId: string) {
+  async getAttendanceLocks(caller: AuthContext, schoolId: string, _academicSessionId?: string) {
     await this.assertAccessToSchool(caller, schoolId);
     return this.dataSource.getRepository(AttendanceLock).find({
-      where: { schoolId, isLocked: true },
+      where: {
+        schoolId,
+        isLocked: true,
+      },
       order: { date: 'DESC' },
+    });
+  }
+
+  async getMonthlyReport(
+    caller: AuthContext,
+    schoolId: string,
+    query: { classId?: string; sectionId?: string; yearMonth?: string; academicSessionId?: string },
+  ) {
+    await this.assertAccessToSchool(caller, schoolId);
+
+    const yearMonth = query.yearMonth || new Date().toISOString().slice(0, 7);
+    const startDate = `${yearMonth}-01`;
+    const [yStr, mStr] = yearMonth.split('-');
+    const nextM = Number(mStr) === 12 ? 1 : Number(mStr) + 1;
+    const nextY = Number(mStr) === 12 ? Number(yStr) + 1 : Number(yStr);
+    const endDate = `${nextY}-${String(nextM).padStart(2, '0')}-01`;
+
+    const sessionQb = this.dataSource
+      .getRepository(AttendanceSession)
+      .createQueryBuilder('session')
+      .where('session.schoolId = :schoolId', { schoolId: String(schoolId) })
+      .andWhere('session.is_delete = false')
+      .andWhere('session.date >= :startDate AND session.date < :endDate', { startDate, endDate });
+
+    if (query.classId) {
+      sessionQb.andWhere('session.classId = :classId', { classId: String(query.classId) });
+    }
+    if (query.sectionId) {
+      sessionQb.andWhere('session.sectionId = :sectionId', { sectionId: String(query.sectionId) });
+    }
+    if (query.academicSessionId) {
+      sessionQb.andWhere('session.academicSessionId = :academicSessionId', { academicSessionId: String(query.academicSessionId) });
+    }
+
+    const sessions = await sessionQb.getMany();
+    if (!sessions.length) return [];
+
+    const sessionIds = sessions.map((s) => s.id);
+    const sessionMap = new Map(sessions.map((s) => [s.id, String(s.date)]));
+
+    const records = await this.dataSource.getRepository(AttendanceRecord).find({
+      where: { sessionId: In(sessionIds), isDeleted: false },
+    });
+
+    if (!records.length) return [];
+
+    // Map StudentEnrollments to link studentEnrollmentId with studentId
+    const enrollmentIds = Array.from(new Set(records.map((r) => r.studentEnrollmentId).filter(Boolean)));
+    let enrollmentMap = new Map<string, string>();
+    if (enrollmentIds.length > 0) {
+      const enrollments = await this.dataSource.getRepository(StudentEnrollment).find({
+        where: { id: In(enrollmentIds) },
+      });
+      enrollmentMap = new Map(enrollments.map((e) => [String(e.id), String(e.studentId)]));
+    }
+
+    return records.map((r) => {
+      const rawDate = sessionMap.get(r.sessionId);
+      const dateStr = rawDate ? String(rawDate).slice(0, 10) : '';
+      const actualStudentId = enrollmentMap.get(String(r.studentEnrollmentId)) || String(r.studentEnrollmentId);
+
+      return {
+        id: String(r.id),
+        sessionId: String(r.sessionId),
+        studentId: actualStudentId,
+        studentEnrollmentId: String(r.studentEnrollmentId),
+        date: dateStr,
+        attendanceMark: String(r.attendanceMark).toUpperCase(),
+        status: String(r.attendanceMark).toUpperCase(),
+        remarks: r.remarks || '',
+      };
     });
   }
 }

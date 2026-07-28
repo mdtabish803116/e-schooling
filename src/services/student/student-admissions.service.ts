@@ -59,6 +59,13 @@ export class StudentAdmissionsService implements OnModuleInit {
   async admitStudent(caller: AuthContext, schoolId: string, dto: StudentAdmissionDto) {
     const school = await this.assertOwnership(caller.id, schoolId);
 
+    if (!dto.academicSessionId) {
+      const activeSession = await this.dataSource.getRepository(AcademicSession).findOne({
+        where: { schoolId, isCurrent: true, isDeleted: false },
+      });
+      dto.academicSessionId = activeSession?.id || '1';
+    }
+
     // Check subscription quota
     const subRepo = this.dataSource.getRepository(SchoolSubscription);
     const subscription = await subRepo.findOne({ where: { schoolId }, relations: ['subscriptionPlan'] });
@@ -219,7 +226,7 @@ export class StudentAdmissionsService implements OnModuleInit {
   async getStudents(
     caller: AuthContext,
     schoolId: string,
-    query: { classId?: string; sectionId?: string; search?: string; page?: number; limit?: number },
+    query: { classId?: string; sectionId?: string; academicSessionId?: string; search?: string; page?: number; limit?: number },
   ) {
     const membership = await this.dataSource.getRepository(SchoolOwnerMember).findOne({ where: { schoolOwnerId: caller.id, schoolId } });
     if (!membership && caller.actorType === 'school_owner') throw new ForbiddenException('You do not have permission to view students of this school');
@@ -234,14 +241,15 @@ export class StudentAdmissionsService implements OnModuleInit {
 
     const queryBuilder = studentRepo.createQueryBuilder('student')
       .where('student.schoolId = :schoolId', { schoolId })
-      .andWhere('student.isDeleted = :isDeleted', { isDeleted: false });
+      .andWhere('student.is_delete = :isDeleted', { isDeleted: false });
 
-    if (query.classId || query.sectionId) {
+    if (query.classId || query.sectionId || query.academicSessionId) {
       queryBuilder.innerJoin(StudentEnrollment, 'enrollment',
-        'enrollment.studentId = student.id AND enrollment.isCurrent = :isCurrent AND enrollment.isDeleted = :enrollmentDeleted',
+        'enrollment.student_id = student.id AND enrollment.is_current = :isCurrent AND enrollment.is_delete = :enrollmentDeleted',
         { isCurrent: true, enrollmentDeleted: false });
-      if (query.classId) queryBuilder.andWhere('enrollment.classId = :classId', { classId: query.classId });
-      if (query.sectionId) queryBuilder.andWhere('enrollment.sectionId = :sectionId', { sectionId: query.sectionId });
+      if (query.classId) queryBuilder.andWhere('enrollment.class_id = :classId', { classId: query.classId });
+      if (query.sectionId) queryBuilder.andWhere('enrollment.section_id = :sectionId', { sectionId: query.sectionId });
+      if (query.academicSessionId) queryBuilder.andWhere('enrollment.academic_session_id = :academicSessionId', { academicSessionId: query.academicSessionId });
     }
 
     if (query.search) {

@@ -6,6 +6,7 @@ import { PermissionGuard } from '../../../../shared/guards/permission.guard';
 import { Feature } from '../../../../shared/decorators/feature.decorator';
 import { Permission } from '../../../../shared/decorators/permission.decorator';
 import { CurrentUser } from '../../../../shared/decorators/current-user.decorator';
+import { CurrentAcademicSession } from '../../../../shared/decorators/current-academic-session.decorator';
 import { AttendanceService } from '../../../../services/attendance/attendance.service';
 import type { AuthContext } from '../../../../interfaces/auth-context.interface';
 import { TakeAttendanceDto } from '../../../../interfaces/request/attendance/take-attendance.dto';
@@ -21,22 +22,26 @@ import { ResourceEnum, ActionEnum } from '../../../../models/enums/enums';
 export class AttendanceController {
   constructor(private readonly attendanceService: AttendanceService) {}
 
-  @ApiOperation({ summary: 'Get bulk attendance session by class/section/date/slot' })
+  @ApiOperation({ summary: 'Get bulk attendance session by class/section/date/slot/academicSession' })
   @Permission(ResourceEnum.ATTENDANCE, ActionEnum.VIEW)
   @Get()
   async getAttendanceSession(
     @Param('schoolId') schoolId: string,
     @CurrentUser() caller: AuthContext,
+    @CurrentAcademicSession() sessionFromHeader: string | null,
     @Query('classId') classId: string,
     @Query('sectionId') sectionId: string,
     @Query('date') date: string,
     @Query('sessionSlot') sessionSlot: number,
+    @Query('academicSessionId') querySessionId?: string,
   ) {
+    const academicSessionId = querySessionId || sessionFromHeader || undefined;
     return this.attendanceService.getAttendanceSession(caller, schoolId, {
       classId,
       sectionId,
       date,
       sessionSlot,
+      academicSessionId,
     });
   }
 
@@ -68,8 +73,11 @@ export class AttendanceController {
   async getAttendanceLocks(
     @Param('schoolId') schoolId: string,
     @CurrentUser() caller: AuthContext,
+    @CurrentAcademicSession() sessionFromHeader: string | null,
+    @Query('academicSessionId') querySessionId?: string,
   ) {
-    return this.attendanceService.getAttendanceLocks(caller, schoolId);
+    const academicSessionId = querySessionId || sessionFromHeader || undefined;
+    return this.attendanceService.getAttendanceLocks(caller, schoolId, academicSessionId);
   }
 
   @ApiOperation({ summary: 'Take class/section student attendance in bulk' })
@@ -89,13 +97,16 @@ export class AttendanceController {
   async getAttendanceStudents(
     @Param('schoolId') schoolId: string,
     @CurrentUser() caller: AuthContext,
+    @CurrentAcademicSession() sessionFromHeader: string | null,
     @Query('classId') classId?: string,
     @Query('sectionId') sectionId?: string,
+    @Query('academicSessionId') querySessionId?: string,
     @Query('date') date?: string,
     @Query('page') page?: number,
     @Query('limit') limit?: number,
   ) {
-    return this.attendanceService.getAttendanceStudents(caller, schoolId, { classId, sectionId, date, page, limit });
+    const academicSessionId = querySessionId || sessionFromHeader || undefined;
+    return this.attendanceService.getAttendanceStudents(caller, schoolId, { classId, sectionId, academicSessionId, date, page, limit });
   }
 
   @ApiOperation({ summary: 'Get attendance dashboard analytics summary' })
@@ -104,10 +115,15 @@ export class AttendanceController {
   async getAttendanceDashboard(
     @Param('schoolId') schoolId: string,
     @CurrentUser() caller: AuthContext,
+    @CurrentAcademicSession() sessionFromHeader: string | null,
     @Query('date') date?: string,
+    @Query('academicSessionId') querySessionId?: string,
   ) {
-    return this.attendanceService.getAttendanceDashboard(caller, schoolId, date);
+    const academicSessionId = querySessionId || sessionFromHeader || undefined;
+    return this.attendanceService.getAttendanceDashboard(caller, schoolId, date, academicSessionId);
   }
+
+
 
   @ApiOperation({ summary: 'Get low attendance defaulters report' })
   @Permission(ResourceEnum.ATTENDANCE, ActionEnum.VIEW)
@@ -115,9 +131,33 @@ export class AttendanceController {
   async getDefaultersReport(
     @Param('schoolId') schoolId: string,
     @CurrentUser() caller: AuthContext,
+    @CurrentAcademicSession() sessionFromHeader: string | null,
     @Query('threshold') threshold?: number,
+    @Query('academicSessionId') querySessionId?: string,
   ) {
-    return this.attendanceService.getDefaultersReport(caller, schoolId, Number(threshold) || 75);
+    const academicSessionId = querySessionId || sessionFromHeader || undefined;
+    return this.attendanceService.getDefaultersReport(caller, schoolId, Number(threshold) || 75, academicSessionId);
+  }
+
+  @ApiOperation({ summary: 'Get monthly attendance matrix report' })
+  @Permission(ResourceEnum.ATTENDANCE, ActionEnum.VIEW)
+  @Get('reports/monthly')
+  async getMonthlyReport(
+    @Param('schoolId') schoolId: string,
+    @CurrentUser() caller: AuthContext,
+    @CurrentAcademicSession() sessionFromHeader: string | null,
+    @Query('classId') classId?: string,
+    @Query('sectionId') sectionId?: string,
+    @Query('yearMonth') yearMonth?: string,
+    @Query('academicSessionId') querySessionId?: string,
+  ) {
+    const academicSessionId = querySessionId || sessionFromHeader || undefined;
+    return this.attendanceService.getMonthlyReport(caller, schoolId, {
+      classId,
+      sectionId,
+      yearMonth,
+      academicSessionId,
+    });
   }
 
   @ApiOperation({ summary: 'Bulk update specific student attendance marks' })

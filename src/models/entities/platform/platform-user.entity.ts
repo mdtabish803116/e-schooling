@@ -23,6 +23,21 @@ export class PlatformUser {
   @Column({ name: 'is_delete', type: 'boolean', nullable: false, default: false, comment: 'Soft delete marker' })
   isDeleted: boolean;
 
+  @Column({ name: 'current_session_token', type: 'varchar', nullable: true, comment: 'Active session token' })
+  currentSessionToken: string;
+
+  @Column({ name: 'is_logged_in', type: 'boolean', default: false, comment: 'Active login flag' })
+  isLoggedIn: boolean;
+
+  @Column({ name: 'failed_login_attempts', type: 'integer', default: 0, comment: 'Failed login count' })
+  failedLoginAttempts: number;
+
+  @Column({ name: 'lockout_until', type: 'timestamp', nullable: true, comment: 'Lockout timestamp' })
+  lockoutUntil: Date;
+
+  @Column({ name: 'is_locked', type: 'boolean', default: false, comment: 'Account lock status' })
+  isLocked: boolean;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamp', comment: 'Creation timestamp' })
   createdAt: Date;
 

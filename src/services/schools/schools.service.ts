@@ -65,20 +65,43 @@ export class SchoolsService {
   async createSchool(caller: AuthContext, dto: CreateSchoolDto) {
     if (caller.actorType !== 'school_owner') throw new ForbiddenException('Only registered school owners can create new schools');
 
-    if (!validateEmail(dto.email)) throw new BadRequestException('Invalid school email address format');
-    if (!validateMobile(dto.phone)) throw new BadRequestException('Invalid school phone number format');
+    const schoolName = dto.schoolName ? dto.schoolName.trim().replace(/[<>]/g, '') : '';
+    const email = dto.email ? dto.email.trim().toLowerCase().replace(/[<>]/g, '') : '';
+    const phone = dto.phone ? dto.phone.trim().replace(/[<>]/g, '') : '';
+
+    if (!schoolName || schoolName.length < 3 || schoolName.length > 100) {
+      throw new BadRequestException('School name must be between 3 and 100 characters long.');
+    }
+
+    if (/\s{2,}/.test(dto.schoolName)) {
+      throw new BadRequestException('Multiple consecutive spaces are not allowed in school name.');
+    }
+
+    if (!validateEmail(email)) throw new BadRequestException('Please enter a valid school email address.');
+    if (!validateMobile(phone)) throw new BadRequestException('Please enter a valid school phone number (10 to 15 digits).');
+
+    // Uniqueness check for school email
+    const existingSchoolEmail = await this.dataSource.getRepository(School).findOne({
+      where: { email }
+    });
+    if (existingSchoolEmail) {
+      throw new BadRequestException('This school email address is already registered. Please use another email.');
+    }
 
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
     try {
-      const internalCode = await this.generateUniqueSchoolCode(dto.schoolName);
+      const internalCode = await this.generateUniqueSchoolCode(schoolName);
       
       const school = new School();
       Object.assign(school, dto);
+      school.schoolName = schoolName;
+      school.email = email;
+      school.phone = phone;
       school.internalSchoolCode = internalCode;
-      school.externalSchoolCode = dto.externalSchoolCode || null;
+      school.externalSchoolCode = dto.externalSchoolCode ? dto.externalSchoolCode.trim() : null;
       school.isActive = true;
       school.createdById = caller.id;
 
@@ -112,6 +135,33 @@ export class SchoolsService {
     const schoolRepo = this.dataSource.getRepository(School);
     const school = await schoolRepo.findOne({ where: { id: schoolId } });
     if (!school) throw new NotFoundException('School not found');
+
+    if (dto.schoolName !== undefined) {
+      const schoolName = dto.schoolName.trim().replace(/[<>]/g, '');
+      if (schoolName.length < 3 || schoolName.length > 100) {
+        throw new BadRequestException('School name must be between 3 and 100 characters long.');
+      }
+      if (/\s{2,}/.test(dto.schoolName)) {
+        throw new BadRequestException('Multiple consecutive spaces are not allowed in school name.');
+      }
+      dto.schoolName = schoolName;
+    }
+
+    if (dto.email !== undefined) {
+      const email = dto.email.trim().toLowerCase().replace(/[<>]/g, '');
+      if (!validateEmail(email)) throw new BadRequestException('Please enter a valid school email address.');
+      const existing = await schoolRepo.findOne({ where: { email } });
+      if (existing && existing.id !== schoolId) {
+        throw new BadRequestException('This school email address is already registered to another school.');
+      }
+      dto.email = email;
+    }
+
+    if (dto.phone !== undefined) {
+      const phone = dto.phone.trim().replace(/[<>]/g, '');
+      if (!validateMobile(phone)) throw new BadRequestException('Please enter a valid school phone number (10 to 15 digits).');
+      dto.phone = phone;
+    }
 
     Object.assign(school, dto);
     school.updatedById = caller.id;
@@ -540,7 +590,7 @@ export class SchoolsService {
       .addSelect('COUNT(role.id)', 'count')
       .where('role.schoolId IN (:...schoolIds)', { schoolIds })
       .andWhere('role.isActive = true')
-      .andWhere('role.isDeleted = false')
+      .andWhere('role.is_delete = false')
       .groupBy('role.name')
       .getRawMany();
     const roleBreakdown = rawRoles.map(r => ({ name: r.name, count: parseInt(r.count, 10) }));
@@ -551,7 +601,7 @@ export class SchoolsService {
       .addSelect('COUNT(user.id)', 'count')
       .where('user.schoolId IN (:...schoolIds)', { schoolIds })
       .andWhere('user.isActive = true')
-      .andWhere('user.isDeleted = false')
+      .andWhere('user.is_delete = false')
       .groupBy('user.userType')
       .getRawMany();
     
@@ -707,7 +757,7 @@ export class SchoolsService {
       .addSelect('COUNT(student.id)', 'count')
       .where('student.schoolId = :schoolId', { schoolId })
       .andWhere('student.isActive = true')
-      .andWhere('student.isDeleted = false')
+      .andWhere('student.is_delete = false')
       .andWhere('student.createdAt >= :startOfYear', { startOfYear })
       .groupBy("EXTRACT(MONTH FROM student.createdAt)")
       .getRawMany();

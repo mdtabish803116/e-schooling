@@ -11,6 +11,7 @@ import { Permission } from '../../../../shared/decorators/permission.decorator';
 import { Feature } from '../../../../shared/decorators/feature.decorator';
 import { ResourceEnum, ActionEnum, JobTypeEnum, ActionTypeEnum } from '../../../../models/enums/enums';
 import { CurrentUser } from '../../../../shared/decorators/current-user.decorator';
+import { CurrentAcademicSession } from '../../../../shared/decorators/current-academic-session.decorator';
 import type { AuthContext } from '../../../../interfaces/auth-context.interface';
 import { QueueProducerService } from '../../../../api/worker/queues/queue-producer.service';
 import { QueueNames } from '../../../../api/worker/queues/queue.constants';
@@ -50,20 +51,23 @@ export class StudentAdmissionsController {
     return this.admissionsService.admitStudent(caller, schoolId, dto);
   }
 
-  @ApiOperation({ summary: 'Get all students (optionally class/section wise)' })
+  @ApiOperation({ summary: 'Get all students (optionally class/section/academicSession wise)' })
   @Get()
   @Permission(ResourceEnum.STUDENTS, ActionEnum.VIEW)
   @Feature('STUDENT_MANAGEMENT')
   async getStudents(
     @CurrentUser() caller: AuthContext,
+    @CurrentAcademicSession() sessionFromHeader: string | null,
     @Param('schoolId') schoolId: string,
     @Query('classId') classId?: string,
     @Query('sectionId') sectionId?: string,
+    @Query('academicSessionId') querySessionId?: string,
     @Query('search') search?: string,
     @Query('page') page?: number,
     @Query('limit') limit?: number,
   ) {
-    return this.admissionsService.getStudents(caller, schoolId, { classId, sectionId, search, page, limit });
+    const academicSessionId = querySessionId || sessionFromHeader || undefined;
+    return this.admissionsService.getStudents(caller, schoolId, { classId, sectionId, academicSessionId, search, page, limit });
   }
 
   @ApiOperation({ summary: 'Get student by ID' })

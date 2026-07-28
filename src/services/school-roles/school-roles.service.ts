@@ -497,7 +497,7 @@ export class SchoolRolesService {
       ])
       .where('rp.roleId = :schoolRoleId', { schoolRoleId })
       .andWhere('rp.isActive = true')
-      .andWhere('rp.isDeleted = false')
+      .andWhere('rp.is_delete = false')
       .getRawMany();
 
     return { permissions };
@@ -537,7 +537,7 @@ export class SchoolRolesService {
       ])
       .where('rp.roleId = :schoolRoleId', { schoolRoleId })
       .andWhere('rp.isActive = true')
-      .andWhere('rp.isDeleted = false')
+      .andWhere('rp.is_delete = false')
       .getRawMany();
 
     return { role, permissions };

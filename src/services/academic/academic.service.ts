@@ -1,39 +1,39 @@
 import {
-  Injectable,
-  NotFoundException,
   BadRequestException,
   ForbiddenException,
+  Injectable,
+  NotFoundException,
 } from '@nestjs/common';
-import { DataSource, Repository, In, IsNull } from 'typeorm';
-import { Class } from '../../models/entities/academic/class.entity';
-import { Section } from '../../models/entities/academic/section.entity';
-import { Subject } from '../../models/entities/academic/subject.entity';
-import { ClassSectionSubject } from '../../models/entities/academic/class-section-subject.entity';
-import { TeacherSectionAssignment } from '../../models/entities/academic/teacher-section-assignment.entity';
-import { AcademicSession } from '../../models/entities/academic/academic-session.entity';
-import { Room } from '../../models/entities/academic/room.entity';
+import { DataSource, In, IsNull, Repository } from 'typeorm';
+import type { AuthContext } from '../../interfaces/auth-context.interface';
+import { AllocateRoomDto } from '../../interfaces/request/academic/allocate-room.dto';
+import { CreateAcademicSessionDto } from '../../interfaces/request/academic/create-academic-session.dto';
 import { CreateClassDto } from '../../interfaces/request/academic/create-class.dto';
-import { UpdateClassDto } from '../../interfaces/request/academic/update-class.dto';
+import { CreateRoomDto } from '../../interfaces/request/academic/create-room.dto';
 import { CreateSectionDto } from '../../interfaces/request/academic/create-section.dto';
+import { TransferStudentsDto } from '../../interfaces/request/academic/transfer-students.dto';
+import { UpdateAcademicSessionDto } from '../../interfaces/request/academic/update-academic-session.dto';
+import { UpdateClassDto } from '../../interfaces/request/academic/update-class.dto';
+import { UpdateRoomDto } from '../../interfaces/request/academic/update-room.dto';
 import { UpdateSectionDto } from '../../interfaces/request/academic/update-section.dto';
 import { UpdateSubjectDto } from '../../interfaces/request/academic/update-subject.dto';
-import { CreateAcademicSessionDto } from '../../interfaces/request/academic/create-academic-session.dto';
-import { UpdateAcademicSessionDto } from '../../interfaces/request/academic/update-academic-session.dto';
-import { CreateRoomDto } from '../../interfaces/request/academic/create-room.dto';
-import { UpdateRoomDto } from '../../interfaces/request/academic/update-room.dto';
-import { AllocateRoomDto } from '../../interfaces/request/academic/allocate-room.dto';
-import { TransferStudentsDto } from '../../interfaces/request/academic/transfer-students.dto';
-import { StudentEnrollment } from '../../models/entities/student/student-enrollment.entity';
-import { SectionTransferHistory } from '../../models/entities/student/section-transfer-history.entity';
-import { SchoolUser } from '../../models/entities/school/school-user.entity';
-import { SchoolOwner } from '../../models/entities/school/school-owner.entity';
+import { AcademicSession } from '../../models/entities/academic/academic-session.entity';
+import { ClassSectionSubject } from '../../models/entities/academic/class-section-subject.entity';
+import { Class } from '../../models/entities/academic/class.entity';
+import { Room } from '../../models/entities/academic/room.entity';
+import { Section } from '../../models/entities/academic/section.entity';
+import { Subject } from '../../models/entities/academic/subject.entity';
+import { TeacherSectionAssignment } from '../../models/entities/academic/teacher-section-assignment.entity';
 import { PlatformUser } from '../../models/entities/platform/platform-user.entity';
-import { SchoolUserRole } from '../../models/entities/rbac/school-user-role.entity';
-import { SchoolRolePermission } from '../../models/entities/rbac/school-role-permission.entity';
-import { ModuleOperationPermission } from '../../models/entities/rbac/module-operation-permission.entity';
 import { ModuleMaster } from '../../models/entities/rbac/module-master.entity';
+import { ModuleOperationPermission } from '../../models/entities/rbac/module-operation-permission.entity';
 import { OperationMaster } from '../../models/entities/rbac/operation-master.entity';
-import type { AuthContext } from '../../interfaces/auth-context.interface';
+import { SchoolRolePermission } from '../../models/entities/rbac/school-role-permission.entity';
+import { SchoolUserRole } from '../../models/entities/rbac/school-user-role.entity';
+import { SchoolOwner } from '../../models/entities/school/school-owner.entity';
+import { SchoolUser } from '../../models/entities/school/school-user.entity';
+import { SectionTransferHistory } from '../../models/entities/student/section-transfer-history.entity';
+import { StudentEnrollment } from '../../models/entities/student/student-enrollment.entity';
 
 @Injectable()
 export class AcademicService {
@@ -84,9 +84,9 @@ export class AcademicService {
         requiredOperation,
       })
       .andWhere('rp.isActive = true')
-      .andWhere('rp.isDeleted = false')
+      .andWhere('rp.is_delete = false')
       .andWhere('p.isActive = true')
-      .andWhere('p.isDeleted = false')
+      .andWhere('p.is_delete = false')
       .andWhere('m.isActive = true')
       .andWhere('o.isActive = true')
       .getOne();
@@ -201,6 +201,18 @@ export class AcademicService {
 
   // CLASSES
   async createClass(schoolId: string, data: CreateClassDto, userId: string) {
+    if (!data.name || !data.name.trim()) {
+      throw new BadRequestException('Class name is required.');
+    }
+    const name = data.name.trim().replace(/[<>]/g, '');
+    if (name.length < 2 || name.length > 100) {
+      throw new BadRequestException('Class name must be between 2 and 100 characters long.');
+    }
+    if (/\s{2,}/.test(data.name)) {
+      throw new BadRequestException('Multiple consecutive spaces are not allowed in class name.');
+    }
+    data.name = name;
+
     const normalizedInput = data.name.replace(/\s+/g, '').toLowerCase();
 
     if (data.classTeacherId) {
@@ -346,7 +358,7 @@ export class AcademicService {
     };
   }
 
-  async getClasses(schoolId: string, caller?: AuthContext) {
+  async getClasses(schoolId: string, caller?: AuthContext, academicSessionId?: string) {
     let classes = await this.classRepo.find({
       where: { schoolId, isDeleted: false },
       order: { createdAt: 'ASC' },
@@ -388,21 +400,27 @@ export class AcademicService {
       .createQueryBuilder('section')
       .select('section.class_id', 'classId')
       .addSelect('COUNT(section.id)', 'count')
-      .where('section.schoolId = :schoolId', { schoolId })
-      .andWhere('section.isDeleted = false')
+      .where('section.school_id = :schoolId', { schoolId: String(schoolId) })
+      .andWhere('section.is_delete = false')
       .groupBy('section.class_id')
       .getRawMany();
 
     // Query active student enrollments counts grouped by classId
-    const studentCounts = await this.dataSource
+    const studentCountQb = this.dataSource
       .getRepository(StudentEnrollment)
       .createQueryBuilder('enrollment')
       .select('enrollment.class_id', 'classId')
       .addSelect('COUNT(enrollment.id)', 'count')
-      .where('enrollment.schoolId = :schoolId', { schoolId })
-      .andWhere('enrollment.isCurrent = true')
-      .andWhere('enrollment.isActive = true')
-      .andWhere('enrollment.isDeleted = false')
+      .where('enrollment.school_id = :schoolId', { schoolId: String(schoolId) })
+      .andWhere('enrollment.is_current = true')
+      .andWhere('enrollment.is_active = true')
+      .andWhere('enrollment.is_delete = false');
+
+    if (academicSessionId) {
+      studentCountQb.andWhere('enrollment.academic_session_id = :academicSessionId', { academicSessionId: String(academicSessionId) });
+    }
+
+    const studentCounts = await studentCountQb
       .groupBy('enrollment.class_id')
       .getRawMany();
 
@@ -1194,11 +1212,11 @@ export class AcademicService {
       .createQueryBuilder('enrollment')
       .select('enrollment.section_id', 'sectionId')
       .addSelect('COUNT(enrollment.id)', 'count')
-      .where('enrollment.schoolId = :schoolId', { schoolId })
+      .where('enrollment.school_id = :schoolId', { schoolId })
       .andWhere('enrollment.section_id IN (:...sectionIds)', { sectionIds })
-      .andWhere('enrollment.isCurrent = true')
-      .andWhere('enrollment.isActive = true')
-      .andWhere('enrollment.isDeleted = false')
+      .andWhere('enrollment.is_current = true')
+      .andWhere('enrollment.is_active = true')
+      .andWhere('enrollment.is_delete = false')
       .groupBy('enrollment.section_id')
       .getRawMany();
 

@@ -553,9 +553,9 @@ export class SchoolUsersService {
       .where('rp.roleId IN (:...roleIds)', { roleIds })
       .andWhere('LOWER(m.code) = LOWER(:moduleCode)', { moduleCode })
       .andWhere('rp.isActive = true')
-      .andWhere('rp.isDeleted = false')
+      .andWhere('rp.is_delete = false')
       .andWhere('p.isActive = true')
-      .andWhere('p.isDeleted = false')
+      .andWhere('p.is_delete = false')
       .andWhere('m.isActive = true')
       .andWhere('o.isActive = true')
       .getRawMany();

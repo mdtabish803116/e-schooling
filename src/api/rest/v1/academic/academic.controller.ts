@@ -12,6 +12,7 @@ import {
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../../../shared/guards/jwt-auth.guard';
 import { CurrentUser } from '../../../../shared/decorators/current-user.decorator';
+import { CurrentAcademicSession } from '../../../../shared/decorators/current-academic-session.decorator';
 import { FeatureGuard } from '../../../../shared/guards/feature.guard';
 import { PermissionGuard } from '../../../../shared/guards/permission.guard';
 import { Feature } from '../../../../shared/decorators/feature.decorator';
@@ -57,8 +58,11 @@ export class AcademicController {
   async getClasses(
     @Param('schoolId') schoolId: string,
     @CurrentUser() user: AuthContext,
+    @CurrentAcademicSession() sessionFromHeader: string | null,
+    @Query('academicSessionId') querySessionId?: string,
   ) {
-    return this.academicService.getClasses(schoolId, user);
+    const academicSessionId = querySessionId || sessionFromHeader || undefined;
+    return this.academicService.getClasses(schoolId, user, academicSessionId);
   }
 
   @ApiOperation({ summary: 'Get class details by ID' })
