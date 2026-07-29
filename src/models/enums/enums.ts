@@ -22,8 +22,10 @@ export enum ResourceEnum {
   ATTENDANCE = 'attendance',
   CLASSES = 'classes',
   SECTIONS = 'sections',
+  ROOMS = 'rooms',
   SUBJECTS = 'subjects',
   ACADEMIC_MAPPING = 'academic_mapping',
+  ACADEMIC_SESSIONS = 'academic_sessions',
   STUDENTS = 'students',
   FEES = 'fees',
   TIMETABLE = 'timetable',
@@ -31,6 +33,8 @@ export enum ResourceEnum {
   REPORTS = 'reports',
   SCHOOL_USERS = 'school_users',
   SCHOOL_ROLES = 'school_roles',
+  STUDENT_CREDENTIALS = 'student_credentials',
+  STAFF_CREDENTIALS = 'staff_credentials',
   PLATFORM_SCHOOLS = 'platform:schools',
   PLATFORM_OWNERS = 'platform:owners',
   PLATFORM_STUDENTS = 'platform:students',
@@ -47,6 +51,7 @@ export enum ActionEnum {
   CREATE = 'create',
   UPDATE = 'update',
   DELETE = 'delete',
+  VIEW_ASSIGNED = 'view_assigned',
 }
 
 
@@ -153,7 +158,9 @@ export enum JobTypeEnum {
   SEND_WHATSAPP = 'send_whatsapp',
   SEND_EMAIL = 'send_email',
   DAILY_CLEANUP = 'daily_cleanup',
-  EXPORT_EXCEL = 'export_excel'
+  EXPORT_EXCEL = 'export_excel',
+  GENERIC_IMPORT = 'generic_import',
+  GENERIC_EXPORT = 'generic_export',
 }
 
 export enum JobStatusEnum {
@@ -204,5 +211,24 @@ export enum FeatureBillingCycleEnum {
   QUARTERLY = 'QUARTERLY',
   YEARLY = 'YEARLY',
   ONE_TIME = 'ONE_TIME',
+}
+
+export enum TimetableStatusEnum {
+  DRAFT = 'Draft',
+  PUBLISHED = 'Published',
+  ARCHIVED = 'Archived',
+}
+
+export enum PeriodTypeEnum {
+  TEACHING = 'Teaching',
+  BREAK = 'Break',
+  ASSEMBLY = 'Assembly',
+}
+
+export enum TimetableEventTypeEnum {
+  CLASS = 'class',
+  EXAM = 'exam',
+  EVENT = 'event',
+  HOLIDAY = 'holiday',
 }
 

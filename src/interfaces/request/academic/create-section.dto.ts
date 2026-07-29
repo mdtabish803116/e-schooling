@@ -22,4 +22,14 @@ export class CreateSectionDto {
   @IsOptional()
   @IsString()
   classTeacherId?: string;
+
+  @ApiPropertyOptional({ example: 'Room 101', description: 'Assigned classroom' })
+  @IsOptional()
+  @IsString()
+  room?: string;
+
+  @ApiPropertyOptional({ example: '1', description: 'Academic Session ID' })
+  @IsOptional()
+  @IsString()
+  academicSessionId?: string;
 }

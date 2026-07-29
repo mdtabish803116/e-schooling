@@ -1,31 +1,40 @@
 import {
+  BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
-  BadRequestException,
 } from '@nestjs/common';
-import { DataSource, Repository, In } from 'typeorm';
-import { Class } from '../../models/entities/academic/class.entity';
-import { Section } from '../../models/entities/academic/section.entity';
-import { Subject } from '../../models/entities/academic/subject.entity';
-import { ClassSectionSubject } from '../../models/entities/academic/class-section-subject.entity';
-import { TeacherSectionAssignment } from '../../models/entities/academic/teacher-section-assignment.entity';
+import { DataSource, In, IsNull, Repository } from 'typeorm';
+import type { AuthContext } from '../../interfaces/auth-context.interface';
+import { AllocateRoomDto } from '../../interfaces/request/academic/allocate-room.dto';
+import { CreateAcademicSessionDto } from '../../interfaces/request/academic/create-academic-session.dto';
 import { CreateClassDto } from '../../interfaces/request/academic/create-class.dto';
-import { UpdateClassDto } from '../../interfaces/request/academic/update-class.dto';
+import { CreateRoomDto } from '../../interfaces/request/academic/create-room.dto';
 import { CreateSectionDto } from '../../interfaces/request/academic/create-section.dto';
+import { CopyAcademicSessionDataDto } from '../../interfaces/request/academic/copy-academic-session-data.dto';
+import { TransferStudentsDto } from '../../interfaces/request/academic/transfer-students.dto';
+import { UpdateAcademicSessionDto } from '../../interfaces/request/academic/update-academic-session.dto';
+import { UpdateClassDto } from '../../interfaces/request/academic/update-class.dto';
+import { UpdateRoomDto } from '../../interfaces/request/academic/update-room.dto';
 import { UpdateSectionDto } from '../../interfaces/request/academic/update-section.dto';
 import { UpdateSubjectDto } from '../../interfaces/request/academic/update-subject.dto';
-import { TransferStudentsDto } from '../../interfaces/request/academic/transfer-students.dto';
-import { StudentEnrollment } from '../../models/entities/student/student-enrollment.entity';
-import { SectionTransferHistory } from '../../models/entities/student/section-transfer-history.entity';
-import { SchoolUser } from '../../models/entities/school/school-user.entity';
-import { SchoolOwner } from '../../models/entities/school/school-owner.entity';
+import { AcademicSession } from '../../models/entities/academic/academic-session.entity';
+import { ClassSectionSubject } from '../../models/entities/academic/class-section-subject.entity';
+import { Class } from '../../models/entities/academic/class.entity';
+import { Room } from '../../models/entities/academic/room.entity';
+import { Section } from '../../models/entities/academic/section.entity';
+import { Subject } from '../../models/entities/academic/subject.entity';
+import { TeacherSectionAssignment } from '../../models/entities/academic/teacher-section-assignment.entity';
 import { PlatformUser } from '../../models/entities/platform/platform-user.entity';
-import { SchoolUserRole } from '../../models/entities/rbac/school-user-role.entity';
-import { SchoolRolePermission } from '../../models/entities/rbac/school-role-permission.entity';
-import { ModuleOperationPermission } from '../../models/entities/rbac/module-operation-permission.entity';
 import { ModuleMaster } from '../../models/entities/rbac/module-master.entity';
+import { ModuleOperationPermission } from '../../models/entities/rbac/module-operation-permission.entity';
 import { OperationMaster } from '../../models/entities/rbac/operation-master.entity';
-import type { AuthContext } from '../../interfaces/auth-context.interface';
+import { SchoolRolePermission } from '../../models/entities/rbac/school-role-permission.entity';
+import { SchoolUserRole } from '../../models/entities/rbac/school-user-role.entity';
+import { SchoolOwner } from '../../models/entities/school/school-owner.entity';
+import { SchoolUser } from '../../models/entities/school/school-user.entity';
+import { SectionTransferHistory } from '../../models/entities/student/section-transfer-history.entity';
+import { StudentEnrollment } from '../../models/entities/student/student-enrollment.entity';
 
 @Injectable()
 export class AcademicService {
@@ -34,6 +43,8 @@ export class AcademicService {
   private subjectRepo: Repository<Subject>;
   private mappingRepo: Repository<ClassSectionSubject>;
   private assignmentRepo: Repository<TeacherSectionAssignment>;
+  private sessionRepo: Repository<AcademicSession>;
+  private roomRepo: Repository<Room>;
 
   constructor(private dataSource: DataSource) {
     this.classRepo = this.dataSource.getRepository(Class);
@@ -43,6 +54,8 @@ export class AcademicService {
     this.assignmentRepo = this.dataSource.getRepository(
       TeacherSectionAssignment,
     );
+    this.sessionRepo = this.dataSource.getRepository(AcademicSession);
+    this.roomRepo = this.dataSource.getRepository(Room);
   }
 
   private async checkModulePermission(
@@ -72,9 +85,9 @@ export class AcademicService {
         requiredOperation,
       })
       .andWhere('rp.isActive = true')
-      .andWhere('rp.isDeleted = false')
+      .andWhere('rp.is_delete = false')
       .andWhere('p.isActive = true')
-      .andWhere('p.isDeleted = false')
+      .andWhere('p.is_delete = false')
       .andWhere('m.isActive = true')
       .andWhere('o.isActive = true')
       .getOne();
@@ -82,16 +95,46 @@ export class AcademicService {
     return !!permission;
   }
 
+  private async getAssignedClassesAndSections(
+    schoolId: string,
+    callerId: string,
+  ): Promise<{ classIds: string[]; sectionIds: string[] }> {
+    const assignments = await this.assignmentRepo.find({
+      where: {
+        teacherId: callerId,
+        schoolId,
+        isActive: true,
+        isDeleted: false,
+      },
+    });
+
+    const classIds = [...new Set(assignments.map((a) => a.classId))];
+    const sectionIds = [
+      ...new Set(
+        assignments
+          .filter((a) => a.sectionId !== null)
+          .map((a) => a.sectionId as string),
+      ),
+    ];
+
+    return { classIds, sectionIds };
+  }
+
   // ASSIGNMENTS HELPER
-  private async upsertSectionTeacher(
+  private async upsertClassTeacher(
     schoolId: string,
     classId: string,
-    sectionId: string,
-    teacherId: string | null, // null means unassign
+    teacherId: string | null,
     userId: string,
   ) {
     const existingAssignment = await this.assignmentRepo.findOne({
-      where: { sectionId, schoolId, isClassTeacher: true, isDeleted: false },
+      where: {
+        classId,
+        schoolId,
+        sectionId: IsNull(),
+        isClassTeacher: true,
+        isDeleted: false,
+      },
     });
 
     if (teacherId) {
@@ -104,7 +147,7 @@ export class AcademicService {
         const newAssignment = this.assignmentRepo.create({
           schoolId,
           classId,
-          sectionId,
+          sectionId: null,
           teacherId,
           isClassTeacher: true,
           isActive: true,
@@ -120,8 +163,57 @@ export class AcademicService {
     }
   }
 
+  private async upsertSectionTeacher(
+    schoolId: string,
+    classId: string,
+    sectionId: string,
+    teacherId: string | null, // null means unassign
+    userId: string,
+  ) {
+    const existingAssignment = await this.assignmentRepo.findOne({
+      where: { sectionId, schoolId, isClassTeacher: false, isDeleted: false },
+    });
+
+    if (teacherId) {
+      if (existingAssignment) {
+        existingAssignment.teacherId = teacherId;
+        existingAssignment.isActive = true;
+        existingAssignment.updatedById = userId;
+        await this.assignmentRepo.save(existingAssignment);
+      } else {
+        const newAssignment = this.assignmentRepo.create({
+          schoolId,
+          classId,
+          sectionId,
+          teacherId,
+          isClassTeacher: false,
+          isActive: true,
+          createdById: userId,
+          updatedById: userId,
+        });
+        await this.assignmentRepo.save(newAssignment);
+      }
+    } else if (existingAssignment) {
+      existingAssignment.isActive = false;
+      existingAssignment.updatedById = userId;
+      await this.assignmentRepo.save(existingAssignment);
+    }
+  }
+
   // CLASSES
   async createClass(schoolId: string, data: CreateClassDto, userId: string) {
+    if (!data.name || !data.name.trim()) {
+      throw new BadRequestException('Class name is required.');
+    }
+    const name = data.name.trim().replace(/[<>]/g, '');
+    if (name.length < 2 || name.length > 100) {
+      throw new BadRequestException('Class name must be between 2 and 100 characters long.');
+    }
+    if (/\s{2,}/.test(data.name)) {
+      throw new BadRequestException('Multiple consecutive spaces are not allowed in class name.');
+    }
+    data.name = name;
+
     const normalizedInput = data.name.replace(/\s+/g, '').toLowerCase();
 
     if (data.classTeacherId) {
@@ -182,17 +274,38 @@ export class AcademicService {
           finalDefaultSectionId = savedSection.id;
         }
 
-        if (data.classTeacherId !== undefined && finalDefaultSectionId) {
-          await this.upsertSectionTeacher(
+        if (data.classTeacherId !== undefined) {
+          await this.upsertClassTeacher(
             schoolId,
             saved.id,
-            finalDefaultSectionId,
             data.classTeacherId || null,
             userId,
           );
+          const activeSections = await this.sectionRepo.find({
+            where: {
+              classId: saved.id,
+              schoolId,
+              isDeleted: false,
+              isActive: true,
+            },
+          });
+          const hasOnlyDefaultSection =
+            activeSections.length === 1 && activeSections[0].isDefault;
+          if (finalDefaultSectionId && hasOnlyDefaultSection) {
+            await this.upsertSectionTeacher(
+              schoolId,
+              saved.id,
+              finalDefaultSectionId,
+              data.classTeacherId || null,
+              userId,
+            );
+          }
         }
 
-        return saved;
+        return {
+          ...saved,
+          defaultSection,
+        };
       }
 
       if (!match.isActive) {
@@ -207,7 +320,7 @@ export class AcademicService {
     const newClass = this.classRepo.create({
       ...data,
       schoolId,
-      hasSections: false, // Force false by default, not taken from user input
+      academicSessionId: data.academicSessionId || null,
       createdById: userId,
       updatedById: userId,
     });
@@ -216,6 +329,7 @@ export class AcademicService {
     // Automatically create a default section since hasSections is false
     const newDefaultSection = this.sectionRepo.create({
       schoolId,
+      academicSessionId: data.academicSessionId || null,
       classId: savedClass.id,
       name: 'default',
       isDefault: true,
@@ -226,6 +340,12 @@ export class AcademicService {
     const savedDefaultSection = await this.sectionRepo.save(newDefaultSection);
 
     if (data.classTeacherId !== undefined) {
+      await this.upsertClassTeacher(
+        schoolId,
+        savedClass.id,
+        data.classTeacherId || null,
+        userId,
+      );
       await this.upsertSectionTeacher(
         schoolId,
         savedClass.id,
@@ -235,11 +355,131 @@ export class AcademicService {
       );
     }
 
-    return savedClass;
+    return {
+      ...savedClass,
+      defaultSection: savedDefaultSection,
+    };
   }
 
-  async getClasses(schoolId: string) {
-    return await this.classRepo.find({ where: { schoolId, isDeleted: false } });
+  async getClasses(schoolId: string, caller?: AuthContext, academicSessionId?: string) {
+    let classes = await this.classRepo.find({
+      where: { schoolId, isDeleted: false },
+      order: { createdAt: 'ASC' },
+    });
+
+    if (academicSessionId) {
+      classes = classes.filter(
+        (cls) =>
+          cls.academicSessionId === String(academicSessionId) ||
+          cls.academicSessionId === null,
+      );
+    }
+
+    if (classes.length === 0) return [];
+
+    // Filter by assigned classes if caller is not owner and only has view_assigned permission
+    if (caller && caller.actorType !== 'school_owner') {
+      const hasFullView = await this.checkModulePermission(
+        caller,
+        schoolId,
+        'classes',
+        'view',
+      );
+      if (!hasFullView) {
+        const hasViewAssigned = await this.checkModulePermission(
+          caller,
+          schoolId,
+          'classes',
+          'view_assigned',
+        );
+        if (hasViewAssigned) {
+          const { classIds } = await this.getAssignedClassesAndSections(
+            schoolId,
+            caller.id,
+          );
+          classes = classes.filter((cls) => classIds.includes(cls.id));
+        } else {
+          return [];
+        }
+      }
+    }
+
+    if (classes.length === 0) return [];
+
+    // Query sections counts grouped by classId
+    const sectionCounts = await this.sectionRepo
+      .createQueryBuilder('section')
+      .select('section.class_id', 'classId')
+      .addSelect('COUNT(section.id)', 'count')
+      .where('section.school_id = :schoolId', { schoolId: String(schoolId) })
+      .andWhere('section.is_delete = false')
+      .groupBy('section.class_id')
+      .getRawMany();
+
+    // Query active student enrollments counts grouped by classId
+    const studentCountQb = this.dataSource
+      .getRepository(StudentEnrollment)
+      .createQueryBuilder('enrollment')
+      .select('enrollment.class_id', 'classId')
+      .addSelect('COUNT(enrollment.id)', 'count')
+      .where('enrollment.school_id = :schoolId', { schoolId: String(schoolId) })
+      .andWhere('enrollment.is_current = true')
+      .andWhere('enrollment.is_active = true')
+      .andWhere('enrollment.is_delete = false');
+
+    if (academicSessionId) {
+      studentCountQb.andWhere('enrollment.academic_session_id = :academicSessionId', { academicSessionId: String(academicSessionId) });
+    }
+
+    const studentCounts = await studentCountQb
+      .groupBy('enrollment.class_id')
+      .getRawMany();
+
+    const sectionCountMap = new Map<string, number>();
+    sectionCounts.forEach((sc) => {
+      sectionCountMap.set(sc.classId, parseInt(sc.count, 10));
+    });
+
+    const studentCountMap = new Map<string, number>();
+    studentCounts.forEach((sc) => {
+      studentCountMap.set(sc.classId, parseInt(sc.count, 10));
+    });
+
+    // Fetch teacher assignments for the school (class-level)
+    const assignments = await this.assignmentRepo.find({
+      where: {
+        schoolId,
+        sectionId: IsNull(),
+        isClassTeacher: true,
+        isActive: true,
+        isDeleted: false,
+      },
+      relations: ['teacher'],
+    });
+
+    return classes.map((cls) => {
+      const sCount = sectionCountMap.get(cls.id) || 0;
+      const stCount = studentCountMap.get(cls.id) || 0;
+
+      let classTeacherId: string | null = null;
+      let classTeacherName: string | null = null;
+
+      const assignment = assignments.find((a) => a.classId === cls.id);
+      if (assignment && assignment.teacher) {
+        classTeacherId = assignment.teacherId;
+        classTeacherName = assignment.teacher.name;
+      }
+
+      return {
+        ...cls,
+        code: cls.classCode,
+        sectionsCount: sCount,
+        sectionCount: sCount,
+        studentsCount: stCount,
+        classTeacherId,
+        classTeacherName,
+      };
+    });
   }
 
   async updateClass(
@@ -321,14 +561,32 @@ export class AcademicService {
             finalDefaultSectionId = savedSection.id;
           }
 
-          if (data.classTeacherId !== undefined && finalDefaultSectionId) {
-            await this.upsertSectionTeacher(
+          if (data.classTeacherId !== undefined) {
+            await this.upsertClassTeacher(
               schoolId,
               saved.id,
-              finalDefaultSectionId,
               data.classTeacherId || null,
               userId,
             );
+            const activeSections = await this.sectionRepo.find({
+              where: {
+                classId: saved.id,
+                schoolId,
+                isDeleted: false,
+                isActive: true,
+              },
+            });
+            const hasOnlyDefaultSection =
+              activeSections.length === 1 && activeSections[0].isDefault;
+            if (finalDefaultSectionId && hasOnlyDefaultSection) {
+              await this.upsertSectionTeacher(
+                schoolId,
+                saved.id,
+                finalDefaultSectionId,
+                data.classTeacherId || null,
+                userId,
+              );
+            }
           }
 
           return saved;
@@ -349,26 +607,109 @@ export class AcademicService {
     const savedClass = await this.classRepo.save(existing);
 
     if (classTeacherId !== undefined) {
-      // Find the default section to assign the teacher
-      const defaultSection = await this.sectionRepo.findOne({
+      await this.upsertClassTeacher(
+        schoolId,
+        existing.id,
+        classTeacherId || null,
+        userId,
+      );
+      const activeSections = await this.sectionRepo.find({
         where: {
           classId: existing.id,
           schoolId,
-          name: 'default',
-          isDefault: true,
+          isDeleted: false,
+          isActive: true,
         },
       });
-      if (defaultSection) {
-        await this.upsertSectionTeacher(
-          schoolId,
-          existing.id,
-          defaultSection.id,
-          classTeacherId || null,
-          userId,
-        );
+      const hasOnlyDefaultSection =
+        activeSections.length === 1 && activeSections[0].isDefault;
+      if (hasOnlyDefaultSection) {
+        // Find the default section to assign the teacher
+        const defaultSection = await this.sectionRepo.findOne({
+          where: {
+            classId: existing.id,
+            schoolId,
+            name: 'default',
+            isDefault: true,
+          },
+        });
+        if (defaultSection) {
+          await this.upsertSectionTeacher(
+            schoolId,
+            existing.id,
+            defaultSection.id,
+            classTeacherId || null,
+            userId,
+          );
+        }
       }
     }
     return savedClass;
+  }
+
+  async deleteClass(schoolId: string, id: string, userId: string) {
+    const existing = await this.classRepo.findOne({
+      where: { id, schoolId, isDeleted: false },
+    });
+    if (!existing) throw new NotFoundException('Class not found');
+
+    // Soft-delete the class
+    existing.isDeleted = true;
+    existing.isActive = false;
+    existing.updatedById = userId;
+    await this.classRepo.save(existing);
+
+    // Also soft-delete all sections in this class
+    const sections = await this.sectionRepo.find({
+      where: { classId: id, schoolId, isDeleted: false },
+    });
+    for (const section of sections) {
+      section.isDeleted = true;
+      section.isActive = false;
+      section.updatedById = userId;
+      await this.sectionRepo.save(section);
+    }
+
+    return {
+      success: true,
+      message: 'Class deleted and unlinked all sections',
+    };
+  }
+
+  async assignClassTeacher(
+    schoolId: string,
+    classId: string,
+    teacherId: string | null,
+    userId: string,
+  ) {
+    const cls = await this.classRepo.findOne({
+      where: { id: classId, schoolId, isDeleted: false },
+    });
+    if (!cls) throw new NotFoundException('Class not found');
+
+    await this.upsertClassTeacher(schoolId, classId, teacherId, userId);
+    return { success: true, teacherId };
+  }
+
+  async assignSectionTeacher(
+    schoolId: string,
+    sectionId: string,
+    teacherId: string | null,
+    userId: string,
+  ) {
+    const sec = await this.sectionRepo.findOne({
+      where: { id: sectionId, schoolId, isDeleted: false },
+    });
+    if (!sec) throw new NotFoundException('Section not found');
+
+    await this.upsertSectionTeacher(
+      schoolId,
+      sec.classId,
+      sectionId,
+      teacherId,
+      userId,
+    );
+    return { success: true, teacherId };
   }
 
   async getClassDetails(
@@ -376,6 +717,35 @@ export class AcademicService {
     classId: string,
     caller: AuthContext,
   ) {
+    // Check permission restriction
+    if (caller.actorType !== 'school_owner') {
+      const hasFullView = await this.checkModulePermission(
+        caller,
+        schoolId,
+        'classes',
+        'view',
+      );
+      if (!hasFullView) {
+        const hasViewAssigned = await this.checkModulePermission(
+          caller,
+          schoolId,
+          'classes',
+          'view_assigned',
+        );
+        if (hasViewAssigned) {
+          const { classIds } = await this.getAssignedClassesAndSections(
+            schoolId,
+            caller.id,
+          );
+          if (!classIds.includes(classId)) {
+            throw new ForbiddenException('Access to this class is denied');
+          }
+        } else {
+          throw new ForbiddenException('Access to class details is denied');
+        }
+      }
+    }
+
     const cls = await this.classRepo.findOne({
       where: { id: classId, schoolId, isDeleted: false },
     });
@@ -443,18 +813,17 @@ export class AcademicService {
       }
     }
 
-    // Fetch active non-default sections allotted to this class
+    // Fetch sections allotted to this class (including inactive, excluding soft-deleted)
     const sections = await this.sectionRepo.find({
-      where: { classId: cls.id, schoolId, isDefault: false, isDeleted: false },
+      where: { classId: cls.id, schoolId, isDeleted: false },
       order: { name: 'ASC' },
     });
 
-    // Fetch assignments for the sections and the default section
+    // Fetch assignments for the class and its sections
     const assignments = await this.assignmentRepo.find({
       where: {
         classId: cls.id,
         schoolId,
-        isClassTeacher: true,
         isDeleted: false,
         isActive: true,
       },
@@ -464,33 +833,72 @@ export class AcademicService {
     let classTeacherId: string | null = null;
     let classTeacherName: string | null = null;
 
-    if (!cls.hasSections) {
-      const defaultSection = await this.sectionRepo.findOne({
-        where: {
-          classId: cls.id,
-          schoolId,
-          name: 'default',
-          isDefault: true,
-          isDeleted: false,
-        },
-      });
-      if (defaultSection) {
-        const assignment = assignments.find(
-          (a) => a.sectionId === defaultSection.id,
-        );
-        if (assignment && assignment.teacher) {
-          classTeacherId = assignment.teacherId;
-          classTeacherName = assignment.teacher.name;
-        }
-      }
+    const classTeacherAssignment = assignments.find(
+      (a) => a.sectionId === null && a.isClassTeacher === true,
+    );
+    if (classTeacherAssignment && classTeacherAssignment.teacher) {
+      classTeacherId = classTeacherAssignment.teacherId;
+      classTeacherName = classTeacherAssignment.teacher.name;
     }
 
-    const hasSectionViewAccess = await this.checkModulePermission(
+    // Check permissions for nested modules
+    let hasSectionViewAccess = await this.checkModulePermission(
       caller,
       schoolId,
       'sections',
       'view',
     );
+    let hasSectionViewAssigned = false;
+    if (!hasSectionViewAccess) {
+      hasSectionViewAssigned = await this.checkModulePermission(
+        caller,
+        schoolId,
+        'sections',
+        'view_assigned',
+      );
+    }
+
+    const hasStudentsViewAccess = await this.checkModulePermission(
+      caller,
+      schoolId,
+      'students',
+      'view',
+    );
+    const hasTimetableAccess = await this.checkModulePermission(
+      caller,
+      schoolId,
+      'timetable',
+      'view',
+    );
+    const hasFeesAccess = await this.checkModulePermission(
+      caller,
+      schoolId,
+      'fees',
+      'view',
+    );
+
+    let displaySections = sections;
+    if (!hasSectionViewAccess && hasSectionViewAssigned) {
+      const { sectionIds } = await this.getAssignedClassesAndSections(
+        schoolId,
+        caller.id,
+      );
+      displaySections = sections.filter((s) => sectionIds.includes(s.id));
+    }
+
+    const studentCount = hasStudentsViewAccess
+      ? await this.dataSource.getRepository(StudentEnrollment).count({
+          where: {
+            schoolId,
+            classId: cls.id,
+            isCurrent: true,
+            isActive: true,
+            isDeleted: false,
+          },
+        })
+      : null;
+
+    const canViewSections = hasSectionViewAccess || hasSectionViewAssigned;
 
     return {
       id: cls.id,
@@ -501,7 +909,6 @@ export class AcademicService {
       classTeacherId,
       classTeacherName,
       dailyAttendanceLimit: cls.dailyAttendanceLimit,
-      hasSections: cls.hasSections,
       isActive: cls.isActive,
       createdById: cls.createdById,
       createdBy: createdByName,
@@ -509,26 +916,51 @@ export class AcademicService {
       updatedBy: updatedByName,
       createdAt: cls.createdAt,
       updatedAt: cls.updatedAt,
-      sections: hasSectionViewAccess
-        ? sections.map((s) => {
-            const assignment = assignments.find((a) => a.sectionId === s.id);
+
+      // Sections access
+      sections: canViewSections
+        ? displaySections.map((s) => {
+            const assignment = assignments.find(
+              (a) => a.sectionId === s.id && a.isClassTeacher === false,
+            );
             return {
               id: s.id,
               name: s.name,
               capacity: s.capacity || null,
+              room: s.room || null,
               isDefault: s.isDefault,
               isActive: s.isActive,
-              classTeacherId: assignment ? assignment.teacherId : null,
-              classTeacherName: assignment?.teacher
+              sectionTeacherId: assignment ? assignment.teacherId : null,
+              sectionTeacherName: assignment?.teacher
                 ? assignment.teacher.name
                 : null,
             };
           })
-        : [],
+        : null,
       sectionCount: sections.length,
-      sectionMessage: hasSectionViewAccess
+      sectionsAccess: canViewSections,
+      sectionsMessage: canViewSections
         ? undefined
         : 'You do not have permission to view sections for this class.',
+
+      // Students access
+      studentsCount: studentCount,
+      studentsAccess: hasStudentsViewAccess,
+      studentsMessage: hasStudentsViewAccess
+        ? undefined
+        : 'You do not have permission to view student records for this class.',
+
+      // Timetable access
+      timetableAccess: hasTimetableAccess,
+      timetableMessage: hasTimetableAccess
+        ? undefined
+        : 'You do not have permission to view timetable for this class.',
+
+      // Fees access
+      feesAccess: hasFeesAccess,
+      feesMessage: hasFeesAccess
+        ? undefined
+        : 'You do not have permission to view fee structures for this class.',
     };
   }
 
@@ -571,14 +1003,9 @@ export class AcademicService {
         match.isDeleted = false;
         match.isActive = true;
         match.name = data.name;
+        if (data.capacity !== undefined) match.capacity = data.capacity;
+        if (data.room !== undefined) match.room = data.room;
         match.updatedById = userId;
-
-        // If the class didn't have sections marked, mark it
-        if (!parentClass.hasSections) {
-          parentClass.hasSections = true;
-          parentClass.updatedById = userId;
-          await this.classRepo.save(parentClass);
-        }
 
         // Check if there was a default section and soft-delete/deactivate it if restoring a custom one
         const defaultSection = await this.sectionRepo.findOne({
@@ -628,17 +1055,12 @@ export class AcademicService {
         },
       });
 
-      // Mark the Class as having multiple sections
-      if (!parentClass.hasSections) {
-        parentClass.hasSections = true;
-        parentClass.updatedById = userId;
-        await queryRunner.manager.save(Class, parentClass);
-      }
-
       // Create new section
+      const targetAcademicSessionId = data.academicSessionId || parentClass.academicSessionId || null;
       const section = queryRunner.manager.create(Section, {
         ...data,
         schoolId,
+        academicSessionId: targetAcademicSessionId,
         isDefault: false,
         createdById: userId,
         updatedById: userId,
@@ -651,10 +1073,11 @@ export class AcademicService {
             TeacherSectionAssignment,
             {
               schoolId,
+              academicSessionId: targetAcademicSessionId,
               classId: data.classId,
               sectionId: savedSection.id,
               teacherId: data.classTeacherId,
-              isClassTeacher: true,
+              isClassTeacher: false,
               isActive: true,
               createdById: userId,
               updatedById: userId,
@@ -748,33 +1171,224 @@ export class AcademicService {
     }
   }
 
-  async getSections(schoolId: string, classId?: string) {
-    const where: any = { schoolId, isDefault: false, isDeleted: false };
+  async getSections(schoolId: string, caller?: AuthContext, classId?: string, academicSessionId?: string) {
+    const where: any = { schoolId, isDeleted: false };
     if (classId) where.classId = classId;
-    const sections = await this.sectionRepo.find({ where });
+    let sections = await this.sectionRepo.find({ where });
+
+    if (academicSessionId) {
+      sections = sections.filter(
+        (s) =>
+          s.academicSessionId === String(academicSessionId) ||
+          s.academicSessionId === null,
+      );
+    }
+
+    if (sections.length === 0) return [];
+
+    // Filter by assigned sections if caller is not owner and only has view_assigned permission
+    if (caller && caller.actorType !== 'school_owner') {
+      const hasFullView = await this.checkModulePermission(
+        caller,
+        schoolId,
+        'sections',
+        'view',
+      );
+      if (!hasFullView) {
+        const hasViewAssigned = await this.checkModulePermission(
+          caller,
+          schoolId,
+          'sections',
+          'view_assigned',
+        );
+        if (hasViewAssigned) {
+          const { classIds, sectionIds } =
+            await this.getAssignedClassesAndSections(schoolId, caller.id);
+          sections = sections.filter(
+            (s) => sectionIds.includes(s.id) || classIds.includes(s.classId),
+          );
+        } else {
+          return [];
+        }
+      }
+    }
+
+    if (sections.length === 0) return [];
 
     const sectionIds = sections.map((s) => s.id);
-    let assignments: TeacherSectionAssignment[] = [];
-    if (sectionIds.length > 0) {
-      assignments = await this.assignmentRepo.find({
-        where: {
-          sectionId: In(sectionIds),
-          isClassTeacher: true,
-          isDeleted: false,
-          isActive: true,
-        },
-        relations: ['teacher'],
-      });
-    }
+
+    // Fetch assignments in parallel
+    const assignmentsPromise = this.assignmentRepo.find({
+      where: {
+        sectionId: In(sectionIds),
+        isClassTeacher: false,
+        isDeleted: false,
+        isActive: true,
+      },
+      relations: ['teacher'],
+    });
+
+    // Fetch active student counts for each section
+    const studentCountsPromise = this.dataSource
+      .getRepository(StudentEnrollment)
+      .createQueryBuilder('enrollment')
+      .select('enrollment.section_id', 'sectionId')
+      .addSelect('COUNT(enrollment.id)', 'count')
+      .where('enrollment.school_id = :schoolId', { schoolId })
+      .andWhere('enrollment.section_id IN (:...sectionIds)', { sectionIds })
+      .andWhere('enrollment.is_current = true')
+      .andWhere('enrollment.is_active = true')
+      .andWhere('enrollment.is_delete = false')
+      .groupBy('enrollment.section_id')
+      .getRawMany();
+
+    const [assignments, studentCounts] = await Promise.all([
+      assignmentsPromise,
+      studentCountsPromise,
+    ]);
+
+    const studentCountMap = new Map<string, number>();
+    studentCounts.forEach((sc) => {
+      studentCountMap.set(sc.sectionId, parseInt(sc.count, 10));
+    });
 
     return sections.map((s) => {
       const assignment = assignments.find((a) => a.sectionId === s.id);
+      const stCount = studentCountMap.get(s.id) || 0;
       return {
         ...s,
+        status: s.isActive ? 'ACTIVE' : 'INACTIVE',
+        sectionTeacherId: assignment ? assignment.teacherId : null,
+        sectionTeacherName: assignment?.teacher
+          ? assignment.teacher.name
+          : null,
         classTeacherId: assignment ? assignment.teacherId : null,
         classTeacherName: assignment?.teacher ? assignment.teacher.name : null,
+        studentsCount: stCount,
       };
     });
+  }
+
+  async getSectionDetails(
+    schoolId: string,
+    sectionId: string,
+    caller: AuthContext,
+  ) {
+    const sec = await this.sectionRepo.findOne({
+      where: { id: sectionId, schoolId, isDeleted: false },
+      relations: ['class'],
+    });
+    if (!sec) {
+      throw new NotFoundException('Section not found');
+    }
+
+    if (caller.actorType !== 'school_owner') {
+      const hasFullView = await this.checkModulePermission(
+        caller,
+        schoolId,
+        'sections',
+        'view',
+      );
+      if (!hasFullView) {
+        const hasViewAssigned = await this.checkModulePermission(
+          caller,
+          schoolId,
+          'sections',
+          'view_assigned',
+        );
+        if (hasViewAssigned) {
+          const { classIds, sectionIds } =
+            await this.getAssignedClassesAndSections(schoolId, caller.id);
+          if (
+            !sectionIds.includes(sectionId) &&
+            !classIds.includes(sec.classId)
+          ) {
+            throw new ForbiddenException('Access to this section is denied');
+          }
+        } else {
+          throw new ForbiddenException('Access to section details is denied');
+        }
+      }
+    }
+
+    const assignment = await this.assignmentRepo.findOne({
+      where: {
+        sectionId: sec.id,
+        isClassTeacher: false,
+        isDeleted: false,
+        isActive: true,
+      },
+      relations: ['teacher'],
+    });
+
+    const hasStudentsViewAccess = await this.checkModulePermission(
+      caller,
+      schoolId,
+      'students',
+      'view',
+    );
+    const hasTimetableAccess = await this.checkModulePermission(
+      caller,
+      schoolId,
+      'timetable',
+      'view',
+    );
+    const hasFeesAccess = await this.checkModulePermission(
+      caller,
+      schoolId,
+      'fees',
+      'view',
+    );
+
+    const studentCount = hasStudentsViewAccess
+      ? await this.dataSource.getRepository(StudentEnrollment).count({
+          where: {
+            schoolId,
+            sectionId: sec.id,
+            isCurrent: true,
+            isActive: true,
+            isDeleted: false,
+          },
+        })
+      : null;
+
+    return {
+      id: sec.id,
+      schoolId: sec.schoolId,
+      classId: sec.classId,
+      className: sec.class?.name || 'Class',
+      name: sec.name,
+      capacity: sec.capacity || 40,
+      room: sec.room || null,
+      isDefault: sec.isDefault,
+      isActive: sec.isActive,
+      status: sec.isActive ? 'ACTIVE' : 'INACTIVE',
+      sectionTeacherId: assignment ? assignment.teacherId : null,
+      sectionTeacherName: assignment?.teacher ? assignment.teacher.name : null,
+      classTeacherId: assignment ? assignment.teacherId : null,
+      classTeacherName: assignment?.teacher ? assignment.teacher.name : null,
+      createdAt: sec.createdAt,
+      updatedAt: sec.updatedAt,
+
+      // Students access
+      studentsCount: studentCount,
+      studentsAccess: hasStudentsViewAccess,
+      studentsMessage: hasStudentsViewAccess
+        ? undefined
+        : 'You do not have permission to view student records for this section.',
+
+      // Timetable access
+      timetableAccess: hasTimetableAccess,
+      timetableMessage: hasTimetableAccess
+        ? undefined
+        : 'You do not have permission to view timetable for this section.',
+
+      // Fees access
+      feesAccess: hasFeesAccess,
+      feesMessage: hasFeesAccess
+        ? undefined
+        : 'You do not have permission to view fee structures for this section.',
+    };
   }
 
   async updateSection(
@@ -787,6 +1401,10 @@ export class AcademicService {
       where: { id, schoolId, isDeleted: false },
     });
     if (!existing) throw new NotFoundException('Section not found');
+
+    if (existing.isDefault && data.isActive === false) {
+      throw new BadRequestException('Cannot deactivate the default section');
+    }
 
     if (data.classTeacherId) {
       const teacher = await this.dataSource.getRepository(SchoolUser).findOne({
@@ -820,6 +1438,7 @@ export class AcademicService {
           match.isActive = true;
           match.name = data.name;
           if (data.capacity !== undefined) match.capacity = data.capacity;
+          if (data.room !== undefined) match.room = data.room;
           match.updatedById = userId;
           const savedSection = await this.sectionRepo.save(match);
 
@@ -861,6 +1480,26 @@ export class AcademicService {
       );
     }
     return savedSection;
+  }
+
+  async deleteSection(schoolId: string, id: string, userId: string) {
+    const existing = await this.sectionRepo.findOne({
+      where: { id, schoolId, isDeleted: false },
+    });
+    if (!existing) throw new NotFoundException('Section not found');
+
+    if (existing.isDefault) {
+      throw new BadRequestException(
+        'Cannot delete the default section of a class',
+      );
+    }
+
+    existing.isDeleted = true;
+    existing.isActive = false;
+    existing.updatedById = userId;
+    await this.sectionRepo.save(existing);
+
+    return { success: true, message: 'Section deleted successfully' };
   }
 
   async transferStudents(
@@ -991,10 +1630,18 @@ export class AcademicService {
     return await this.subjectRepo.save(subject);
   }
 
-  async getSubjects(schoolId: string) {
-    return await this.subjectRepo.find({
+  async getSubjects(schoolId: string, academicSessionId?: string) {
+    let subjects = await this.subjectRepo.find({
       where: { schoolId, isDeleted: false },
     });
+    if (academicSessionId) {
+      subjects = subjects.filter(
+        (s) =>
+          s.academicSessionId === String(academicSessionId) ||
+          s.academicSessionId === null,
+      );
+    }
+    return subjects;
   }
 
   async updateSubject(
@@ -1106,19 +1753,855 @@ export class AcademicService {
     const mapping = this.mappingRepo.create({
       ...data,
       schoolId,
+      academicSessionId: data.academicSessionId || cls.academicSessionId || null,
       createdById: userId,
       updatedById: userId,
     });
     return await this.mappingRepo.save(mapping);
   }
 
-  async getMappings(schoolId: string, classId?: string, sectionId?: string) {
-    const where: any = { schoolId };
+  async getMappings(
+    schoolId: string,
+    classId?: string,
+    sectionId?: string,
+    academicSessionId?: string,
+  ) {
+    const where: any = { schoolId, isDeleted: false };
     if (classId) where.classId = classId;
     if (sectionId) where.sectionId = sectionId;
-    return await this.mappingRepo.find({
+    let mappings = await this.mappingRepo.find({
       where,
       relations: ['class', 'section', 'subject'],
     });
+
+    if (academicSessionId) {
+      mappings = mappings.filter(
+        (m) =>
+          m.academicSessionId === String(academicSessionId) ||
+          m.academicSessionId === null,
+      );
+    }
+    return mappings;
+  }
+
+  // ACADEMIC SESSIONS CRUD
+  async createAcademicSession(
+    schoolId: string,
+    dto: CreateAcademicSessionDto,
+    userId: string,
+  ) {
+    // Check duplicate name for the school
+    const normalizedName = dto.name.replace(/\s+/g, '').toLowerCase();
+    const existingSessions = await this.sessionRepo.find({
+      where: { schoolId, isDeleted: false },
+    });
+    const match = existingSessions.find(
+      (s) => s.name.replace(/\s+/g, '').toLowerCase() === normalizedName,
+    );
+    if (match) {
+      throw new BadRequestException(
+        `Academic session '${dto.name}' already exists for this school`,
+      );
+    }
+
+    // If marked as current or if this is the first session, unset isCurrent on all existing
+    const isFirstSession = existingSessions.length === 0;
+    const shouldBeCurrent = dto.isCurrent ?? isFirstSession;
+
+    if (shouldBeCurrent) {
+      await this.sessionRepo.update(
+        { schoolId, isDeleted: false },
+        { isCurrent: false },
+      );
+    }
+
+    const session = this.sessionRepo.create({
+      schoolId,
+      name: dto.name,
+      startDate: dto.startDate,
+      endDate: dto.endDate,
+      isCurrent: shouldBeCurrent,
+      isActive: dto.isActive !== false,
+      isDeleted: false,
+      createdById: userId,
+      updatedById: userId,
+    });
+
+    return await this.sessionRepo.save(session);
+  }
+
+  async getAcademicSessions(schoolId: string) {
+    return await this.sessionRepo.find({
+      where: { schoolId, isDeleted: false },
+      order: { startDate: 'DESC', createdAt: 'DESC' },
+    });
+  }
+
+  async getAcademicSessionDetails(schoolId: string, id: string) {
+    const session = await this.sessionRepo.findOne({
+      where: { id, schoolId, isDeleted: false },
+    });
+    if (!session) {
+      throw new NotFoundException('Academic session not found');
+    }
+    return session;
+  }
+
+  async updateAcademicSession(
+    schoolId: string,
+    id: string,
+    dto: UpdateAcademicSessionDto,
+    userId: string,
+  ) {
+    const session = await this.sessionRepo.findOne({
+      where: { id, schoolId, isDeleted: false },
+    });
+    if (!session) {
+      throw new NotFoundException('Academic session not found');
+    }
+
+    if (dto.name && dto.name !== session.name) {
+      const normalizedName = dto.name.replace(/\s+/g, '').toLowerCase();
+      const existingSessions = await this.sessionRepo.find({
+        where: { schoolId, isDeleted: false },
+      });
+      const match = existingSessions.find(
+        (s) =>
+          s.id !== id &&
+          s.name.replace(/\s+/g, '').toLowerCase() === normalizedName,
+      );
+      if (match) {
+        throw new BadRequestException(
+          `Academic session '${dto.name}' already exists for this school`,
+        );
+      }
+    }
+
+    if (dto.isCurrent === true) {
+      await this.sessionRepo.update(
+        { schoolId, isDeleted: false },
+        { isCurrent: false },
+      );
+    }
+
+    Object.assign(session, {
+      ...dto,
+      updatedById: userId,
+    });
+
+    return await this.sessionRepo.save(session);
+  }
+
+  async deleteAcademicSession(schoolId: string, id: string, userId: string) {
+    const session = await this.sessionRepo.findOne({
+      where: { id, schoolId, isDeleted: false },
+    });
+    if (!session) {
+      throw new NotFoundException('Academic session not found');
+    }
+
+    if (session.isCurrent) {
+      throw new BadRequestException(
+        'Cannot delete the current active academic session. Please set another session as current first.',
+      );
+    }
+
+    session.isDeleted = true;
+    session.isActive = false;
+    session.updatedById = userId;
+    await this.sessionRepo.save(session);
+
+    return {
+      success: true,
+      message: 'Academic session deleted successfully',
+    };
+  }
+
+  async setAsCurrentAcademicSession(
+    schoolId: string,
+    id: string,
+    userId: string,
+  ) {
+    const session = await this.sessionRepo.findOne({
+      where: { id, schoolId, isDeleted: false },
+    });
+    if (!session) {
+      throw new NotFoundException('Academic session not found');
+    }
+
+    // Unset all other sessions
+    await this.sessionRepo.update(
+      { schoolId, isDeleted: false },
+      { isCurrent: false },
+    );
+
+    session.isCurrent = true;
+    session.isActive = true;
+    session.updatedById = userId;
+    return await this.sessionRepo.save(session);
+  }
+
+  async getCurrentAcademicSession(schoolId: string) {
+    let session = await this.sessionRepo.findOne({
+      where: { schoolId, isCurrent: true, isDeleted: false },
+    });
+    if (!session) {
+      session = await this.sessionRepo.findOne({
+        where: { schoolId, isDeleted: false },
+        order: { startDate: 'DESC', createdAt: 'DESC' },
+      });
+    }
+    if (!session) {
+      throw new NotFoundException('No active academic session found');
+    }
+    return session;
+  }
+
+  // ROOMS / CLASSROOMSPersisted DB Methods
+  async createRoom(schoolId: string, dto: CreateRoomDto, userId: string) {
+    const existing = await this.roomRepo.findOne({
+      where: { schoolId, name: dto.name, isDeleted: false },
+    });
+    if (existing) {
+      throw new BadRequestException(
+        `Room "${dto.name}" already exists in this school.`,
+      );
+    }
+
+    const room = this.roomRepo.create({
+      schoolId,
+      academicSessionId: dto.academicSessionId || null,
+      name: dto.name,
+      block: dto.block || 'Main Block',
+      floor: dto.floor !== undefined ? dto.floor : 1,
+      capacity: dto.capacity !== undefined ? dto.capacity : 40,
+      equipment: dto.equipment || ['Smartboard', 'AC'],
+      assignedSectionId: null,
+      createdById: userId,
+      updatedById: userId,
+    });
+
+    return await this.roomRepo.save(room);
+  }
+
+  async getRooms(schoolId: string, academicSessionId?: string) {
+    try {
+      if (!this.roomRepo) {
+        this.roomRepo = this.dataSource.getRepository(Room);
+      }
+      let rooms = await this.roomRepo.find({
+        where: { schoolId, isDeleted: false },
+        order: { name: 'ASC' },
+      });
+
+      if (academicSessionId) {
+        rooms = rooms.filter(
+          (r) =>
+            r.academicSessionId === String(academicSessionId) ||
+            r.academicSessionId === null,
+        );
+      }
+
+      const sections = await this.sectionRepo.find({
+        where: { schoolId, isDeleted: false },
+        relations: ['class'],
+      });
+
+      const sectionMap = new Map(sections.map((s) => [String(s.id), s]));
+
+      return rooms.map((room) => {
+        let assignedSectionName: string | undefined = undefined;
+        let occupancy = 0;
+
+        if (room.assignedSectionId) {
+          const sec = sectionMap.get(String(room.assignedSectionId));
+          if (sec) {
+            assignedSectionName = `${sec.class?.name || 'Class'} - ${sec.name}`;
+            occupancy = sec.capacity || 30;
+          }
+        }
+
+        return {
+          ...room,
+          occupancy,
+          assignedSectionName,
+        };
+      });
+    } catch (e) {
+      console.error('Error fetching rooms from DB:', e);
+      return [];
+    }
+  }
+
+  async getRoomById(schoolId: string, roomId: string) {
+    const room = await this.roomRepo.findOne({
+      where: { id: roomId, schoolId, isDeleted: false },
+    });
+    if (!room) {
+      throw new NotFoundException('Room not found');
+    }
+    return room;
+  }
+
+  async updateRoom(
+    schoolId: string,
+    roomId: string,
+    dto: UpdateRoomDto,
+    userId: string,
+  ) {
+    const room = await this.getRoomById(schoolId, roomId);
+
+    if (dto.name && dto.name !== room.name) {
+      const existing = await this.roomRepo.findOne({
+        where: { schoolId, name: dto.name, isDeleted: false },
+      });
+      if (existing && existing.id !== roomId) {
+        throw new BadRequestException(`Room "${dto.name}" already exists.`);
+      }
+    }
+
+    if (dto.name !== undefined) room.name = dto.name;
+    if (dto.block !== undefined) room.block = dto.block;
+    if (dto.floor !== undefined) room.floor = dto.floor;
+    if (dto.capacity !== undefined) room.capacity = dto.capacity;
+    if (dto.equipment !== undefined) room.equipment = dto.equipment;
+    if (dto.isActive !== undefined) room.isActive = dto.isActive;
+    room.updatedById = userId;
+
+    return await this.roomRepo.save(room);
+  }
+
+  async deleteRoom(schoolId: string, roomId: string, userId: string) {
+    const room = await this.getRoomById(schoolId, roomId);
+
+    // Unassign section if currently allocated
+    if (room.assignedSectionId) {
+      const sec = await this.sectionRepo.findOne({
+        where: { id: room.assignedSectionId, schoolId },
+      });
+      if (sec && sec.room === room.name) {
+        sec.room = '';
+        sec.updatedById = userId;
+        await this.sectionRepo.save(sec);
+      }
+    }
+
+    room.isDeleted = true;
+    room.assignedSectionId = null;
+    room.updatedById = userId;
+    await this.roomRepo.save(room);
+
+    return { success: true, message: 'Room deleted successfully' };
+  }
+
+  async allocateRoom(
+    schoolId: string,
+    roomId: string,
+    dto: AllocateRoomDto,
+    userId: string,
+  ) {
+    const room = await this.getRoomById(schoolId, roomId);
+
+    if (!dto.sectionId) {
+      // UNASSIGN ROOM
+      if (room.assignedSectionId) {
+        const oldSec = await this.sectionRepo.findOne({
+          where: { id: room.assignedSectionId, schoolId },
+        });
+        if (oldSec) {
+          oldSec.room = '';
+          oldSec.updatedById = userId;
+          await this.sectionRepo.save(oldSec);
+        }
+      }
+
+      room.assignedSectionId = null;
+      room.updatedById = userId;
+      return await this.roomRepo.save(room);
+    }
+
+    // ASSIGN ROOM TO SECTION
+    const section = await this.sectionRepo.findOne({
+      where: { id: dto.sectionId, schoolId, isDeleted: false },
+      relations: ['class'],
+    });
+    if (!section) {
+      throw new NotFoundException('Section not found');
+    }
+
+    // Conflict Check 1: Check if target section is ALREADY allocated to another room
+    const existingRoomForSection = await this.roomRepo.findOne({
+      where: { schoolId, assignedSectionId: section.id, isDeleted: false },
+    });
+    if (existingRoomForSection && existingRoomForSection.id !== roomId) {
+      throw new BadRequestException(
+        `Section "${section.class?.name || 'Class'} - ${section.name}" is already allocated to Room "${existingRoomForSection.name}". Unassign it first.`,
+      );
+    }
+
+    // Conflict Check 2: If this room already had another section, clear that section's room property
+    if (room.assignedSectionId && room.assignedSectionId !== section.id) {
+      const prevSec = await this.sectionRepo.findOne({
+        where: { id: room.assignedSectionId, schoolId },
+      });
+      if (prevSec) {
+        prevSec.room = '';
+        prevSec.updatedById = userId;
+        await this.sectionRepo.save(prevSec);
+      }
+    }
+
+    // Perform allocation
+    room.assignedSectionId = section.id;
+    room.updatedById = userId;
+
+    section.room = room.name;
+    section.updatedById = userId;
+
+    await this.sectionRepo.save(section);
+    return await this.roomRepo.save(room);
+  }
+
+  async copyAcademicSessionData(
+    schoolId: string,
+    dto: CopyAcademicSessionDataDto,
+    userId: string,
+  ) {
+    const { fromAcademicSessionId, toAcademicSessionId, modules } = dto;
+
+    if (fromAcademicSessionId === toAcademicSessionId) {
+      throw new BadRequestException(
+        'Source and target academic sessions must be different.',
+      );
+    }
+
+    const [fromSession, toSession] = await Promise.all([
+      this.sessionRepo.findOne({
+        where: { id: fromAcademicSessionId, schoolId, isDeleted: false },
+      }),
+      this.sessionRepo.findOne({
+        where: { id: toAcademicSessionId, schoolId, isDeleted: false },
+      }),
+    ]);
+
+    if (!fromSession) {
+      throw new NotFoundException(
+        `Source academic session (${fromAcademicSessionId}) not found`,
+      );
+    }
+    if (!toSession) {
+      throw new NotFoundException(
+        `Target academic session (${toAcademicSessionId}) not found`,
+      );
+    }
+
+    const copyAll = !modules || modules.length === 0;
+    const shouldCopyClasses = copyAll || modules.includes('classes');
+    const shouldCopySections = copyAll || modules.includes('sections');
+    const shouldCopySubjects = copyAll || modules.includes('subjects');
+    const shouldCopyMappings = copyAll || modules.includes('mappings');
+    const shouldCopyRooms = copyAll || modules.includes('rooms');
+    const shouldCopyStaff = copyAll || modules.includes('staff');
+    const shouldCopyStudents = copyAll || modules.includes('students');
+
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      const summary = {
+        copiedClasses: 0,
+        copiedSections: 0,
+        copiedSubjects: 0,
+        copiedMappings: 0,
+        copiedRooms: 0,
+        copiedStaffAssignments: 0,
+        copiedStudentEnrollments: 0,
+      };
+
+      const classIdMap = new Map<string, string>();
+      const sectionIdMap = new Map<string, string>();
+      const subjectIdMap = new Map<string, string>();
+
+      // 1. Copy Classes in Bulk
+      if (shouldCopyClasses) {
+        const sourceClasses = await queryRunner.manager.find(Class, {
+          where: [
+            { schoolId, academicSessionId: fromAcademicSessionId, isDeleted: false },
+            { schoolId, academicSessionId: IsNull(), isDeleted: false },
+          ],
+        });
+
+        const newClassesToCreate: Class[] = [];
+
+        for (const sourceClass of sourceClasses) {
+          const existingTargetClass = await queryRunner.manager.findOne(Class, {
+            where: {
+              schoolId,
+              name: sourceClass.name,
+              academicSessionId: toAcademicSessionId,
+              isDeleted: false,
+            },
+          });
+
+          if (existingTargetClass) {
+            classIdMap.set(sourceClass.id, existingTargetClass.id);
+          } else {
+            const newClass = queryRunner.manager.create(Class, {
+              schoolId,
+              academicSessionId: toAcademicSessionId,
+              name: sourceClass.name,
+              classCode: sourceClass.classCode,
+              description: sourceClass.description,
+              dailyAttendanceLimit: sourceClass.dailyAttendanceLimit,
+              isActive: true,
+              createdById: userId,
+              updatedById: userId,
+            });
+            newClassesToCreate.push(newClass);
+          }
+        }
+
+        if (newClassesToCreate.length > 0) {
+          const savedClasses = await queryRunner.manager.save(Class, newClassesToCreate);
+          summary.copiedClasses = savedClasses.length;
+          for (const sourceClass of sourceClasses) {
+            if (!classIdMap.has(sourceClass.id)) {
+              const matched = savedClasses.find((sc) => sc.name === sourceClass.name);
+              if (matched) classIdMap.set(sourceClass.id, matched.id);
+            }
+          }
+        }
+      }
+
+      // 2. Copy Sections in Bulk
+      if (shouldCopySections) {
+        const sourceSections = await queryRunner.manager.find(Section, {
+          where: [
+            { schoolId, academicSessionId: fromAcademicSessionId, isDeleted: false },
+            { schoolId, academicSessionId: IsNull(), isDeleted: false },
+          ],
+        });
+
+        const newSectionsToCreate: Section[] = [];
+
+        for (const sourceSec of sourceSections) {
+          const targetClassId = classIdMap.get(sourceSec.classId) || sourceSec.classId;
+          const existingTargetSec = await queryRunner.manager.findOne(Section, {
+            where: {
+              schoolId,
+              classId: targetClassId,
+              name: sourceSec.name,
+              academicSessionId: toAcademicSessionId,
+              isDeleted: false,
+            },
+          });
+
+          if (existingTargetSec) {
+            sectionIdMap.set(sourceSec.id, existingTargetSec.id);
+          } else {
+            const newSec = queryRunner.manager.create(Section, {
+              schoolId,
+              academicSessionId: toAcademicSessionId,
+              classId: targetClassId,
+              name: sourceSec.name,
+              capacity: sourceSec.capacity,
+              room: sourceSec.room,
+              isDefault: sourceSec.isDefault,
+              isActive: true,
+              createdById: userId,
+              updatedById: userId,
+            });
+            newSectionsToCreate.push(newSec);
+          }
+        }
+
+        if (newSectionsToCreate.length > 0) {
+          const savedSections = await queryRunner.manager.save(Section, newSectionsToCreate);
+          summary.copiedSections = savedSections.length;
+          for (const sourceSec of sourceSections) {
+            if (!sectionIdMap.has(sourceSec.id)) {
+              const targetClassId = classIdMap.get(sourceSec.classId) || sourceSec.classId;
+              const matched = savedSections.find(
+                (ss) => ss.classId === targetClassId && ss.name === sourceSec.name,
+              );
+              if (matched) sectionIdMap.set(sourceSec.id, matched.id);
+            }
+          }
+        }
+      }
+
+      // 3. Copy Subjects in Bulk
+      if (shouldCopySubjects) {
+        const sourceSubjects = await queryRunner.manager.find(Subject, {
+          where: [
+            { schoolId, academicSessionId: fromAcademicSessionId, isDeleted: false },
+            { schoolId, academicSessionId: IsNull(), isDeleted: false },
+          ],
+        });
+
+        const newSubjectsToCreate: Subject[] = [];
+
+        for (const sourceSub of sourceSubjects) {
+          const existingTargetSub = await queryRunner.manager.findOne(Subject, {
+            where: {
+              schoolId,
+              name: sourceSub.name,
+              academicSessionId: toAcademicSessionId,
+              isDeleted: false,
+            },
+          });
+
+          if (existingTargetSub) {
+            subjectIdMap.set(sourceSub.id, existingTargetSub.id);
+          } else {
+            const newSub = queryRunner.manager.create(Subject, {
+              schoolId,
+              academicSessionId: toAcademicSessionId,
+              name: sourceSub.name,
+              isActive: true,
+              createdById: userId,
+              updatedById: userId,
+            });
+            newSubjectsToCreate.push(newSub);
+          }
+        }
+
+        if (newSubjectsToCreate.length > 0) {
+          const savedSubjects = await queryRunner.manager.save(Subject, newSubjectsToCreate);
+          summary.copiedSubjects = savedSubjects.length;
+          for (const sourceSub of sourceSubjects) {
+            if (!subjectIdMap.has(sourceSub.id)) {
+              const matched = savedSubjects.find((ss) => ss.name === sourceSub.name);
+              if (matched) subjectIdMap.set(sourceSub.id, matched.id);
+            }
+          }
+        }
+      }
+
+      // 4. Copy Mappings in Bulk
+      if (shouldCopyMappings) {
+        const sourceMappings = await queryRunner.manager.find(ClassSectionSubject, {
+          where: [
+            { schoolId, academicSessionId: fromAcademicSessionId, isDeleted: false },
+            { schoolId, academicSessionId: IsNull(), isDeleted: false },
+          ],
+        });
+
+        const newMappingsToCreate: ClassSectionSubject[] = [];
+
+        for (const sourceMapping of sourceMappings) {
+          const targetClassId = classIdMap.get(sourceMapping.classId) || sourceMapping.classId;
+          const targetSectionId = sectionIdMap.get(sourceMapping.sectionId) || sourceMapping.sectionId;
+          const targetSubjectId = subjectIdMap.get(sourceMapping.subjectId) || sourceMapping.subjectId;
+
+          const existingMapping = await queryRunner.manager.findOne(ClassSectionSubject, {
+            where: {
+              schoolId,
+              classId: targetClassId,
+              sectionId: targetSectionId,
+              subjectId: targetSubjectId,
+              academicSessionId: toAcademicSessionId,
+              isDeleted: false,
+            },
+          });
+
+          if (!existingMapping) {
+            const newMapping = queryRunner.manager.create(ClassSectionSubject, {
+              schoolId,
+              academicSessionId: toAcademicSessionId,
+              classId: targetClassId,
+              sectionId: targetSectionId,
+              subjectId: targetSubjectId,
+              teacherId: sourceMapping.teacherId,
+              isActive: true,
+              createdById: userId,
+              updatedById: userId,
+            });
+            newMappingsToCreate.push(newMapping);
+          }
+        }
+
+        if (newMappingsToCreate.length > 0) {
+          const savedMappings = await queryRunner.manager.save(ClassSectionSubject, newMappingsToCreate);
+          summary.copiedMappings = savedMappings.length;
+        }
+      }
+
+      // 5. Copy Rooms in Bulk
+      if (shouldCopyRooms) {
+        const sourceRooms = await queryRunner.manager.find(Room, {
+          where: [
+            { schoolId, academicSessionId: fromAcademicSessionId, isDeleted: false },
+            { schoolId, academicSessionId: IsNull(), isDeleted: false },
+          ],
+        });
+
+        const newRoomsToCreate: Room[] = [];
+
+        for (const sourceRoom of sourceRooms) {
+          const targetAssignedSectionId = sourceRoom.assignedSectionId
+            ? sectionIdMap.get(sourceRoom.assignedSectionId) || null
+            : null;
+
+          const existingTargetRoom = await queryRunner.manager.findOne(Room, {
+            where: {
+              schoolId,
+              name: sourceRoom.name,
+              academicSessionId: toAcademicSessionId,
+              isDeleted: false,
+            },
+          });
+
+          if (!existingTargetRoom) {
+            const newRoom = queryRunner.manager.create(Room, {
+              schoolId,
+              academicSessionId: toAcademicSessionId,
+              name: sourceRoom.name,
+              block: sourceRoom.block,
+              floor: sourceRoom.floor,
+              capacity: sourceRoom.capacity,
+              equipment: sourceRoom.equipment,
+              assignedSectionId: targetAssignedSectionId,
+              isActive: true,
+              createdById: userId,
+              updatedById: userId,
+            });
+            newRoomsToCreate.push(newRoom);
+          }
+        }
+
+        if (newRoomsToCreate.length > 0) {
+          const savedRooms = await queryRunner.manager.save(Room, newRoomsToCreate);
+          summary.copiedRooms = savedRooms.length;
+        }
+      }
+
+      // 6. Copy Staff Teacher Section Assignments in Bulk
+      if (shouldCopyStaff) {
+        const sourceStaffAssignments = await queryRunner.manager.find(TeacherSectionAssignment, {
+          where: [
+            { schoolId, academicSessionId: fromAcademicSessionId, isDeleted: false, isActive: true },
+            { schoolId, academicSessionId: IsNull(), isDeleted: false, isActive: true },
+          ],
+        });
+
+        const newStaffToCreate: TeacherSectionAssignment[] = [];
+
+        for (const sourceAssign of sourceStaffAssignments) {
+          const targetClassId = classIdMap.get(sourceAssign.classId) || sourceAssign.classId;
+          const targetSectionId = sourceAssign.sectionId
+            ? sectionIdMap.get(sourceAssign.sectionId) || sourceAssign.sectionId
+            : null;
+
+          const existingAssign = await queryRunner.manager.findOne(TeacherSectionAssignment, {
+            where: {
+              schoolId,
+              teacherId: sourceAssign.teacherId,
+              classId: targetClassId,
+              sectionId: targetSectionId === null ? IsNull() : targetSectionId,
+              academicSessionId: toAcademicSessionId,
+              isDeleted: false,
+            },
+          });
+
+          if (!existingAssign) {
+            const newAssign = queryRunner.manager.create(TeacherSectionAssignment, {
+              schoolId,
+              academicSessionId: toAcademicSessionId,
+              teacherId: sourceAssign.teacherId,
+              classId: targetClassId,
+              sectionId: targetSectionId,
+              isClassTeacher: sourceAssign.isClassTeacher,
+              isActive: true,
+              createdById: userId,
+              updatedById: userId,
+            });
+            newStaffToCreate.push(newAssign);
+          }
+        }
+
+        if (newStaffToCreate.length > 0) {
+          const savedStaff = await queryRunner.manager.save(TeacherSectionAssignment, newStaffToCreate);
+          summary.copiedStaffAssignments = savedStaff.length;
+        }
+      }
+
+      // 7. Copy Student Enrollments in Bulk
+      if (shouldCopyStudents) {
+        const sourceEnrollments = await queryRunner.manager.find(StudentEnrollment, {
+          where: {
+            schoolId,
+            academicSessionId: fromAcademicSessionId,
+            isCurrent: true,
+            isDeleted: false,
+            isActive: true,
+          },
+        });
+
+        const newEnrollmentsToCreate: StudentEnrollment[] = [];
+
+        for (const sourceEnv of sourceEnrollments) {
+          const targetClassId = classIdMap.get(sourceEnv.classId) || sourceEnv.classId;
+          const targetSectionId = sectionIdMap.get(sourceEnv.sectionId) || sourceEnv.sectionId;
+
+          const existingEnv = await queryRunner.manager.findOne(StudentEnrollment, {
+            where: {
+              schoolId,
+              studentId: sourceEnv.studentId,
+              academicSessionId: toAcademicSessionId,
+              isDeleted: false,
+            },
+          });
+
+          if (!existingEnv) {
+            const newEnv = queryRunner.manager.create(StudentEnrollment, {
+              schoolId,
+              studentId: sourceEnv.studentId,
+              classId: targetClassId,
+              sectionId: targetSectionId,
+              academicSessionId: toAcademicSessionId,
+              rollNumber: sourceEnv.rollNumber,
+              enrollmentState: 'active' as any,
+              enrollmentType: 'promotion' as any,
+              isCurrent: true,
+              startDate: new Date().toISOString().split('T')[0],
+              isActive: true,
+              isDeleted: false,
+              createdById: userId,
+              updatedById: userId,
+            });
+            newEnrollmentsToCreate.push(newEnv);
+          }
+        }
+
+        if (newEnrollmentsToCreate.length > 0) {
+          const studentIds = newEnrollmentsToCreate.map((e) => e.studentId);
+          await queryRunner.manager.createQueryBuilder()
+            .update(StudentEnrollment)
+            .set({ isCurrent: false })
+            .where('school_id = :schoolId', { schoolId })
+            .andWhere('student_id IN (:...studentIds)', { studentIds })
+            .andWhere('academic_session_id = :fromAcademicSessionId', { fromAcademicSessionId })
+            .execute();
+
+          const savedEnrollments = await queryRunner.manager.save(StudentEnrollment, newEnrollmentsToCreate);
+          summary.copiedStudentEnrollments = savedEnrollments.length;
+        }
+      }
+
+      await queryRunner.commitTransaction();
+
+      return {
+        success: true,
+        message: `Academic session data successfully copied from ${fromSession.name} to ${toSession.name}.`,
+        summary,
+      };
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
   }
 }

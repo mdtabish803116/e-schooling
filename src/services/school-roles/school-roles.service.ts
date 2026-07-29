@@ -41,7 +41,7 @@ export class SchoolRolesService {
         throw new ForbiddenException('You do not have access to this school');
       }
     } else if (caller.actorType === 'school_user') {
-      if (caller.schoolId !== schoolId) {
+      if (String(caller.schoolId) !== String(schoolId)) {
         throw new ForbiddenException('You do not belong to this school');
       }
     } else {
@@ -163,85 +163,126 @@ export class SchoolRolesService {
     schoolRoleId: string,
     permissionIds: string[],
   ) {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
     try {
+      // 1. Assert caller's access to the school context
       await this.assertAccessToSchool(caller, schoolId);
 
-      const role = await this.dataSource
-        .getRepository(SchoolRole)
-        .findOne({ where: { id: schoolRoleId, schoolId } });
-      if (!role || role.isDeleted)
+      // 2. Fetch and validate school role existence and status within the transaction
+      const role = await queryRunner.manager.findOne(SchoolRole, {
+        where: { id: schoolRoleId, schoolId },
+      });
+      if (!role || role.isDeleted) {
         throw new NotFoundException('This role does not exist');
+      }
       if (!role.isActive) {
         throw new BadRequestException(
           'This role is inactive. Please activate it first before assigning permissions.',
         );
       }
 
-      // Validate all permissionIds exist and are not deleted
-      for (const pId of permissionIds) {
-        const permissionExists = await this.dataSource
-          .getRepository(ModuleOperationPermission)
-          .findOne({ where: { id: pId, isDeleted: false } });
-        if (!permissionExists) {
-          throw new NotFoundException('This permission does not exist');
-        }
-      }
-
-      const queryRunner = this.dataSource.createQueryRunner();
-      await queryRunner.connect();
-      await queryRunner.startTransaction();
-
-      try {
-        if (permissionIds.length > 0) {
-          await queryRunner.manager.update(
-            SchoolRolePermission,
-            {
-              roleId: schoolRoleId,
-              permissionId: Not(In(permissionIds)),
+      // 3. Validate all permissionIds exist and are active in a single bulk query within the transaction
+      if (permissionIds.length > 0) {
+        const uniquePermissionIds = [...new Set(permissionIds)];
+        const validPermissionsCount = await queryRunner.manager.count(
+          ModuleOperationPermission,
+          {
+            where: {
+              id: In(uniquePermissionIds),
+              isDeleted: false,
             },
-            { isActive: false },
-          );
-        } else {
-          await queryRunner.manager.update(
-            SchoolRolePermission,
-            { roleId: schoolRoleId },
-            { isActive: false },
-          );
-        }
-
-        for (const pId of permissionIds) {
-          // Soft-Upsert: If mapping exists but is deleted/inactive, reactivate it.
-          let mapping = await queryRunner.manager.findOne(
-            SchoolRolePermission,
-            {
-              where: { roleId: schoolRoleId, permissionId: pId },
-            },
-          );
-
-          if (mapping) {
-            mapping.isActive = true;
-          } else {
-            mapping = new SchoolRolePermission();
-            mapping.roleId = schoolRoleId;
-            mapping.permissionId = pId;
-          }
-          mapping.createdById = caller.id;
-          await queryRunner.manager.save(mapping);
-        }
-
-        await queryRunner.commitTransaction();
-        return ApiResponse.success(
-          null,
-          'Permissions assigned/reactivated successfully',
-          200,
+          },
         );
-      } catch (error) {
-        await queryRunner.rollbackTransaction();
-        throw error;
-      } finally {
-        await queryRunner.release();
+        if (validPermissionsCount !== uniquePermissionIds.length) {
+          throw new NotFoundException('One or more permissions do not exist');
+        }
       }
-    } catch (error: unknown) {
+
+      // 4. Fetch all existing mappings for this role, both active and inactive/deleted
+      const existingMappings = await queryRunner.manager.find(
+        SchoolRolePermission,
+        {
+          where: { roleId: schoolRoleId },
+        },
+      );
+
+      // Group existing mappings by permissionId in memory
+      const mappingMap = new Map<string, SchoolRolePermission[]>();
+      for (const m of existingMappings) {
+        if (!mappingMap.has(m.permissionId)) {
+          mappingMap.set(m.permissionId, []);
+        }
+        mappingMap.get(m.permissionId)!.push(m);
+      }
+
+      const incomingSet = new Set(permissionIds);
+
+      // 5. Process incoming permissions (assign or reactivate/upsert)
+      for (const pId of permissionIds) {
+        const mappingsForPermission = mappingMap.get(pId) || [];
+
+        if (mappingsForPermission.length > 0) {
+          // Keep the first mapping, make it active and not deleted
+          const [first, ...duplicates] = mappingsForPermission;
+          let needsSave = false;
+
+          if (!first.isActive) {
+            first.isActive = true;
+            needsSave = true;
+          }
+          if (first.isDeleted) {
+            first.isDeleted = false;
+            needsSave = true;
+          }
+
+          if (needsSave) {
+            first.createdById = caller.id;
+            await queryRunner.manager.save(first);
+          }
+
+          // Soft-delete/deactivate any duplicate mappings to clean up database state
+          for (const dup of duplicates) {
+            if (dup.isActive || !dup.isDeleted) {
+              dup.isActive = false;
+              dup.isDeleted = true;
+              await queryRunner.manager.save(dup);
+            }
+          }
+        } else {
+          // Create a brand new mapping
+          const newMapping = new SchoolRolePermission();
+          newMapping.roleId = schoolRoleId;
+          newMapping.permissionId = pId;
+          newMapping.isActive = true;
+          newMapping.isDeleted = false;
+          newMapping.createdById = caller.id;
+          await queryRunner.manager.save(newMapping);
+        }
+      }
+
+      // 6. Deactivate permissions that are NOT present in the new assignment list
+      for (const [pId, mappingsForPermission] of mappingMap.entries()) {
+        if (!incomingSet.has(pId)) {
+          for (const mapping of mappingsForPermission) {
+            if (mapping.isActive) {
+              mapping.isActive = false;
+              await queryRunner.manager.save(mapping);
+            }
+          }
+        }
+      }
+
+      await queryRunner.commitTransaction();
+      return ApiResponse.success(
+        null,
+        'Permissions assigned/reactivated successfully',
+        200,
+      );
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
       if (error instanceof ApiResponseException) {
         throw error;
       }
@@ -258,6 +299,8 @@ export class SchoolRolesService {
         status,
         err.name || 'INTERNAL_SERVER_ERROR',
       );
+    } finally {
+      await queryRunner.release();
     }
   }
 
@@ -454,7 +497,7 @@ export class SchoolRolesService {
       ])
       .where('rp.roleId = :schoolRoleId', { schoolRoleId })
       .andWhere('rp.isActive = true')
-      .andWhere('rp.isDeleted = false')
+      .andWhere('rp.is_delete = false')
       .getRawMany();
 
     return { permissions };
@@ -494,7 +537,7 @@ export class SchoolRolesService {
       ])
       .where('rp.roleId = :schoolRoleId', { schoolRoleId })
       .andWhere('rp.isActive = true')
-      .andWhere('rp.isDeleted = false')
+      .andWhere('rp.is_delete = false')
       .getRawMany();
 
     return { role, permissions };

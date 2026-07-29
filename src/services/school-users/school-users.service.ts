@@ -6,7 +6,10 @@ import {
 } from '@nestjs/common';
 import { DataSource, In, Not } from 'typeorm';
 import * as bcrypt from 'bcrypt';
+import { UserTypeEnum } from '../../models/enums/enums';
 import { SchoolUser } from '../../models/entities/school/school-user.entity';
+import { School } from '../../models/entities/school/school.entity';
+import { SchoolOwner } from '../../models/entities/school/school-owner.entity';
 import { SchoolOwnerMember } from '../../models/entities/school/school-owner-member.entity';
 import { SchoolUserRole } from '../../models/entities/rbac/school-user-role.entity';
 import { SchoolRole } from '../../models/entities/rbac/school-role.entity';
@@ -39,7 +42,7 @@ export class SchoolUsersService {
       if (!membership)
         throw new ForbiddenException('You do not have access to this school');
     } else if (caller.actorType === 'school_user') {
-      if (caller.schoolId !== schoolId) {
+      if (String(caller.schoolId) !== String(schoolId)) {
         throw new ForbiddenException('You do not belong to this school');
       }
     } else {
@@ -69,7 +72,10 @@ export class SchoolUsersService {
       const passwordHash = await bcrypt.hash(dto.password, salt);
 
       const user = new SchoolUser();
-      Object.assign(user, dto);
+      user.name = dto.name;
+      user.username = dto.username;
+      user.phone = dto.phone || '';
+      user.userType = dto.userType;
       user.schoolId = schoolId;
       user.schoolOwnerId = caller.id;
       user.passwordHash = passwordHash;
@@ -77,6 +83,34 @@ export class SchoolUsersService {
       user.createdById = caller.id;
 
       const savedUser = await queryRunner.manager.save(user);
+
+      // Create associated SchoolUserProfile
+      const profile = new SchoolUserProfile();
+      profile.schoolUserId = savedUser.id;
+      profile.firstName = dto.profile?.firstName || dto.name.split(' ')[0] || '';
+      profile.lastName = dto.profile?.lastName || dto.name.split(' ').slice(1).join(' ') || '';
+      profile.email = dto.profile?.email || '';
+      profile.designation = dto.profile?.designation || (dto.userType === UserTypeEnum.ACADEMIC ? 'Teacher' : 'Staff');
+      profile.departmentName = dto.profile?.departmentName || 'General';
+      profile.joiningDate = dto.profile?.joiningDate || new Date().toISOString().split('T')[0];
+      
+      if (dto.profile) {
+        Object.assign(profile, dto.profile);
+      }
+      await queryRunner.manager.save(profile);
+
+      // Assign initial roleIds if provided
+      if (dto.roleIds && dto.roleIds.length > 0) {
+        for (const roleId of dto.roleIds) {
+          const userRole = new SchoolUserRole();
+          userRole.userId = savedUser.id;
+          userRole.roleId = roleId;
+          userRole.isActive = true;
+          userRole.createdById = caller.id;
+          await queryRunner.manager.save(userRole);
+        }
+      }
+
       await queryRunner.commitTransaction();
 
       return {
@@ -98,6 +132,12 @@ export class SchoolUsersService {
   async listUsers(caller: AuthContext, schoolId: string) {
     try {
       await this.assertAccessToSchool(caller, schoolId);
+
+      const school = await this.dataSource
+        .getRepository(School)
+        .findOne({ where: { id: schoolId } });
+      const schoolName = school?.schoolName || `School #${schoolId}`;
+
       const users = await this.dataSource.getRepository(SchoolUser).find({
         where: { schoolId, isActive: true, isDeleted: false },
         order: { createdAt: 'DESC' },
@@ -108,6 +148,13 @@ export class SchoolUsersService {
       }
 
       const userIds = users.map((u) => u.id);
+      const creatorIds = [...new Set(users.map((u) => u.createdById).filter(Boolean))];
+
+      // Fetch creator names
+      const creators = creatorIds.length > 0
+        ? await this.dataSource.getRepository(SchoolOwner).find({ where: { id: In(creatorIds) } })
+        : [];
+      const creatorMap = new Map(creators.map((c) => [c.id, c.fullName || 'Administrator']));
 
       // Fetch active roles assigned to these users
       const userRoles = await this.dataSource
@@ -160,10 +207,37 @@ export class SchoolUsersService {
         }
       }
 
-      const formattedUsers = users.map((u) => ({
-        ...u,
-        roles: userRolesMap.get(u.id) || [],
-      }));
+      const profiles = await this.dataSource
+        .getRepository(SchoolUserProfile)
+        .find({ where: { schoolUserId: In(userIds) } });
+
+      const profilesMap = new Map(profiles.map((p) => [p.schoolUserId, p]));
+
+      // Ensure missing profiles are initialized
+      for (const u of users) {
+        if (!profilesMap.has(u.id)) {
+          const newProfile = new SchoolUserProfile();
+          newProfile.schoolUserId = u.id;
+          newProfile.firstName = u.name.split(' ')[0] || u.name;
+          newProfile.lastName = u.name.split(' ').slice(1).join(' ') || '';
+          newProfile.designation = u.userType === UserTypeEnum.ACADEMIC ? 'Teacher' : 'Staff';
+          const savedProf = await this.dataSource.getRepository(SchoolUserProfile).save(newProfile);
+          profilesMap.set(u.id, savedProf);
+        }
+      }
+
+      const formattedUsers = users.map((u) => {
+        const prof = profilesMap.get(u.id) || null;
+        const userRolesList = userRolesMap.get(u.id) || [];
+        return {
+          ...u,
+          schoolName,
+          createdByName: creatorMap.get(u.createdById) || 'Administrator',
+          profile: prof,
+          roles: userRolesList,
+          roleNames: userRolesList.map((r) => r.name).join(', ') || 'No Role Assigned',
+        };
+      });
 
       return ApiResponse.success(
         formattedUsers,
@@ -345,15 +419,38 @@ export class SchoolUsersService {
   async getUserProfile(caller: AuthContext, schoolId: string, userId: string) {
     try {
       await this.assertAccessToSchool(caller, schoolId);
+
+      const school = await this.dataSource
+        .getRepository(School)
+        .findOne({ where: { id: schoolId } });
+      const schoolName = school?.schoolName || `School #${schoolId}`;
+
       const user = await this.dataSource
         .getRepository(SchoolUser)
         .findOne({ where: { id: userId, schoolId } });
       if (!user || user.isDeleted)
         throw new NotFoundException('This user does not exist');
 
-      const profile = await this.dataSource
+      let creatorName = 'Administrator';
+      if (user.createdById) {
+        const owner = await this.dataSource
+          .getRepository(SchoolOwner)
+          .findOne({ where: { id: user.createdById } });
+        if (owner) creatorName = owner.fullName || 'Administrator';
+      }
+
+      let profile = await this.dataSource
         .getRepository(SchoolUserProfile)
         .findOne({ where: { schoolUserId: userId } });
+
+      if (!profile) {
+        profile = new SchoolUserProfile();
+        profile.schoolUserId = userId;
+        profile.firstName = user.name.split(' ')[0] || user.name;
+        profile.lastName = user.name.split(' ').slice(1).join(' ') || '';
+        profile.designation = user.userType === UserTypeEnum.ACADEMIC ? 'Teacher' : 'Staff';
+        profile = await this.dataSource.getRepository(SchoolUserProfile).save(profile);
+      }
 
       // Fetch active roles assigned to this user
       const userRoles = await this.dataSource
@@ -377,15 +474,22 @@ export class SchoolUsersService {
             })
           : [];
 
+      const formattedUser = {
+        ...user,
+        schoolName,
+        createdByName: creatorName,
+      };
+
       const result = {
-        user,
-        profile: profile || null,
+        user: formattedUser,
+        profile,
         roles: roles.map((r) => ({
           id: r.id,
           name: r.name,
           description: r.description,
           isActive: r.isActive,
         })),
+        roleNames: roles.map((r) => r.name).join(', ') || 'No Role Assigned',
       };
 
       return ApiResponse.success(result, 'User profile fetched successfully');
@@ -449,9 +553,9 @@ export class SchoolUsersService {
       .where('rp.roleId IN (:...roleIds)', { roleIds })
       .andWhere('LOWER(m.code) = LOWER(:moduleCode)', { moduleCode })
       .andWhere('rp.isActive = true')
-      .andWhere('rp.isDeleted = false')
+      .andWhere('rp.is_delete = false')
       .andWhere('p.isActive = true')
-      .andWhere('p.isDeleted = false')
+      .andWhere('p.is_delete = false')
       .andWhere('m.isActive = true')
       .andWhere('o.isActive = true')
       .getRawMany();
@@ -466,5 +570,60 @@ export class SchoolUsersService {
       hasRoleAssigned: true,
       operations: uniqueOperations,
     };
+  }
+
+  async changeMyPassword(
+    caller: AuthContext,
+    schoolId: string,
+    body: { oldPassword?: string; newPassword?: string },
+  ) {
+    await this.assertAccessToSchool(caller, schoolId);
+    if (!body.oldPassword || !body.newPassword) {
+      throw new BadRequestException('Both oldPassword and newPassword are required');
+    }
+    if (body.newPassword.length < 6) {
+      throw new BadRequestException('New password must be at least 6 characters');
+    }
+
+    const user = await this.dataSource
+      .getRepository(SchoolUser)
+      .findOne({ where: { id: caller.id, schoolId } });
+
+    if (!user) throw new NotFoundException('User account not found');
+
+    const matches = await bcrypt.compare(body.oldPassword, user.passwordHash || '');
+    if (!matches) {
+      throw new BadRequestException('Incorrect old password');
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    user.passwordHash = await bcrypt.hash(body.newPassword, salt);
+    await this.dataSource.getRepository(SchoolUser).save(user);
+
+    return ApiResponse.success(null, 'Password updated successfully');
+  }
+
+  async resetUserPassword(
+    caller: AuthContext,
+    schoolId: string,
+    userId: string,
+    newPassword?: string,
+  ) {
+    await this.assertAccessToSchool(caller, schoolId);
+    const user = await this.dataSource
+      .getRepository(SchoolUser)
+      .findOne({ where: { id: userId, schoolId } });
+
+    if (!user || user.isDeleted) throw new NotFoundException('User not found');
+
+    const pass = newPassword || 'TempPass@123';
+    const salt = await bcrypt.genSalt(10);
+    user.passwordHash = await bcrypt.hash(pass, salt);
+    await this.dataSource.getRepository(SchoolUser).save(user);
+
+    return ApiResponse.success(
+      { username: user.username, temporaryPassword: pass },
+      'Password reset successfully',
+    );
   }
 }

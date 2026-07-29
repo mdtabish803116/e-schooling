@@ -37,7 +37,7 @@ export class FeatureGuard implements CanActivate {
         if (!membership) {
           throw new ForbiddenException('Unauthorized access to this school');
         }
-      } else if (user.schoolId && user.schoolId !== routeSchoolId) {
+      } else if (user.schoolId && String(user.schoolId) !== String(routeSchoolId)) {
         throw new ForbiddenException('Unauthorized access to this school');
       }
     }

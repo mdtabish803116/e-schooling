@@ -211,12 +211,10 @@ export class PlatformService {
   }
 
   async listModules() {
-    return this.dataSource
-      .getRepository(ModuleMaster)
-      .find({
-        where: { isActive: true, isDeleted: false },
-        order: { displayOrder: 'ASC' },
-      });
+    return this.dataSource.getRepository(ModuleMaster).find({
+      where: { isActive: true, isDeleted: false },
+      order: { displayOrder: 'ASC' },
+    });
   }
 
   async listOperations() {
@@ -225,31 +223,28 @@ export class PlatformService {
       .find({ where: { isActive: true, isDeleted: false } });
   }
 
-  async seedPlatformData(apiKey: string) {
-    const secretKey = Config.getPlatformRegisterApiKey();
-    if (apiKey !== secretKey) {
-      throw new ForbiddenException('Invalid platform registration key');
+  async seedPlatformData(apiKey?: string) {
+    if (apiKey) {
+      const secretKey = Config.getPlatformRegisterApiKey();
+      if (apiKey !== secretKey) {
+        throw new ForbiddenException('Invalid platform registration key');
+      }
     }
 
-    const queryRunner = this.dataSource.createQueryRunner();
-    await queryRunner.connect();
-    await queryRunner.startTransaction();
-
-    try {
-      const featRepo = queryRunner.manager.getRepository(PlatformFeature);
-      const priceRepo = queryRunner.manager.getRepository(PlatformFeaturePrice);
-      const modRepo = queryRunner.manager.getRepository(ModuleMaster);
-      const opRepo = queryRunner.manager.getRepository(OperationMaster);
-      const permRepo = queryRunner.manager.getRepository(
-        ModuleOperationPermission,
-      );
-      const planRepo = queryRunner.manager.getRepository(SubscriptionPlan);
-      const planPriceRepo = queryRunner.manager.getRepository(
-        SubscriptionPlanPrice,
-      );
-      const planMappingRepo = queryRunner.manager.getRepository(
-        SubscriptionPlanPlatformFeatureMapping,
-      );
+    const featRepo = this.dataSource.getRepository(PlatformFeature);
+    const priceRepo = this.dataSource.getRepository(PlatformFeaturePrice);
+    const modRepo = this.dataSource.getRepository(ModuleMaster);
+    const opRepo = this.dataSource.getRepository(OperationMaster);
+    const permRepo = this.dataSource.getRepository(
+      ModuleOperationPermission,
+    );
+    const planRepo = this.dataSource.getRepository(SubscriptionPlan);
+    const planPriceRepo = this.dataSource.getRepository(
+      SubscriptionPlanPrice,
+    );
+    const planMappingRepo = this.dataSource.getRepository(
+      SubscriptionPlanPlatformFeatureMapping,
+    );
 
       // 1. Platform Features
       const featuresData = [
@@ -552,6 +547,16 @@ export class PlatformService {
           parentName: 'Academics',
           showInSidebar: true,
         },
+        {
+          name: 'Academic Sessions',
+          route: '/academics/sessions',
+          icon: 'date_range',
+          displayOrder: 6,
+          isMenuGroup: false,
+          featureCode: 'ACADEMIC_MANAGEMENT',
+          parentName: 'Academics',
+          showInSidebar: true,
+        },
 
         {
           name: 'Students',
@@ -613,6 +618,30 @@ export class PlatformService {
           parentName: null,
           showInSidebar: true,
         },
+        {
+          name: 'Announcements',
+          route: '/announcements',
+          icon: 'bell',
+          description:
+            'Create, publish, and view school announcements and notices',
+          displayOrder: 16,
+          isMenuGroup: false,
+          featureCode: null,
+          parentName: null,
+          showInSidebar: true,
+        },
+        {
+          name: 'Tasks',
+          route: '/tasks',
+          icon: 'check_square',
+          description:
+            'Assign, track, and complete operational tasks and checklists',
+          displayOrder: 17,
+          isMenuGroup: false,
+          featureCode: null,
+          parentName: null,
+          showInSidebar: true,
+        },
 
         {
           name: 'Administration',
@@ -633,6 +662,26 @@ export class PlatformService {
           featureCode: null,
           parentName: 'Administration',
           showInSidebar: true,
+        },
+        {
+          name: 'Student Credentials',
+          route: '/students/credentials',
+          icon: 'key',
+          displayOrder: 91.1,
+          isMenuGroup: false,
+          featureCode: 'STUDENT_MANAGEMENT',
+          parentName: null,
+          showInSidebar: false,
+        },
+        {
+          name: 'Staff Credentials',
+          route: '/administration/staff-credentials',
+          icon: 'badge',
+          displayOrder: 91.2,
+          isMenuGroup: false,
+          featureCode: null,
+          parentName: 'Administration',
+          showInSidebar: false,
         },
         {
           name: 'School Roles',
@@ -750,6 +799,7 @@ export class PlatformService {
         m.name = md.name;
         m.routePath = md.route;
         m.icon = md.icon;
+        m.description = (md as any).description || null;
         m.displayOrder = md.displayOrder;
         m.showInSidebar = md.showInSidebar !== false;
         m.isMenuGroup = md.isMenuGroup;
@@ -767,7 +817,12 @@ export class PlatformService {
         } else {
           m.parentModuleId = undefined;
         }
-        m = await modRepo.save(m);
+        try {
+          m = await modRepo.save(m);
+        } catch (err) {
+          const existing = await modRepo.findOne({ where: { code: generatedCode } });
+          if (existing) m = existing;
+        }
         seededModules[generatedCode] = m;
       }
 
@@ -777,6 +832,10 @@ export class PlatformService {
         { name: 'create', desc: 'Allows creating new records' },
         { name: 'update', desc: 'Allows modifying existing records' },
         { name: 'delete', desc: 'Allows soft-deleting/revoking records' },
+        {
+          name: 'view_assigned',
+          desc: 'Allows viewing only assigned records (e.g. assigned classes/sections)',
+        },
       ];
       const seededOps: Record<string, OperationMaster> = {};
       for (const od of opsData) {
@@ -788,7 +847,12 @@ export class PlatformService {
           o.name = od.name;
           o.description = od.desc;
           o.isActive = true;
-          o = await opRepo.save(o);
+          try {
+            o = await opRepo.save(o);
+          } catch (err) {
+            const existing = await opRepo.findOne({ where: { code: generatedCode } });
+            if (existing) o = existing;
+          }
         }
         seededOps[generatedCode] = o;
       }
@@ -803,6 +867,7 @@ export class PlatformService {
         { modCode: 'ATTENDANCE', opCode: 'DELETE' },
 
         { modCode: 'CLASSES', opCode: 'VIEW' },
+        { modCode: 'CLASSES', opCode: 'VIEW_ASSIGNED' },
         { modCode: 'CLASSES', opCode: 'CREATE' },
         { modCode: 'CLASSES', opCode: 'UPDATE' },
         { modCode: 'CLASSES', opCode: 'DELETE' },
@@ -813,6 +878,7 @@ export class PlatformService {
         { modCode: 'SUBJECTS', opCode: 'DELETE' },
 
         { modCode: 'SECTIONS', opCode: 'VIEW' },
+        { modCode: 'SECTIONS', opCode: 'VIEW_ASSIGNED' },
         { modCode: 'SECTIONS', opCode: 'CREATE' },
         { modCode: 'SECTIONS', opCode: 'UPDATE' },
         { modCode: 'SECTIONS', opCode: 'DELETE' },
@@ -821,6 +887,15 @@ export class PlatformService {
         { modCode: 'ACADEMIC_MAPPING', opCode: 'CREATE' },
         { modCode: 'ACADEMIC_MAPPING', opCode: 'UPDATE' },
         { modCode: 'ACADEMIC_MAPPING', opCode: 'DELETE' },
+        { modCode: 'ACADEMIC_YEARS', opCode: 'VIEW' },
+        { modCode: 'ACADEMIC_YEARS', opCode: 'CREATE' },
+        { modCode: 'ACADEMIC_YEARS', opCode: 'UPDATE' },
+        { modCode: 'ACADEMIC_YEARS', opCode: 'DELETE' },
+
+        { modCode: 'ACADEMIC_SESSIONS', opCode: 'VIEW' },
+        { modCode: 'ACADEMIC_SESSIONS', opCode: 'CREATE' },
+        { modCode: 'ACADEMIC_SESSIONS', opCode: 'UPDATE' },
+        { modCode: 'ACADEMIC_SESSIONS', opCode: 'DELETE' },
 
         { modCode: 'STUDENTS', opCode: 'VIEW' },
         { modCode: 'STUDENTS', opCode: 'CREATE' },
@@ -833,6 +908,7 @@ export class PlatformService {
         { modCode: 'FEES', opCode: 'DELETE' },
 
         { modCode: 'TIMETABLE', opCode: 'VIEW' },
+        { modCode: 'TIMETABLE', opCode: 'VIEW_ASSIGNED' },
         { modCode: 'TIMETABLE', opCode: 'CREATE' },
         { modCode: 'TIMETABLE', opCode: 'UPDATE' },
         { modCode: 'TIMETABLE', opCode: 'DELETE' },
@@ -844,6 +920,16 @@ export class PlatformService {
 
         { modCode: 'REPORTS', opCode: 'VIEW' },
 
+        { modCode: 'ANNOUNCEMENTS', opCode: 'VIEW' },
+        { modCode: 'ANNOUNCEMENTS', opCode: 'CREATE' },
+        { modCode: 'ANNOUNCEMENTS', opCode: 'UPDATE' },
+        { modCode: 'ANNOUNCEMENTS', opCode: 'DELETE' },
+
+        { modCode: 'TASKS', opCode: 'VIEW' },
+        { modCode: 'TASKS', opCode: 'CREATE' },
+        { modCode: 'TASKS', opCode: 'UPDATE' },
+        { modCode: 'TASKS', opCode: 'DELETE' },
+
         { modCode: 'SCHOOL_ROLES', opCode: 'VIEW' },
         { modCode: 'SCHOOL_ROLES', opCode: 'CREATE' },
         { modCode: 'SCHOOL_ROLES', opCode: 'UPDATE' },
@@ -853,6 +939,16 @@ export class PlatformService {
         { modCode: 'SCHOOL_USERS', opCode: 'CREATE' },
         { modCode: 'SCHOOL_USERS', opCode: 'UPDATE' },
         { modCode: 'SCHOOL_USERS', opCode: 'DELETE' },
+
+        { modCode: 'STUDENT_CREDENTIALS', opCode: 'VIEW' },
+        { modCode: 'STUDENT_CREDENTIALS', opCode: 'CREATE' },
+        { modCode: 'STUDENT_CREDENTIALS', opCode: 'UPDATE' },
+        { modCode: 'STUDENT_CREDENTIALS', opCode: 'DELETE' },
+
+        { modCode: 'STAFF_CREDENTIALS', opCode: 'VIEW' },
+        { modCode: 'STAFF_CREDENTIALS', opCode: 'CREATE' },
+        { modCode: 'STAFF_CREDENTIALS', opCode: 'UPDATE' },
+        { modCode: 'STAFF_CREDENTIALS', opCode: 'DELETE' },
 
         { modCode: 'SUBSCRIPTION', opCode: 'VIEW' },
         { modCode: 'SUBSCRIPTION', opCode: 'CREATE' },
@@ -900,7 +996,11 @@ export class PlatformService {
             p.operationId = op.id;
             p.description = `Grants permission to ${op.name} in ${mod.name}`;
             p.isActive = true;
-            await permRepo.save(p);
+            try {
+              await permRepo.save(p);
+            } catch (err) {
+              // Ignore duplicate constraint
+            }
           }
         }
       }
@@ -998,6 +1098,7 @@ export class PlatformService {
             { code: 'ACADEMIC_MANAGEMENT', limit: null },
             { code: 'STUDENT_MANAGEMENT', limit: null },
             { code: 'ATTENDANCE_MANAGEMENT', limit: null },
+            { code: 'TIMETABLE_MANAGEMENT', limit: null },
           );
         } else if (pd.code === PlanCodeEnum.BASIC) {
           planFeatures.push(
@@ -1048,16 +1149,9 @@ export class PlatformService {
         }
       }
 
-      await queryRunner.commitTransaction();
       return {
         message:
           'Metadata seeded successfully! Ready for manual and frontend testing.',
       };
-    } catch (error) {
-      await queryRunner.rollbackTransaction();
-      throw error;
-    } finally {
-      await queryRunner.release();
-    }
   }
 }

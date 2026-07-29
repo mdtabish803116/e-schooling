@@ -9,6 +9,10 @@ export class Class {
   @Column({ name: 'school_id', type: 'bigint', nullable: true, comment: 'Reference to School' })
   schoolId: string;
 
+  @Index()
+  @Column({ name: 'academic_session_id', type: 'bigint', nullable: true, comment: 'Reference to AcademicSession' })
+  academicSessionId: string | null;
+
   @Column({ name: 'name', type: 'varchar', nullable: true, comment: 'Class name' })
   name: string;
 
@@ -17,10 +21,6 @@ export class Class {
 
   @Column({ name: 'description', type: 'text', nullable: true, comment: 'Optional description of the class' })
   description: string;
-
-
-  @Column({ name: 'has_sections', type: 'boolean', nullable: true, comment: 'Whether class has multiple sections' })
-  hasSections: boolean;
 
   @Column({ name: 'daily_attendance_limit', type: 'integer', nullable: false, default: 1, comment: 'Max attendance sessions per day' })
   dailyAttendanceLimit: number;

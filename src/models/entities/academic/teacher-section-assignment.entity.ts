@@ -11,6 +11,10 @@ export class TeacherSectionAssignment {
   schoolId: string;
 
   @Index()
+  @Column({ name: 'academic_session_id', type: 'bigint', nullable: true, comment: 'Reference to AcademicSession' })
+  academicSessionId: string | null;
+
+  @Index()
   @Column({ name: 'teacher_id', type: 'bigint', nullable: true, comment: 'Reference to SchoolUser' })
   teacherId: string;
 
@@ -24,7 +28,7 @@ export class TeacherSectionAssignment {
 
   @Index()
   @Column({ name: 'section_id', type: 'bigint', nullable: true, comment: 'Reference to Section' })
-  sectionId: string;
+  sectionId: string | null;
 
   @Column({ name: 'is_class_teacher', type: 'boolean', nullable: true, comment: 'Whether this teacher is the class teacher' })
   isClassTeacher: boolean;

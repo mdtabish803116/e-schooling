@@ -7,7 +7,7 @@ import { QueueNames } from './queue.constants';
 import { BackGroundJob } from '../../../models/entities/background-job/background_jobs.entity';
 import { JobStatusEnum, JobTypeEnum } from '../../../models/enums/enums';
 import { NotificationProcessor } from '../processors/notification.processor';
-import { ImportExportProcessor } from '../processors/import-export.processor';
+import { ImportExportProcessor } from '../processors/import-export/import-export.processor';
 import { CleanupProcessor } from '../processors/cleanup.processor';
 import { PaymentReconciliationProcessor } from '../processors/payment-reconciliation.processor';
 import { StudentProgressionProcessor } from '../processors/student-progression.processor';

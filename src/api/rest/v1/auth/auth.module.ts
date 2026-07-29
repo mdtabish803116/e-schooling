@@ -11,12 +11,14 @@ import { Config } from '../../../../config/index';
     PassportModule,
     JwtModule.registerAsync({
       useFactory: () => ({
-        secret: Config.getSecret('JWT_SECRET', String) || 'default_secret_please_change_in_production',
+        secret:
+          Config.getSecret('JWT_SECRET', String) ||
+          'default_secret_please_change_in_production',
         signOptions: { expiresIn: '1d' },
       }),
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy]
+  providers: [AuthService, JwtStrategy],
 })
 export class AuthModule {}
