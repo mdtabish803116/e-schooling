@@ -27,4 +27,9 @@ export class CreateClassDto {
   @IsOptional()
   @IsString()
   classTeacherId?: string;
+
+  @ApiPropertyOptional({ example: '1', description: 'Academic Session ID' })
+  @IsOptional()
+  @IsString()
+  academicSessionId?: string;
 }

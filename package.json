@@ -25,7 +25,8 @@
     "migration:revert": "npm run typeorm -- migration:revert",
     "seed:platform-modules": "npx ts-node -r tsconfig-paths/register ./src/core/seed/seed-platform-module.ts",
     "seed:login-history": "npx ts-node -r tsconfig-paths/register ./src/core/seed/seed-login-history.ts",
-    "seed:fees": "npx ts-node -r tsconfig-paths/register ./src/core/seed/seed-fees.ts"
+    "seed:fees": "npx ts-node -r tsconfig-paths/register ./src/core/seed/seed-fees.ts",
+    "seed:students": "npx ts-node -r tsconfig-paths/register ./src/core/seed/seed-students.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",

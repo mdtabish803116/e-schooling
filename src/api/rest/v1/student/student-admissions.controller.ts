@@ -15,6 +15,7 @@ import { CurrentAcademicSession } from '../../../../shared/decorators/current-ac
 import type { AuthContext } from '../../../../interfaces/auth-context.interface';
 import { QueueProducerService } from '../../../../api/worker/queues/queue-producer.service';
 import { QueueNames } from '../../../../api/worker/queues/queue.constants';
+import { seedStudentsForSchool } from '../../../../core/seed/seed-students';
 
 @ApiTags('Student Admissions')
 @ApiBearerAuth('JWT-auth')
@@ -190,7 +191,7 @@ export class StudentAdmissionsController {
   async seedStudents(
     @Param('schoolId') schoolId: string,
   ) {
-    return this.admissionsService.seedStudentsForSchool(schoolId);
+    return seedStudentsForSchool((this.admissionsService as any).dataSource, schoolId);
   }
 
   @ApiOperation({ summary: 'Queue bulk student CSV import via BullMQ Redis worker' })
