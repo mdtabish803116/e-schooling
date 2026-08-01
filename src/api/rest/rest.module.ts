@@ -15,6 +15,7 @@ import { AttendanceModule } from './v1/attendance/attendance.module';
 import { TimetableModule } from './v1/timetable/timetable.module';
 import { DocumentModule } from './v1/document/document.module';
 import { ImportExportModule } from './v1/import-export/import-export.module';
+import { FeesModule } from './v1/fees/fees.module';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { ImportExportModule } from './v1/import-export/import-export.module';
     TimetableModule,
     DocumentModule,
     ImportExportModule,
+    FeesModule,
   ],
   controllers: [],
   providers: [],

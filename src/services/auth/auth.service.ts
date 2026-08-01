@@ -26,6 +26,8 @@ import { Student } from '../../models/entities/student/student.entity';
 import { SchoolSubscription } from '../../models/entities/subscription/school-subscription.entity';
 import { SchoolOwnerRoleEnum } from '../../models/enums/enums';
 import { validateEmail, validateMobile } from '../../shared/utils/validation.utils';
+import { UserLoginHistory, AuthActionEnum, SessionStatusEnum } from '../../models/entities/auth/user-login-history.entity';
+import { parseUserAgent } from '../../shared/utils/user-agent.parser';
 
 const isPasswordStrong = (pwd: string): boolean => {
   if (!pwd || pwd.length < 8) return false;
@@ -61,12 +63,49 @@ export class AuthService implements OnModuleInit {
           ADD COLUMN IF NOT EXISTS "is_locked" boolean NOT NULL DEFAULT false;
         `);
       }
+
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS "e_schooling"."user_login_history" (
+          "id" BIGSERIAL PRIMARY KEY,
+          "school_id" varchar,
+          "user_id" varchar,
+          "role" varchar(50) DEFAULT 'STAFF',
+          "entity_id" varchar,
+          "identifier_used" varchar(150) NOT NULL,
+          "auth_action" varchar(50) DEFAULT 'LOGIN_SUCCESS',
+          "login_method" varchar(50) DEFAULT 'PASSWORD',
+          "login_status" varchar(20) DEFAULT 'SUCCESS',
+          "failure_reason" varchar(255),
+          "login_at" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          "logout_at" TIMESTAMP,
+          "session_duration_seconds" integer,
+          "session_id" varchar(255),
+          "refresh_token_id" varchar(255),
+          "session_status" varchar(30) DEFAULT 'ACTIVE',
+          "device_type" varchar(50) DEFAULT 'Desktop',
+          "device_name" varchar(100) DEFAULT 'Unknown Device',
+          "browser" varchar(100) DEFAULT 'Unknown Browser',
+          "browser_version" varchar(50),
+          "operating_system" varchar(100) DEFAULT 'Unknown OS',
+          "user_agent" text,
+          "ip_address" varchar(100) DEFAULT '127.0.0.1',
+          "location" varchar(150),
+          "country" varchar(100),
+          "city" varchar(100),
+          "mfa_used" boolean DEFAULT false,
+          "risk_score" float DEFAULT 0,
+          "is_suspicious" boolean DEFAULT false,
+          "created_at" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          "updated_at" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          "is_deleted" boolean DEFAULT false
+        );
+      `);
     } catch (e) {
       console.warn('Auto-migration for auth security columns:', e);
     }
   }
 
-  async register(dto: SchoolOwnerRegisterDto) {
+  async register(dto: SchoolOwnerRegisterDto, reqHeaders?: any) {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -160,7 +199,7 @@ export class AuthService implements OnModuleInit {
   }
 
 
-  async login(dto: SchoolOwnerLoginDto) {
+  async login(dto: SchoolOwnerLoginDto, reqHeaders?: any) {
     const repo = this.dataSource.getRepository(SchoolOwner);
     const identifier = sanitizeInput(dto.identifier);
 
@@ -172,6 +211,13 @@ export class AuthService implements OnModuleInit {
     });
 
     if (!owner || owner.isDeleted) {
+      await this.recordLoginHistory({
+        role: 'OWNER',
+        identifierUsed: identifier,
+        loginStatus: 'FAILED',
+        failureReason: 'Invalid email, mobile, or password.',
+        reqHeaders,
+      });
       throw new UnauthorizedException('Invalid email, mobile, or password.');
     }
 
@@ -179,6 +225,16 @@ export class AuthService implements OnModuleInit {
     if (owner.isLocked && owner.lockoutUntil) {
       if (new Date(owner.lockoutUntil).getTime() > Date.now()) {
         const remainingMins = Math.max(1, Math.ceil((new Date(owner.lockoutUntil).getTime() - Date.now()) / 60000));
+        await this.recordLoginHistory({
+          userId: String(owner.id),
+          role: 'OWNER',
+          entityId: String(owner.id),
+          identifierUsed: owner.email,
+          authAction: 'ACCOUNT_LOCKED',
+          loginStatus: 'FAILED',
+          failureReason: `Account temporarily locked. Try again in ${remainingMins} minute(s).`,
+          reqHeaders,
+        });
         throw new UnauthorizedException(`Account is temporarily locked due to multiple failed login attempts. Try again in ${remainingMins} minute(s).`);
       } else {
         owner.isLocked = false;
@@ -194,9 +250,28 @@ export class AuthService implements OnModuleInit {
         owner.isLocked = true;
         owner.lockoutUntil = new Date(Date.now() + 15 * 60 * 1000);
         await repo.save(owner);
+        await this.recordLoginHistory({
+          userId: String(owner.id),
+          role: 'OWNER',
+          entityId: String(owner.id),
+          identifierUsed: owner.email,
+          authAction: 'ACCOUNT_LOCKED',
+          loginStatus: 'FAILED',
+          failureReason: 'Account locked due to 5 consecutive failed attempts',
+          reqHeaders,
+        });
         throw new UnauthorizedException('Account has been temporarily locked due to 5 consecutive failed login attempts. Try again in 15 minutes.');
       }
       await repo.save(owner);
+      await this.recordLoginHistory({
+        userId: String(owner.id),
+        role: 'OWNER',
+        entityId: String(owner.id),
+        identifierUsed: owner.email,
+        loginStatus: 'FAILED',
+        failureReason: 'Wrong Password',
+        reqHeaders,
+      });
       throw new UnauthorizedException('Invalid email, mobile, or password.');
     }
 
@@ -206,6 +281,15 @@ export class AuthService implements OnModuleInit {
     owner.lockoutUntil = null as any;
 
     if (!owner.isActive) {
+      await this.recordLoginHistory({
+        userId: String(owner.id),
+        role: 'OWNER',
+        entityId: String(owner.id),
+        identifierUsed: owner.email,
+        loginStatus: 'FAILED',
+        failureReason: 'Account deactivated',
+        reqHeaders,
+      });
       throw new UnauthorizedException('Your account is currently deactivated. Please contact support.');
     }
 
@@ -222,6 +306,21 @@ export class AuthService implements OnModuleInit {
       );
     }
 
+    // Revoke any previous active session records in history
+    await this.dataSource.createQueryBuilder()
+      .update(UserLoginHistory)
+      .set({
+        sessionStatus: 'REVOKED',
+        authAction: 'REVOKED',
+        logoutAt: new Date(),
+      })
+      .where('(userId = :userId OR identifierUsed = :identifier) AND sessionStatus = :status', {
+        userId: String(owner.id),
+        identifier: owner.email,
+        status: 'ACTIVE',
+      })
+      .execute();
+
     const payload = { sub: owner.id, email: owner.email, roles: [SchoolOwnerRoleEnum.OWNER], actorType: 'school_owner' as const };
     const token = this.jwtService.sign(payload);
 
@@ -229,6 +328,17 @@ export class AuthService implements OnModuleInit {
     owner.isLoggedIn = true;
     owner.lastLoginAt = new Date();
     await repo.save(owner);
+
+    await this.recordLoginHistory({
+      userId: String(owner.id),
+      role: 'OWNER',
+      entityId: String(owner.id),
+      identifierUsed: owner.email,
+      authAction: 'LOGIN_SUCCESS',
+      loginStatus: 'SUCCESS',
+      sessionId: token,
+      reqHeaders,
+    });
 
     return {
       message: 'Login successful',
@@ -244,7 +354,7 @@ export class AuthService implements OnModuleInit {
   /**
    * Login as a school user (Teacher / Accountant / Staff / Admin)
    */
-  async schoolUserLogin(dto: SchoolUserLoginDto) {
+  async schoolUserLogin(dto: SchoolUserLoginDto, reqHeaders?: any) {
     const userRepo = this.dataSource.getRepository(SchoolUser);
     const username = sanitizeInput(dto.username);
     const schoolCode = sanitizeInput(dto.schoolCode);
@@ -254,12 +364,27 @@ export class AuthService implements OnModuleInit {
     });
     
     if (!school || !school.isActive) {
+      await this.recordLoginHistory({
+        role: 'STAFF',
+        identifierUsed: username,
+        loginStatus: 'FAILED',
+        failureReason: 'School account deactivated or blocked',
+        reqHeaders,
+      });
       throw new UnauthorizedException('Your school account is currently deactivated, blocked, or deleted. Please contact support.');
     }
 
     // Check school subscription
     const sub = await this.dataSource.getRepository(SchoolSubscription).findOne({ where: { schoolId: school.id } });
     if (sub && (sub.subscriptionState === 'expired' as any || sub.subscriptionState === 'cancelled' as any)) {
+      await this.recordLoginHistory({
+        schoolId: String(school.id),
+        role: 'STAFF',
+        identifierUsed: username,
+        loginStatus: 'FAILED',
+        failureReason: 'School subscription expired or cancelled',
+        reqHeaders,
+      });
       throw new ForbiddenException('School subscription has expired or been cancelled. Please renew subscription to access.');
     }
 
@@ -268,6 +393,14 @@ export class AuthService implements OnModuleInit {
     });
 
     if (!user) {
+      await this.recordLoginHistory({
+        schoolId: String(school.id),
+        role: 'STAFF',
+        identifierUsed: username,
+        loginStatus: 'FAILED',
+        failureReason: 'Invalid username or user not found',
+        reqHeaders,
+      });
       throw new UnauthorizedException('Invalid username, password, or school code.');
     }
 
@@ -275,6 +408,17 @@ export class AuthService implements OnModuleInit {
     if (user.isLocked && user.lockoutUntil) {
       if (new Date(user.lockoutUntil).getTime() > Date.now()) {
         const remainingMins = Math.max(1, Math.ceil((new Date(user.lockoutUntil).getTime() - Date.now()) / 60000));
+        await this.recordLoginHistory({
+          schoolId: String(school.id),
+          userId: String(user.id),
+          role: user.userType || 'STAFF',
+          entityId: String(user.id),
+          identifierUsed: username,
+          authAction: 'ACCOUNT_LOCKED',
+          loginStatus: 'FAILED',
+          failureReason: `Account temporarily locked for ${remainingMins} min(s)`,
+          reqHeaders,
+        });
         throw new UnauthorizedException(`Account is temporarily locked due to multiple failed login attempts. Try again in ${remainingMins} minute(s).`);
       } else {
         user.isLocked = false;
@@ -290,9 +434,30 @@ export class AuthService implements OnModuleInit {
         user.isLocked = true;
         user.lockoutUntil = new Date(Date.now() + 15 * 60 * 1000);
         await userRepo.save(user);
+        await this.recordLoginHistory({
+          schoolId: String(school.id),
+          userId: String(user.id),
+          role: user.userType || 'STAFF',
+          entityId: String(user.id),
+          identifierUsed: username,
+          authAction: 'ACCOUNT_LOCKED',
+          loginStatus: 'FAILED',
+          failureReason: 'Account locked due to 5 consecutive failed attempts',
+          reqHeaders,
+        });
         throw new UnauthorizedException('Account has been temporarily locked due to 5 consecutive failed login attempts. Try again in 15 minutes.');
       }
       await userRepo.save(user);
+      await this.recordLoginHistory({
+        schoolId: String(school.id),
+        userId: String(user.id),
+        role: user.userType || 'STAFF',
+        entityId: String(user.id),
+        identifierUsed: username,
+        loginStatus: 'FAILED',
+        failureReason: 'Wrong Password',
+        reqHeaders,
+      });
       throw new UnauthorizedException('Invalid username, password, or school code.');
     }
 
@@ -301,6 +466,16 @@ export class AuthService implements OnModuleInit {
     user.lockoutUntil = null as any;
 
     if (!user.isActive) {
+      await this.recordLoginHistory({
+        schoolId: String(school.id),
+        userId: String(user.id),
+        role: user.userType || 'STAFF',
+        entityId: String(user.id),
+        identifierUsed: username,
+        loginStatus: 'FAILED',
+        failureReason: 'Staff account deactivated',
+        reqHeaders,
+      });
       throw new UnauthorizedException('Your staff account is deactivated. Please contact your school administrator.');
     }
 
@@ -338,6 +513,21 @@ export class AuthService implements OnModuleInit {
       );
     }
 
+    // Revoke any previous active session records in history
+    await this.dataSource.createQueryBuilder()
+      .update(UserLoginHistory)
+      .set({
+        sessionStatus: 'REVOKED',
+        authAction: 'REVOKED',
+        logoutAt: new Date(),
+      })
+      .where('(userId = :userId OR identifierUsed = :identifier) AND sessionStatus = :status', {
+        userId: String(user.id),
+        identifier: user.username,
+        status: 'ACTIVE',
+      })
+      .execute();
+
     const payload = { 
       sub: user.id, 
       email: user.username,
@@ -350,6 +540,18 @@ export class AuthService implements OnModuleInit {
     user.currentSessionToken = token;
     user.isLoggedIn = true;
     await userRepo.save(user);
+
+    await this.recordLoginHistory({
+      schoolId: String(user.schoolId),
+      userId: String(user.id),
+      role: user.userType || roleNames[0] || 'STAFF',
+      entityId: String(user.id),
+      identifierUsed: user.username,
+      authAction: 'LOGIN_SUCCESS',
+      loginStatus: 'SUCCESS',
+      sessionId: token,
+      reqHeaders,
+    });
 
     return {
       message: 'Login successful',
@@ -368,7 +570,7 @@ export class AuthService implements OnModuleInit {
   /**
    * Login as a Student
    */
-  async studentLogin(dto: StudentLoginDto) {
+  async studentLogin(dto: StudentLoginDto, reqHeaders?: any) {
     const studentRepo = this.dataSource.getRepository(Student);
     const studentCode = sanitizeInput(dto.studentCode);
     const schoolCode = sanitizeInput(dto.schoolCode);
@@ -378,6 +580,13 @@ export class AuthService implements OnModuleInit {
     });
     
     if (!school || !school.isActive) {
+      await this.recordLoginHistory({
+        role: 'STUDENT',
+        identifierUsed: studentCode,
+        loginStatus: 'FAILED',
+        failureReason: 'School deactivated or blocked',
+        reqHeaders,
+      });
       throw new UnauthorizedException('Your school account is currently deactivated or blocked.');
     }
 
@@ -386,6 +595,14 @@ export class AuthService implements OnModuleInit {
     });
 
     if (!student) {
+      await this.recordLoginHistory({
+        schoolId: String(school.id),
+        role: 'STUDENT',
+        identifierUsed: studentCode,
+        loginStatus: 'FAILED',
+        failureReason: 'Student record not found',
+        reqHeaders,
+      });
       throw new UnauthorizedException('Invalid student code, password, or school code.');
     }
 
@@ -393,6 +610,17 @@ export class AuthService implements OnModuleInit {
     if (student.isLocked && student.lockoutUntil) {
       if (new Date(student.lockoutUntil).getTime() > Date.now()) {
         const remainingMins = Math.max(1, Math.ceil((new Date(student.lockoutUntil).getTime() - Date.now()) / 60000));
+        await this.recordLoginHistory({
+          schoolId: String(school.id),
+          userId: String(student.id),
+          role: 'STUDENT',
+          entityId: String(student.id),
+          identifierUsed: studentCode,
+          authAction: 'ACCOUNT_LOCKED',
+          loginStatus: 'FAILED',
+          failureReason: `Account locked for ${remainingMins} min(s)`,
+          reqHeaders,
+        });
         throw new UnauthorizedException(`Account is temporarily locked due to multiple failed login attempts. Try again in ${remainingMins} minute(s).`);
       } else {
         student.isLocked = false;
@@ -408,9 +636,30 @@ export class AuthService implements OnModuleInit {
         student.isLocked = true;
         student.lockoutUntil = new Date(Date.now() + 15 * 60 * 1000);
         await studentRepo.save(student);
+        await this.recordLoginHistory({
+          schoolId: String(school.id),
+          userId: String(student.id),
+          role: 'STUDENT',
+          entityId: String(student.id),
+          identifierUsed: studentCode,
+          authAction: 'ACCOUNT_LOCKED',
+          loginStatus: 'FAILED',
+          failureReason: 'Account locked due to 5 consecutive failed attempts',
+          reqHeaders,
+        });
         throw new UnauthorizedException('Account has been temporarily locked due to 5 consecutive failed login attempts. Try again in 15 minutes.');
       }
       await studentRepo.save(student);
+      await this.recordLoginHistory({
+        schoolId: String(school.id),
+        userId: String(student.id),
+        role: 'STUDENT',
+        entityId: String(student.id),
+        identifierUsed: studentCode,
+        loginStatus: 'FAILED',
+        failureReason: 'Wrong Password',
+        reqHeaders,
+      });
       throw new UnauthorizedException('Invalid student code, password, or school code.');
     }
 
@@ -419,6 +668,16 @@ export class AuthService implements OnModuleInit {
     student.lockoutUntil = null as any;
 
     if (!student.isActive) {
+      await this.recordLoginHistory({
+        schoolId: String(school.id),
+        userId: String(student.id),
+        role: 'STUDENT',
+        entityId: String(student.id),
+        identifierUsed: studentCode,
+        loginStatus: 'FAILED',
+        failureReason: 'Student account deactivated',
+        reqHeaders,
+      });
       throw new UnauthorizedException('Student account is deactivated. Please contact your school administrator.');
     }
 
@@ -435,6 +694,21 @@ export class AuthService implements OnModuleInit {
       );
     }
 
+    // Revoke any previous active session records in history
+    await this.dataSource.createQueryBuilder()
+      .update(UserLoginHistory)
+      .set({
+        sessionStatus: 'REVOKED',
+        authAction: 'REVOKED',
+        logoutAt: new Date(),
+      })
+      .where('(userId = :userId OR identifierUsed = :identifier) AND sessionStatus = :status', {
+        userId: String(student.id),
+        identifier: student.studentCode,
+        status: 'ACTIVE',
+      })
+      .execute();
+
     const roleNames = ['student'];
 
     const payload = { 
@@ -449,6 +723,18 @@ export class AuthService implements OnModuleInit {
     student.currentSessionToken = token;
     student.isLoggedIn = true;
     await studentRepo.save(student);
+
+    await this.recordLoginHistory({
+      schoolId: String(student.schoolId),
+      userId: String(student.id),
+      role: 'STUDENT',
+      entityId: String(student.id),
+      identifierUsed: student.studentCode,
+      authAction: 'LOGIN_SUCCESS',
+      loginStatus: 'SUCCESS',
+      sessionId: token,
+      reqHeaders,
+    });
 
     return {
       message: 'Student login successful',
@@ -467,17 +753,33 @@ export class AuthService implements OnModuleInit {
   /**
    * Login as a Platform Admin
    */
-  async platformLogin(dto: PlatformLoginDto) {
+  async platformLogin(dto: PlatformLoginDto, reqHeaders?: any) {
     const user = await this.dataSource.getRepository(PlatformUser).findOne({
       where: { email: dto.email, isActive: true, isDeleted: false },
     });
 
     if (!user) {
+      await this.recordLoginHistory({
+        role: 'PLATFORM_ADMIN',
+        identifierUsed: dto.email,
+        loginStatus: 'FAILED',
+        failureReason: 'Invalid credentials',
+        reqHeaders,
+      });
       throw new UnauthorizedException('Invalid credentials');
     }
 
     const isMatch = await bcrypt.compare(dto.password, user.passwordHash);
     if (!isMatch) {
+      await this.recordLoginHistory({
+        userId: String(user.id),
+        role: 'PLATFORM_ADMIN',
+        entityId: String(user.id),
+        identifierUsed: user.email,
+        loginStatus: 'FAILED',
+        failureReason: 'Wrong Password',
+        reqHeaders,
+      });
       throw new UnauthorizedException('Invalid credentials');
     }
 
@@ -502,6 +804,17 @@ export class AuthService implements OnModuleInit {
       actorType: 'platform_user' as const 
     };
     const token = this.jwtService.sign(payload);
+
+    await this.recordLoginHistory({
+      userId: String(user.id),
+      role: 'PLATFORM_ADMIN',
+      entityId: String(user.id),
+      identifierUsed: user.email,
+      authAction: 'LOGIN_SUCCESS',
+      loginStatus: 'SUCCESS',
+      sessionId: token,
+      reqHeaders,
+    });
 
     return {
       token,
@@ -813,4 +1126,316 @@ export class AuthService implements OnModuleInit {
       throw new BadRequestException('Profile updates not supported for this user type');
     }
   }
+
+  /**
+   * Record a login attempt or auth event into user_login_history
+   */
+  async recordLoginHistory(data: {
+    schoolId?: string | null;
+    userId?: string | null;
+    role?: string;
+    entityId?: string | null;
+    identifierUsed: string;
+    authAction?: string;
+    loginMethod?: string;
+    loginStatus: 'SUCCESS' | 'FAILED';
+    failureReason?: string | null;
+    sessionId?: string | null;
+    refreshTokenId?: string | null;
+    reqHeaders?: any;
+    ipAddress?: string;
+    location?: string;
+    mfaUsed?: boolean;
+    riskScore?: number;
+    isSuspicious?: boolean;
+  }) {
+    try {
+      const repo = this.dataSource.getRepository(UserLoginHistory);
+      const history = new UserLoginHistory();
+
+      history.schoolId = data.schoolId || null;
+      history.userId = data.userId || null;
+      history.role = data.role || 'STAFF';
+      history.entityId = data.entityId || data.userId || null;
+      history.identifierUsed = data.identifierUsed;
+      history.authAction = data.authAction || (data.loginStatus === 'SUCCESS' ? AuthActionEnum.LOGIN_SUCCESS : AuthActionEnum.LOGIN_FAILED);
+      history.loginMethod = data.loginMethod || 'PASSWORD';
+      history.loginStatus = data.loginStatus;
+      history.failureReason = data.failureReason || null;
+      history.sessionId = data.sessionId || null;
+      history.refreshTokenId = data.refreshTokenId || null;
+      history.sessionStatus = data.loginStatus === 'SUCCESS' ? SessionStatusEnum.ACTIVE : SessionStatusEnum.LOGGED_OUT;
+      history.mfaUsed = data.mfaUsed || false;
+      history.riskScore = data.riskScore || 0;
+      history.isSuspicious = data.isSuspicious || false;
+
+      // Extract User-Agent and IP
+      const uaStr = data.reqHeaders?.['user-agent'] || data.reqHeaders?.['User-Agent'] || '';
+      const parsedUa = parseUserAgent(uaStr);
+
+      history.deviceType = parsedUa.deviceType;
+      history.deviceName = parsedUa.deviceName;
+      history.browser = parsedUa.browser;
+      history.browserVersion = parsedUa.browserVersion;
+      history.operatingSystem = parsedUa.operatingSystem;
+      history.userAgent = uaStr || null;
+
+      const rawIp = data.ipAddress || data.reqHeaders?.['x-forwarded-for'] || data.reqHeaders?.['x-real-ip'] || '127.0.0.1';
+      history.ipAddress = Array.isArray(rawIp) ? rawIp[0] : (rawIp.split(',')[0]?.trim() || '127.0.0.1');
+
+      history.location = data.location || 'Local Workspace';
+      history.country = 'India';
+      history.city = 'New Delhi';
+
+      await repo.save(history);
+      return history;
+    } catch (err) {
+      console.error('Failed to record user login history:', err);
+      return null;
+    }
+  }
+
+  /**
+   * User Logout: updates session status and logout timestamp
+   */
+  async logout(userId?: string, sessionId?: string) {
+    if (!sessionId && !userId) {
+      return { message: 'Logged out successfully' };
+    }
+
+    const repo = this.dataSource.getRepository(UserLoginHistory);
+    const qb = repo.createQueryBuilder('h')
+      .where('h.session_status = :status', { status: SessionStatusEnum.ACTIVE });
+
+    if (sessionId) {
+      qb.andWhere('h.session_id = :sessionId', { sessionId });
+    } else if (userId) {
+      qb.andWhere('h.user_id = :userId', { userId });
+    }
+
+    const activeSession = await qb.getOne();
+    if (activeSession) {
+      const now = new Date();
+      activeSession.logoutAt = now;
+      activeSession.sessionStatus = SessionStatusEnum.LOGGED_OUT;
+      activeSession.authAction = AuthActionEnum.LOGOUT;
+      if (activeSession.loginAt) {
+        const durationSec = Math.max(0, Math.floor((now.getTime() - new Date(activeSession.loginAt).getTime()) / 1000));
+        activeSession.sessionDurationSeconds = durationSec;
+      }
+      await repo.save(activeSession);
+    }
+
+    return { message: 'Logged out successfully' };
+  }
+
+  /**
+   * Get paginated Login History records with optional filters
+   */
+  async getLoginHistory(params: {
+    schoolId?: string;
+    userId?: string;
+    role?: string;
+    loginStatus?: string;
+    authAction?: string;
+    search?: string;
+    startDate?: string;
+    endDate?: string;
+    page?: number;
+    limit?: number;
+  }) {
+    const page = Math.max(1, Number(params.page) || 1);
+    const limit = Math.min(100, Math.max(1, Number(params.limit) || 20));
+    const skip = (page - 1) * limit;
+
+    const qb = this.dataSource.getRepository(UserLoginHistory)
+      .createQueryBuilder('history')
+      .where('history.is_deleted = false');
+
+    if (params.schoolId) {
+      qb.andWhere('(history.school_id = :schoolId OR history.school_id IS NULL)', { schoolId: params.schoolId });
+    }
+
+    if (params.userId) {
+      qb.andWhere('history.user_id = :userId', { userId: params.userId });
+    }
+
+    if (params.role) {
+      qb.andWhere('UPPER(history.role) = UPPER(:role)', { role: params.role });
+    }
+
+    if (params.loginStatus) {
+      qb.andWhere('UPPER(history.login_status) = UPPER(:loginStatus)', { loginStatus: params.loginStatus });
+    }
+
+    if (params.authAction) {
+      qb.andWhere('UPPER(history.auth_action) = UPPER(:authAction)', { authAction: params.authAction });
+    }
+
+    if (params.search) {
+      qb.andWhere(
+        '(history.identifier_used ILIKE :search OR history.ip_address ILIKE :search OR history.device_name ILIKE :search OR history.browser ILIKE :search)',
+        { search: `%${params.search}%` },
+      );
+    }
+
+    if (params.startDate) {
+      qb.andWhere('history.login_at >= :startDate', { startDate: new Date(params.startDate) });
+    }
+
+    if (params.endDate) {
+      qb.andWhere('history.login_at <= :endDate', { endDate: new Date(params.endDate) });
+    }
+
+    qb.orderBy('history.login_at', 'DESC');
+    qb.skip(skip).take(limit);
+
+    const [data, total] = await qb.getManyAndCount();
+    const totalPages = Math.ceil(total / limit) || 1;
+
+    return {
+      data,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages,
+      },
+    };
+  }
+
+  /**
+   * Get active sessions for a school or user
+   */
+  async getActiveSessions(schoolId?: string, userId?: string) {
+    const qb = this.dataSource.getRepository(UserLoginHistory)
+      .createQueryBuilder('history')
+      .where('history.session_status = :status', { status: SessionStatusEnum.ACTIVE })
+      .andWhere('history.is_deleted = false');
+
+    if (schoolId) {
+      qb.andWhere('history.school_id = :schoolId', { schoolId });
+    }
+
+    if (userId) {
+      qb.andWhere('history.user_id = :userId', { userId });
+    }
+
+    qb.orderBy('history.login_at', 'DESC');
+    return qb.getMany();
+  }
+
+  /**
+   * Revoke an active session by session ID or history ID
+   */
+  async revokeSession(id: string, revokedBy?: string) {
+    const repo = this.dataSource.getRepository(UserLoginHistory);
+    const session = await repo.findOne({
+      where: [
+        { id, isDeleted: false },
+        { sessionId: id, isDeleted: false },
+      ],
+    });
+
+    if (!session) {
+      throw new NotFoundException('Active session not found.');
+    }
+
+    const now = new Date();
+    session.sessionStatus = SessionStatusEnum.REVOKED;
+    session.authAction = AuthActionEnum.REVOKED;
+    session.logoutAt = now;
+    if (session.loginAt) {
+      session.sessionDurationSeconds = Math.max(0, Math.floor((now.getTime() - new Date(session.loginAt).getTime()) / 1000));
+    }
+
+    await repo.save(session);
+
+    return {
+      message: `Session for user ${session.identifierUsed} successfully revoked.`,
+      sessionId: session.id,
+      revokedAt: now,
+    };
+  }
+
+  /**
+   * Get login analytics & security metrics
+   */
+  async getLoginAnalytics(schoolId?: string) {
+    const repo = this.dataSource.getRepository(UserLoginHistory);
+
+    const baseQb = repo.createQueryBuilder('h').where('h.is_deleted = false');
+    if (schoolId) {
+      baseQb.andWhere('(h.school_id = :schoolId OR h.school_id IS NULL)', { schoolId });
+    }
+
+    const totalLogins = await baseQb.clone().andWhere('h.login_status = :status', { status: 'SUCCESS' }).getCount();
+    const failedLogins = await baseQb.clone().andWhere('h.login_status = :status', { status: 'FAILED' }).getCount();
+    const activeSessionsCount = await baseQb.clone().andWhere('h.session_status = :status', { status: SessionStatusEnum.ACTIVE }).getCount();
+    const lockedAttempts = await baseQb.clone().andWhere('h.auth_action = :act', { act: AuthActionEnum.ACCOUNT_LOCKED }).getCount();
+
+    const lastLoginRecord = await baseQb.clone()
+      .andWhere('h.login_status = :status', { status: 'SUCCESS' })
+      .orderBy('h.login_at', 'DESC')
+      .getOne();
+
+    const avgDurationResult = await baseQb.clone()
+      .select('AVG(h.session_duration_seconds)', 'avg')
+      .where('h.session_duration_seconds IS NOT NULL')
+      .getRawOne();
+
+    const avgSessionDuration = Math.round(Number(avgDurationResult?.avg) || 3600);
+
+    // Device breakdown
+    const devicesRaw = await baseQb.clone()
+      .select('h.device_type', 'deviceType')
+      .addSelect('COUNT(*)', 'count')
+      .groupBy('h.device_type')
+      .getRawMany();
+
+    // Most active users
+    const topUsersRaw = await baseQb.clone()
+      .select('h.identifier_used', 'identifier')
+      .addSelect('h.role', 'role')
+      .addSelect('COUNT(*)', 'logins')
+      .groupBy('h.identifier_used')
+      .addGroupBy('h.role')
+      .orderBy('logins', 'DESC')
+      .limit(5)
+      .getRawMany();
+
+    return {
+      summary: {
+        totalLogins,
+        failedLogins,
+        activeSessionsCount,
+        lockedAttempts,
+        avgSessionDurationSeconds: avgSessionDuration,
+        lastLoginAt: lastLoginRecord?.loginAt || null,
+        lastLoginUser: lastLoginRecord?.identifierUsed || null,
+      },
+      deviceBreakdown: devicesRaw.map(d => ({ deviceType: d.deviceType || 'Desktop', count: Number(d.count) || 0 })),
+      topActiveUsers: topUsersRaw.map(u => ({ identifier: u.identifier, role: u.role, loginsCount: Number(u.logins) || 0 })),
+    };
+  }
+
+  /**
+   * Purge old login records beyond retention period
+   */
+  async purgeLoginHistory(daysToKeep: number = 365) {
+    const cutoffDate = new Date(Date.now() - daysToKeep * 24 * 60 * 60 * 1000);
+    const result = await this.dataSource.getRepository(UserLoginHistory)
+      .createQueryBuilder()
+      .delete()
+      .from(UserLoginHistory)
+      .where('login_at < :cutoffDate', { cutoffDate })
+      .execute();
+
+    return {
+      message: `Login records older than ${daysToKeep} days purged successfully.`,
+      recordsPurged: result.affected || 0,
+      cutoffDate,
+    };
+  }
 }
+

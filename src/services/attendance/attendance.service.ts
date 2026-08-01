@@ -276,10 +276,10 @@ export class AttendanceService implements OnModuleInit {
       .leftJoin(
         StudentEnrollment,
         'enrollment',
-        'enrollment.student_id = student.id AND enrollment.is_deleted = false AND enrollment.is_current = true',
+        'enrollment.student_id = student.id AND enrollment.is_delete = false AND enrollment.is_current = true',
       )
       .where('student.school_id = :schoolId', { schoolId: String(schoolId) })
-      .andWhere('student.is_deleted = false')
+      .andWhere('student.is_delete = false')
       .andWhere('student.is_active = true');
 
     if (filter.classId) {
@@ -396,10 +396,10 @@ export class AttendanceService implements OnModuleInit {
       .innerJoin(
         StudentEnrollment,
         'enrollment',
-        'enrollment.student_id = student.id AND enrollment.is_deleted = false AND enrollment.is_current = true',
+        'enrollment.student_id = student.id AND enrollment.is_delete = false AND enrollment.is_current = true',
       )
       .where('student.school_id = :schoolId', { schoolId: String(schoolId) })
-      .andWhere('student.is_deleted = false')
+      .andWhere('student.is_delete = false')
       .andWhere('student.is_active = true');
 
     if (academicSessionId) {
@@ -501,12 +501,12 @@ export class AttendanceService implements OnModuleInit {
       .leftJoin(
         StudentEnrollment,
         'enrollment',
-        'enrollment.student_id = student.id AND enrollment.is_deleted = false AND enrollment.is_current = true',
+        'enrollment.student_id = student.id AND enrollment.is_delete = false AND enrollment.is_current = true',
       )
       .leftJoin(Class, 'class', 'class.id = enrollment.class_id')
       .leftJoin(Section, 'section', 'section.id = enrollment.section_id')
       .where('student.school_id = :schoolId', { schoolId: String(schoolId) })
-      .andWhere('student.is_deleted = false')
+      .andWhere('student.is_delete = false')
       .andWhere('student.is_active = true');
 
     if (academicSessionId) {
@@ -693,7 +693,18 @@ export class AttendanceService implements OnModuleInit {
 
     return records.map((r) => {
       const rawDate = sessionMap.get(r.sessionId);
-      const dateStr = rawDate ? String(rawDate).slice(0, 10) : '';
+      let dateStr = '';
+      if (rawDate) {
+        const rawDateAsAny = rawDate as any;
+        if (rawDateAsAny instanceof Date) {
+          const y = rawDateAsAny.getFullYear();
+          const m = String(rawDateAsAny.getMonth() + 1).padStart(2, '0');
+          const d = String(rawDateAsAny.getDate()).padStart(2, '0');
+          dateStr = `${y}-${m}-${d}`;
+        } else {
+          dateStr = String(rawDate).slice(0, 10);
+        }
+      }
       const actualStudentId = enrollmentMap.get(String(r.studentEnrollmentId)) || String(r.studentEnrollmentId);
 
       return {

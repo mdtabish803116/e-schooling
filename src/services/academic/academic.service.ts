@@ -1729,6 +1729,21 @@ export class AcademicService {
     return await this.mappingRepo.save(mapping);
   }
 
+  async removeSubjectFromClassSection(
+    schoolId: string,
+    classId: string,
+    sectionId: string,
+    subjectId: string,
+  ) {
+    const mapping = await this.mappingRepo.findOne({
+      where: { schoolId, classId, sectionId, subjectId, isDeleted: false },
+    });
+    if (mapping) {
+      mapping.isDeleted = true;
+      return await this.mappingRepo.save(mapping);
+    }
+  }
+
   async getMappings(schoolId: string, classId?: string, sectionId?: string) {
     const where: any = { schoolId };
     if (classId) where.classId = classId;

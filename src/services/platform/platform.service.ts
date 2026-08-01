@@ -573,9 +573,29 @@ export class PlatformService {
           route: '/attendance',
           icon: 'check_circle',
           displayOrder: 8,
-          isMenuGroup: false,
+          isMenuGroup: true,
           featureCode: 'ATTENDANCE_MANAGEMENT',
           parentName: null,
+          showInSidebar: true,
+        },
+        {
+          name: 'Attendance History',
+          route: '/attendance/history',
+          icon: 'history',
+          displayOrder: 81,
+          isMenuGroup: false,
+          featureCode: 'ATTENDANCE_MANAGEMENT',
+          parentName: 'Attendance',
+          showInSidebar: true,
+        },
+        {
+          name: 'Take Attendance',
+          route: '/attendance/take',
+          icon: 'how_to_reg',
+          displayOrder: 82,
+          isMenuGroup: false,
+          featureCode: 'ATTENDANCE_MANAGEMENT',
+          parentName: 'Attendance',
           showInSidebar: true,
         },
         {
@@ -787,10 +807,24 @@ export class PlatformService {
         },
       ];
 
+      try {
+        await this.dataSource.query(`
+          SELECT setval(
+            pg_get_serial_sequence('"e_schooling"."module_masters"', 'id'),
+            COALESCE(MAX(id), 1)
+          ) FROM "e_schooling"."module_masters";
+        `);
+      } catch (seqErr) {
+        console.warn('Could not reset sequence for module_masters:', (seqErr as Error).message);
+      }
+
       const seededModules: Record<string, ModuleMaster> = {};
       for (const md of modulesData) {
         const generatedCode = this.generateCodeFromName(md.name);
         let m = await modRepo.findOne({ where: { code: generatedCode } });
+        if (!m) {
+          m = await modRepo.findOne({ where: { name: md.name } });
+        }
         if (!m) {
           m = new ModuleMaster();
           m.code = generatedCode;
@@ -800,7 +834,7 @@ export class PlatformService {
         m.routePath = md.route;
         m.icon = md.icon;
         m.description = (md as any).description || null;
-        m.displayOrder = md.displayOrder;
+        m.displayOrder = Math.floor(md.displayOrder ?? 0);
         m.showInSidebar = md.showInSidebar !== false;
         m.isMenuGroup = md.isMenuGroup;
         if (md.featureCode && seededFeatures[md.featureCode]) {
@@ -820,8 +854,14 @@ export class PlatformService {
         try {
           m = await modRepo.save(m);
         } catch (err) {
-          const existing = await modRepo.findOne({ where: { code: generatedCode } });
-          if (existing) m = existing;
+          const existing = await modRepo.findOne({ where: { code: generatedCode } }) || await modRepo.findOne({ where: { name: md.name } });
+          if (existing) {
+            existing.parentModuleId = m.parentModuleId;
+            existing.displayOrder = m.displayOrder;
+            m = await modRepo.save(existing);
+          } else {
+            console.error(`❌ Module seed save error for "${md.name}":`, (err as Error).message);
+          }
         }
         seededModules[generatedCode] = m;
       }
@@ -865,6 +905,16 @@ export class PlatformService {
         { modCode: 'ATTENDANCE', opCode: 'CREATE' },
         { modCode: 'ATTENDANCE', opCode: 'UPDATE' },
         { modCode: 'ATTENDANCE', opCode: 'DELETE' },
+
+        { modCode: 'ATTENDANCE_HISTORY', opCode: 'VIEW' },
+        { modCode: 'ATTENDANCE_HISTORY', opCode: 'CREATE' },
+        { modCode: 'ATTENDANCE_HISTORY', opCode: 'UPDATE' },
+        { modCode: 'ATTENDANCE_HISTORY', opCode: 'DELETE' },
+
+        { modCode: 'TAKE_ATTENDANCE', opCode: 'VIEW' },
+        { modCode: 'TAKE_ATTENDANCE', opCode: 'CREATE' },
+        { modCode: 'TAKE_ATTENDANCE', opCode: 'UPDATE' },
+        { modCode: 'TAKE_ATTENDANCE', opCode: 'DELETE' },
 
         { modCode: 'CLASSES', opCode: 'VIEW' },
         { modCode: 'CLASSES', opCode: 'VIEW_ASSIGNED' },

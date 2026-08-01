@@ -1,4 +1,7 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Index, ManyToOne, JoinColumn } from 'typeorm';
+import { Class } from './class.entity';
+import { Section } from './section.entity';
+import { Subject } from './subject.entity';
 
 @Entity({ name: 'class_section_subjects', schema: 'e_schooling' })
 export class ClassSectionSubject {
@@ -13,13 +16,25 @@ export class ClassSectionSubject {
   @Column({ name: 'class_id', type: 'bigint', nullable: true, comment: 'Reference to Class' })
   classId: string;
 
+  @ManyToOne(() => Class)
+  @JoinColumn({ name: 'class_id' })
+  class: Class;
+
   @Index()
   @Column({ name: 'section_id', type: 'bigint', nullable: true, comment: 'Reference to Section' })
   sectionId: string;
 
+  @ManyToOne(() => Section)
+  @JoinColumn({ name: 'section_id' })
+  section: Section;
+
   @Index()
   @Column({ name: 'subject_id', type: 'bigint', nullable: true, comment: 'Reference to Subject' })
   subjectId: string;
+
+  @ManyToOne(() => Subject)
+  @JoinColumn({ name: 'subject_id' })
+  subject: Subject;
 
   @Index()
   @Column({ name: 'teacher_id', type: 'bigint', nullable: true, comment: 'Reference to SchoolUser' })

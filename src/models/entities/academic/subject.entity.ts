@@ -12,6 +12,9 @@ export class Subject {
   @Column({ name: 'name', type: 'varchar', nullable: true, comment: 'Subject name' })
   name: string;
 
+  @Column({ name: 'subject_code', type: 'varchar', nullable: true, comment: 'Unique subject code' })
+  subjectCode: string;
+
   @Column({ name: 'is_active', type: 'boolean', nullable: false, default: true, comment: 'Active status toggle' })
   isActive: boolean;
 

@@ -250,6 +250,23 @@ export class AcademicController {
     return this.academicService.getMappings(schoolId, classId, sectionId);
   }
 
+  @ApiOperation({ summary: 'Remove academic mapping' })
+  @Permission(ResourceEnum.ACADEMIC_MAPPING, ActionEnum.DELETE)
+  @Delete('mappings')
+  async removeMapping(
+    @Param('schoolId') schoolId: string,
+    @Query('classId') classId: string,
+    @Query('sectionId') sectionId: string,
+    @Query('subjectId') subjectId: string,
+  ) {
+    return this.academicService.removeSubjectFromClassSection(
+      schoolId,
+      classId,
+      sectionId,
+      subjectId,
+    );
+  }
+
   // ACADEMIC SESSIONS
   @ApiOperation({ summary: 'Create a new academic session' })
   @Permission(ResourceEnum.ACADEMIC_SESSIONS, ActionEnum.CREATE)
