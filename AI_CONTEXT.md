@@ -1,6 +1,6 @@
 # E-School Backend (`e-schooling`) AI Context
 
-Last updated: 2026-07-29 (NestJS v11 Architecture, Dual-Mode Execution, TypeORM Postgres Migrations, RBAC & Entitlement System)
+Last updated: 2026-08-07 (Module Masters & RBAC Permissions Seed, Staff/Homework/Academic Years Support, Migration 1784832800000)
 
 This file is the quick-start handoff for AI agents working in the `e-schooling` backend repository. Read it before modifying or adding API endpoints, NestJS services, TypeORM entities, background workers, or migrations.
 
@@ -263,4 +263,9 @@ Background asynchronous jobs are processed using BullMQ:
   - Fields: `sourceSessionId`, `targetSessionId`, `copyClasses`, `copySections`, `copySubjects`, `copyRooms`, `copyTeacherAssignments`, `copyClassSectionSubjects`.
 - **Service Logic**: `AcademicService.copyAcademicSessionData` in `src/services/academic/academic.service.ts`
   - Deep-clones classes, sections, subjects, rooms, class-section-subject mappings, and teacher section assignments from `sourceSessionId` into `targetSessionId` in a single transaction context.
+
+### 3. Module Masters & RBAC Permissions Seeding Migration
+- **Seed Service**: `PlatformService.seedPlatformData()` in `src/services/platform/platform.service.ts` updated with `STAFF`, `HOMEWORK`, `ACADEMIC_YEARS`, and `ANNOUNCEMENTS` modules & operations.
+- **Migration Script**: `src/core/database/postgres/migrations/1784832800000-AddMissingModulesAndPermissionsSeed.ts` automatically inserts and syncs all module masters, operation masters (`VIEW`, `CREATE`, `UPDATE`, `DELETE`, `VIEW_ASSIGNED`), and `module_operation_permissions` mappings in PostgreSQL.
+
 
