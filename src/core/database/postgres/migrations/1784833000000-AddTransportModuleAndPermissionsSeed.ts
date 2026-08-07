@@ -155,6 +155,52 @@ export class AddTransportModuleAndPermissionsSeed1784833000000
         "updated_at" timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP
       );
 
+      CREATE TABLE IF NOT EXISTS "e_schooling"."admission_enquiries" (
+        "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        "school_id" varchar(100) NOT NULL,
+        "enquiry_no" varchar(50) NOT NULL,
+        "student_name" varchar(150) NOT NULL,
+        "parent_name" varchar(150) NOT NULL,
+        "contact_number" varchar(50) NOT NULL,
+        "email" varchar(150),
+        "target_class_id" varchar(100) NOT NULL,
+        "target_class_name" varchar(100),
+        "gender" varchar(20) NOT NULL DEFAULT 'MALE',
+        "previous_school" varchar(150),
+        "source" varchar(50) NOT NULL DEFAULT 'WALK_IN',
+        "stage" varchar(50) NOT NULL DEFAULT 'ENQUIRY',
+        "enquiry_status" varchar(50) NOT NULL DEFAULT 'NEW',
+        "notes" text,
+        "assigned_to_staff_name" varchar(150),
+        "created_at" timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updated_at" timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS "e_schooling"."admission_applications" (
+        "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        "school_id" varchar(100) NOT NULL,
+        "application_no" varchar(50) NOT NULL,
+        "enquiry_id" varchar(100),
+        "first_name" varchar(100) NOT NULL,
+        "last_name" varchar(100) NOT NULL,
+        "gender" varchar(20) NOT NULL DEFAULT 'MALE',
+        "dob" varchar(30),
+        "father_name" varchar(150) NOT NULL,
+        "father_phone" varchar(50) NOT NULL,
+        "mother_name" varchar(150),
+        "target_class_id" varchar(100) NOT NULL,
+        "target_class_name" varchar(100),
+        "stage" varchar(50) NOT NULL DEFAULT 'APPLICATION',
+        "verification_status" varchar(50) NOT NULL DEFAULT 'PENDING',
+        "verified_documents" jsonb,
+        "rejection_reason" text,
+        "approval_remarks" text,
+        "approved_by" varchar(100),
+        "converted_student_id" varchar(100),
+        "created_at" timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updated_at" timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+
       ALTER TABLE "e_schooling"."transport_drivers" ADD COLUMN IF NOT EXISTS "user_id" varchar(100);
       ALTER TABLE "e_schooling"."transport_drivers" ADD COLUMN IF NOT EXISTS "role_id" varchar(100);
       ALTER TABLE "e_schooling"."transport_drivers" ADD COLUMN IF NOT EXISTS "role_name" varchar(100);

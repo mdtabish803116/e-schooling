@@ -322,4 +322,68 @@ export class StudentAdmissionsController {
       status: job.status,
     };
   }
+
+  /* ======================================================
+     ADMISSION ENQUIRIES & APPLICATIONS
+  ====================================================== */
+
+  @ApiOperation({ summary: 'Get all admission enquiries for a school' })
+  @Get('admissions/enquiries')
+  @Permission(ResourceEnum.STUDENTS, ActionEnum.VIEW)
+  @Feature('STUDENT_MANAGEMENT')
+  async getEnquiries(@Param('schoolId') schoolId: string) {
+    return this.admissionsService.getEnquiries(schoolId);
+  }
+
+  @ApiOperation({ summary: 'Create a new admission enquiry lead' })
+  @Post('admissions/enquiries')
+  @Permission(ResourceEnum.STUDENTS, ActionEnum.CREATE)
+  @Feature('STUDENT_MANAGEMENT')
+  async createEnquiry(
+    @Param('schoolId') schoolId: string,
+    @Body() dto: any,
+  ) {
+    return this.admissionsService.createEnquiry(schoolId, dto);
+  }
+
+  @ApiOperation({ summary: 'Update admission enquiry status' })
+  @Patch('admissions/enquiries/:enquiryId/status')
+  @Permission(ResourceEnum.STUDENTS, ActionEnum.UPDATE)
+  @Feature('STUDENT_MANAGEMENT')
+  async updateEnquiryStatus(
+    @Param('schoolId') schoolId: string,
+    @Param('enquiryId') enquiryId: string,
+    @Body() body: { enquiryStatus: string },
+  ) {
+    return this.admissionsService.updateEnquiryStatus(
+      schoolId,
+      enquiryId,
+      body.enquiryStatus,
+    );
+  }
+
+  @ApiOperation({ summary: 'Get all admission applications' })
+  @Get('admissions/applications')
+  @Permission(ResourceEnum.STUDENTS, ActionEnum.VIEW)
+  @Feature('STUDENT_MANAGEMENT')
+  async getApplications(@Param('schoolId') schoolId: string) {
+    return this.admissionsService.getApplications(schoolId);
+  }
+
+  @ApiOperation({ summary: 'Update admission application stage' })
+  @Patch('admissions/applications/:applicationId/stage')
+  @Permission(ResourceEnum.STUDENTS, ActionEnum.UPDATE)
+  @Feature('STUDENT_MANAGEMENT')
+  async updateStage(
+    @Param('schoolId') schoolId: string,
+    @Param('applicationId') applicationId: string,
+    @Body() body: { stage: string; remarks?: string },
+  ) {
+    return this.admissionsService.updateApplicationStage(
+      schoolId,
+      applicationId,
+      body.stage,
+      body.remarks,
+    );
+  }
 }

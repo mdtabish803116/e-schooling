@@ -23,6 +23,8 @@ import { School } from '../../models/entities/school/school.entity';
 import { PromotionLog } from '../../models/entities/student/promotion-log.entity';
 import { StudentEnrollment } from '../../models/entities/student/student-enrollment.entity';
 import { Student } from '../../models/entities/student/student.entity';
+import { AdmissionEnquiry } from '../../models/entities/student/admission-enquiry.entity';
+import { AdmissionApplication } from '../../models/entities/student/admission-application.entity';
 import { SchoolSubscription } from '../../models/entities/subscription/school-subscription.entity';
 import {
   ActionTypeEnum,
@@ -921,5 +923,73 @@ export class StudentAdmissionsService {
     student.documents = documents.filter((doc: any) => doc.id !== documentId);
     await studentRepo.save(student);
     return { message: 'Document deleted successfully' };
+  }
+
+  /* ────────────────────────────────────────────────────
+     ADMISSION ENQUIRIES & PIPELINE (DB OPERATED)
+  ──────────────────────────────────────────────────── */
+  async getEnquiries(schoolId: string) {
+    const repo = this.dataSource.getRepository(AdmissionEnquiry);
+    return repo.find({
+      where: { schoolId },
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  async createEnquiry(schoolId: string, dto: any) {
+    const repo = this.dataSource.getRepository(AdmissionEnquiry);
+    const count = await repo.count({ where: { schoolId } });
+    const enquiryNo = `ENQ-${new Date().getFullYear()}-${String(count + 1).padStart(3, '0')}`;
+
+    const enquiry = repo.create({
+      schoolId,
+      enquiryNo,
+      studentName: dto.studentName,
+      parentName: dto.parentName,
+      contactNumber: dto.contactNumber,
+      email: dto.email,
+      targetClassId: dto.targetClassId || 'cls-1',
+      targetClassName: dto.targetClassName || 'Class 9',
+      gender: dto.gender || 'MALE',
+      previousSchool: dto.previousSchool,
+      source: dto.source || 'WALK_IN',
+      stage: 'ENQUIRY',
+      enquiryStatus: 'NEW',
+      notes: dto.notes,
+      assignedToStaffName: dto.assignedToStaffName || 'Admission Counselor',
+    });
+
+    return repo.save(enquiry);
+  }
+
+  async updateEnquiryStatus(schoolId: string, id: string, enquiryStatus: string) {
+    const repo = this.dataSource.getRepository(AdmissionEnquiry);
+    const enquiry = await repo.findOne({ where: { id, schoolId } });
+    if (!enquiry) throw new NotFoundException('Admission Enquiry record not found');
+
+    enquiry.enquiryStatus = enquiryStatus;
+    if (enquiryStatus === 'CONVERTED') {
+      enquiry.stage = 'APPROVAL';
+    }
+    return repo.save(enquiry);
+  }
+
+  async getApplications(schoolId: string) {
+    const repo = this.dataSource.getRepository(AdmissionApplication);
+    return repo.find({
+      where: { schoolId },
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  async updateApplicationStage(schoolId: string, id: string, stage: string, remarks?: string) {
+    const repo = this.dataSource.getRepository(AdmissionApplication);
+    const application = await repo.findOne({ where: { id, schoolId } });
+    if (!application) throw new NotFoundException('Admission Application record not found');
+
+    application.stage = stage;
+    if (remarks) application.approvalRemarks = remarks;
+    if (stage === 'VERIFICATION') application.verificationStatus = 'VERIFIED';
+    return repo.save(application);
   }
 }
