@@ -1,4 +1,3 @@
-
 /** Roles/types for school users (teachers, staff, etc.) */
 export enum UserTypeEnum {
   ACADEMIC = 'academic',
@@ -54,18 +53,16 @@ export enum ActionEnum {
   VIEW_ASSIGNED = 'view_assigned',
 }
 
-
-
 export enum InvitationStatusEnum {
   PENDING = 'pending',
   ACCEPTED = 'accepted',
-  REJECTED = 'rejected'
+  REJECTED = 'rejected',
 }
 
 export enum BillingCycleEnum {
   MONTHLY = 'monthly',
   QUARTERLY = 'quarterly',
-  YEARLY = 'yearly'
+  YEARLY = 'yearly',
 }
 
 export enum SubscriptionStatusEnum {
@@ -73,14 +70,14 @@ export enum SubscriptionStatusEnum {
   ACTIVE = 'active',
   EXPIRED = 'expired',
   CANCELLED = 'cancelled',
-  SUSPENDED = 'suspended'
+  SUSPENDED = 'suspended',
 }
 
 export enum PlanCodeEnum {
   TRIAL = 'TRIAL',
   BASIC = 'BASIC',
   STANDARD = 'STANDARD',
-  PREMIUM = 'PREMIUM'
+  PREMIUM = 'PREMIUM',
 }
 
 export enum AddonTypeEnum {
@@ -93,33 +90,33 @@ export enum AddonTypeEnum {
 export enum PaymentGatewayEnum {
   RAZORPAY = 'razorpay',
   STRIPE = 'stripe',
-  CASHFREE = 'cashfree'
+  CASHFREE = 'cashfree',
 }
 
 export enum PaymentStatusEnum {
   PENDING = 'pending',
   SUCCESS = 'success',
   FAILED = 'failed',
-  REFUNDED = 'refunded'
+  REFUNDED = 'refunded',
 }
 
 export enum OrderStatusEnum {
   PENDING = 'pending',
   PAID = 'paid',
   FAILED = 'failed',
-  CANCELLED = 'cancelled'
+  CANCELLED = 'cancelled',
 }
 
 export enum OrderItemTypeEnum {
   PLAN = 'PLAN',
   FEATURE = 'FEATURE',
-  ADDON = 'ADDON'
+  ADDON = 'ADDON',
 }
 
 export enum InvoiceStatusEnum {
   PAID = 'paid',
   UNPAID = 'unpaid',
-  OVERDUE = 'overdue'
+  OVERDUE = 'overdue',
 }
 
 export enum EnrollmentStatusEnum {
@@ -128,7 +125,7 @@ export enum EnrollmentStatusEnum {
   DEMOTED = 'demoted',
   TRANSFERRED = 'transferred',
   COMPLETED = 'completed',
-  DROPPED = 'dropped'
+  DROPPED = 'dropped',
 }
 
 export enum EnrollmentTypeEnum {
@@ -137,7 +134,7 @@ export enum EnrollmentTypeEnum {
   DEMOTION = 'demotion',
   TRANSFER = 'transfer',
   REPEAT = 'repeat',
-  SPECIAL_PROMOTION = 'special_promotion'
+  SPECIAL_PROMOTION = 'special_promotion',
 }
 
 export enum ActionTypeEnum {
@@ -145,7 +142,7 @@ export enum ActionTypeEnum {
   DEMOTION = 'demotion',
   SECTION_TRANSFER = 'section_transfer',
   SPECIAL_PROMOTION = 'special_promotion',
-  REPEAT = 'repeat'
+  REPEAT = 'repeat',
 }
 
 export enum JobTypeEnum {
@@ -171,7 +168,7 @@ export enum JobStatusEnum {
   FAILED = 'failed',
   DELAYED = 'delayed',
   CANCELLED = 'cancelled',
-  RETRYING = 'retrying'
+  RETRYING = 'retrying',
 }
 
 export enum AttendanceStatusEnum {
@@ -179,7 +176,7 @@ export enum AttendanceStatusEnum {
   ABSENT = 'absent',
   LEAVE = 'leave',
   HALF_DAY = 'half_day',
-  LATE = 'late'
+  LATE = 'late',
 }
 
 /** Feature Entitlement & Billing Add-ons mapping */
@@ -231,4 +228,3 @@ export enum TimetableEventTypeEnum {
   EVENT = 'event',
   HOLIDAY = 'holiday',
 }
-

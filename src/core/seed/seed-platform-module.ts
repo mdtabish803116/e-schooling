@@ -21,14 +21,17 @@ async function runSeed() {
     const platformService = new PlatformService(dataSource);
     console.log('🌱 Starting Platform Data Seeding...');
     const result = await platformService.seedPlatformData();
-    
+
     console.log('🛡️ Running Login History Table & Data Seed...');
     await seedLoginHistoryTable(dataSource);
 
     console.log('🎉 Seeding completed successfully!');
     console.log(result);
   } catch (error) {
-    console.error('⚠️ Exception occurred during seeding (handled):', (error as Error).message);
+    console.error(
+      '⚠️ Exception occurred during seeding (handled):',
+      (error as Error).message,
+    );
   } finally {
     if (dataSource && dataSource.isInitialized) {
       await dataSource.destroy();

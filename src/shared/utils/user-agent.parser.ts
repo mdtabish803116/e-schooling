@@ -27,7 +27,9 @@ export function parseUserAgent(uaString?: string): ParsedUserAgent {
   if (/iPad|Android(?!.*Mobile)|Tablet/i.test(uaString)) {
     deviceType = 'Tablet';
     deviceName = /iPad/i.test(uaString) ? 'iPad' : 'Android Tablet';
-  } else if (/Mobile|iPhone|iPod|Android|BlackBerry|IEMobile|Opera Mini/i.test(uaString)) {
+  } else if (
+    /Mobile|iPhone|iPod|Android|BlackBerry|IEMobile|Opera Mini/i.test(uaString)
+  ) {
     deviceType = 'Mobile';
     if (/iPhone/i.test(uaString)) deviceName = 'iPhone';
     else if (/iPod/i.test(uaString)) deviceName = 'iPod';

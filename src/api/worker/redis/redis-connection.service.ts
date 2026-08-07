@@ -10,7 +10,9 @@ export class RedisConnectionService implements OnApplicationShutdown {
   constructor() {
     const redisConfig = Config.getRedisConfig();
 
-    this.logger.log(`Initializing Redis Connection to ${redisConfig.host}:${redisConfig.port}`);
+    this.logger.log(
+      `Initializing Redis Connection to ${redisConfig.host}:${redisConfig.port}`,
+    );
 
     this.redisConnection = new Redis({
       host: redisConfig.host,
@@ -19,7 +21,9 @@ export class RedisConnectionService implements OnApplicationShutdown {
       maxRetriesPerRequest: null, // Critical requirement for BullMQ workers!
       retryStrategy: (times) => {
         const delay = Math.min(times * 100, 3000);
-        this.logger.warn(`Redis connection lost. Reconnection attempt #${times} in ${delay}ms`);
+        this.logger.warn(
+          `Redis connection lost. Reconnection attempt #${times} in ${delay}ms`,
+        );
         return delay;
       },
     });

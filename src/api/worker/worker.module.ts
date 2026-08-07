@@ -43,5 +43,3 @@ import { ImportExportModule } from '../rest/v1/import-export/import-export.modul
   exports: [BackgroundJobService],
 })
 export class WorkerModule {}
-
-

@@ -8,6 +8,6 @@ import { RBACModule } from './rbac.module';
   imports: [EntitlementModule, RBACModule],
   controllers: [SchoolRolesController],
   providers: [SchoolRolesService],
-  exports: [SchoolRolesService]
+  exports: [SchoolRolesService],
 })
 export class SchoolRolesModule {}

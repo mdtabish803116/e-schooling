@@ -13,7 +13,7 @@ export class QueueProducerService {
   constructor(
     private readonly dataSource: DataSource,
     private readonly redisConnectionService: RedisConnectionService,
-  ) { }
+  ) {}
 
   /**
    * Lazy load or fetch cached BullMQ Queue client
@@ -77,7 +77,9 @@ export class QueueProducerService {
     });
 
     const savedJob = await dbJobRepo.save(globalJob);
-    this.logger.log(`Created PENDING DB log entry for job ${dbJobId} under queue ${queueName}`);
+    this.logger.log(
+      `Created PENDING DB log entry for job ${dbJobId} under queue ${queueName}`,
+    );
 
     // BullMQ specific Options
     const bullmqOpts: JobsOptions = {
@@ -99,10 +101,15 @@ export class QueueProducerService {
 
     try {
       await queue.add(jobType, payload, bullmqOpts);
-      this.logger.log(`Dispatched Job ${dbJobId} to BullMQ queue: ${queueName}`);
+      this.logger.log(
+        `Dispatched Job ${dbJobId} to BullMQ queue: ${queueName}`,
+      );
     } catch (err: unknown) {
       const errorObj = err as Error;
-      this.logger.error(`Failed to publish Job ${dbJobId} to BullMQ: ${errorObj.message}`, errorObj.stack);
+      this.logger.error(
+        `Failed to publish Job ${dbJobId} to BullMQ: ${errorObj.message}`,
+        errorObj.stack,
+      );
       savedJob.status = JobStatusEnum.FAILED;
       savedJob.failedAt = new Date();
       savedJob.error = { message: errorObj.message, stack: errorObj.stack };

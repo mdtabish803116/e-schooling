@@ -23,8 +23,14 @@ export class AddStudentAttendanceAndTimetableSeedData1784832700000 implements Mi
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`DROP INDEX IF EXISTS "e_schooling"."IDX_academic_timetables_school_year";`);
-    await queryRunner.query(`DROP INDEX IF EXISTS "e_schooling"."IDX_attendance_sessions_school_session";`);
-    await queryRunner.query(`DROP INDEX IF EXISTS "e_schooling"."IDX_attendance_records_enrollment";`);
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "e_schooling"."IDX_academic_timetables_school_year";`,
+    );
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "e_schooling"."IDX_attendance_sessions_school_session";`,
+    );
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "e_schooling"."IDX_attendance_records_enrollment";`,
+    );
   }
 }

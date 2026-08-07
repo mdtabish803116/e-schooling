@@ -8,6 +8,6 @@ import { SubscriptionModule } from '../subscription/subscription.module';
   imports: [SubscriptionModule],
   controllers: [PlatformUserController],
   providers: [PlatformService, PlatformUserService],
-  exports: [PlatformService, PlatformUserService]
+  exports: [PlatformService, PlatformUserService],
 })
 export class PlatformModule {}

@@ -1,9 +1,22 @@
-import { Controller, Post, Get, Param, Query, Body, UseGuards, NotFoundException } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Get,
+  Param,
+  Query,
+  Body,
+  UseGuards,
+  NotFoundException,
+} from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { DataSource } from 'typeorm';
 import { QueueProducerService } from '../../../../api/worker/queues/queue-producer.service';
 import { QueueNames } from '../../../../api/worker/queues/queue.constants';
-import { JobTypeEnum, ResourceEnum, ActionEnum } from '../../../../models/enums/enums';
+import {
+  JobTypeEnum,
+  ResourceEnum,
+  ActionEnum,
+} from '../../../../models/enums/enums';
 import { BackGroundJob } from '../../../../models/entities/background-job/background_jobs.entity';
 import { JwtAuthGuard } from '../../../../shared/guards/jwt-auth.guard';
 import { FeatureGuard } from '../../../../shared/guards/feature.guard';
@@ -22,7 +35,9 @@ export class ImportExportController {
     private readonly queueProducerService: QueueProducerService,
   ) {}
 
-  @ApiOperation({ summary: 'Trigger generic export for ANY entity/table via BullMQ worker' })
+  @ApiOperation({
+    summary: 'Trigger generic export for ANY entity/table via BullMQ worker',
+  })
   @Post('export')
   @Permission(ResourceEnum.REPORTS, ActionEnum.VIEW)
   async triggerExport(
@@ -61,7 +76,9 @@ export class ImportExportController {
     };
   }
 
-  @ApiOperation({ summary: 'Trigger generic import for ANY entity/table via BullMQ worker' })
+  @ApiOperation({
+    summary: 'Trigger generic import for ANY entity/table via BullMQ worker',
+  })
   @Post('import')
   @Permission(ResourceEnum.STUDENTS, ActionEnum.CREATE)
   async triggerImport(
@@ -100,7 +117,9 @@ export class ImportExportController {
     };
   }
 
-  @ApiOperation({ summary: 'Get background import/export job progress & output result' })
+  @ApiOperation({
+    summary: 'Get background import/export job progress & output result',
+  })
   @Get('jobs/:jobId')
   async getJobStatus(
     @Param('schoolId') schoolId: string,
@@ -115,7 +134,9 @@ export class ImportExportController {
     });
 
     if (!job) {
-      throw new NotFoundException(`Background job with ID '${jobId}' not found for this school.`);
+      throw new NotFoundException(
+        `Background job with ID '${jobId}' not found for this school.`,
+      );
     }
 
     return {

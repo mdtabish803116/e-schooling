@@ -1,5 +1,18 @@
-import { Controller, Post, Body, Headers, UseGuards, Get, Patch } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import {
+  Controller,
+  Post,
+  Body,
+  Headers,
+  UseGuards,
+  Get,
+  Patch,
+} from '@nestjs/common';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import { AuthService } from '../../../../services/auth/auth.service';
 import { SchoolOwnerRegisterDto } from '../../../../interfaces/request/auth/school-owner-register.dto';
 import { SchoolOwnerLoginDto } from '../../../../interfaces/request/auth/school-owner-login.dto';
@@ -50,10 +63,7 @@ export class AuthController {
     },
   })
   @Post('login')
-  async login(
-    @Body() loginDto: SchoolOwnerLoginDto,
-    @Headers() headers: any,
-  ) {
+  async login(@Body() loginDto: SchoolOwnerLoginDto, @Headers() headers: any) {
     return this.authService.login(loginDto, headers);
   }
 
@@ -187,10 +197,7 @@ export class AuthController {
   @ApiBearerAuth('JWT-auth')
   @UseGuards(JwtAuthGuard)
   @Patch('profile')
-  async updateProfile(
-    @CurrentUser() caller: any,
-    @Body() body: any,
-  ) {
+  async updateProfile(@CurrentUser() caller: any, @Body() body: any) {
     return this.authService.updateProfile(caller, body);
   }
 }

@@ -1,4 +1,9 @@
-import { Injectable, OnModuleInit, ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  OnModuleInit,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { AuthContext } from '../../interfaces/auth-context.interface';
 import { CreateHolidayDto } from '../../interfaces/request/academic/create-holiday.dto';
@@ -36,7 +41,10 @@ export class HolidayService implements OnModuleInit {
     }
   }
 
-  private async assertAccessToSchool(caller: AuthContext, schoolId: string): Promise<void> {
+  private async assertAccessToSchool(
+    caller: AuthContext,
+    schoolId: string,
+  ): Promise<void> {
     if (caller.actorType === 'school_owner') {
       const membership = await this.dataSource
         .getRepository(SchoolOwnerMember)
@@ -60,7 +68,11 @@ export class HolidayService implements OnModuleInit {
     });
   }
 
-  async createHoliday(caller: AuthContext, schoolId: string, dto: CreateHolidayDto) {
+  async createHoliday(
+    caller: AuthContext,
+    schoolId: string,
+    dto: CreateHolidayDto,
+  ) {
     await this.assertAccessToSchool(caller, schoolId);
     const holidayRepo = this.dataSource.getRepository(Holiday);
     const holiday = holidayRepo.create({
@@ -95,13 +107,18 @@ export class HolidayService implements OnModuleInit {
     if (dto.fromDate !== undefined) holiday.fromDate = dto.fromDate;
     if (dto.toDate !== undefined) holiday.toDate = dto.toDate;
     if (dto.description !== undefined) holiday.description = dto.description;
-    if (dto.academicSessionId !== undefined) holiday.academicSessionId = dto.academicSessionId;
+    if (dto.academicSessionId !== undefined)
+      holiday.academicSessionId = dto.academicSessionId;
     holiday.updatedById = caller.id;
 
     return holidayRepo.save(holiday);
   }
 
-  async deleteHoliday(caller: AuthContext, schoolId: string, holidayId: string) {
+  async deleteHoliday(
+    caller: AuthContext,
+    schoolId: string,
+    holidayId: string,
+  ) {
     await this.assertAccessToSchool(caller, schoolId);
     const holidayRepo = this.dataSource.getRepository(Holiday);
     const holiday = await holidayRepo.findOne({

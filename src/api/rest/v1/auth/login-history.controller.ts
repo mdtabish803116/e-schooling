@@ -9,7 +9,12 @@ import {
   Headers,
   Req,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import { AuthService } from '../../../../services/auth/auth.service';
 import { JwtAuthGuard } from '../../../../shared/guards/jwt-auth.guard';
 import { CurrentUser } from '../../../../shared/decorators/current-user.decorator';
@@ -64,10 +69,7 @@ export class LoginHistoryController {
   @ApiBearerAuth('JWT-auth')
   @UseGuards(JwtAuthGuard)
   @Post('revoke/:id')
-  async revokeSession(
-    @Param('id') id: string,
-    @CurrentUser() caller: any,
-  ) {
+  async revokeSession(@Param('id') id: string, @CurrentUser() caller: any) {
     return this.authService.revokeSession(id, caller?.id);
   }
 

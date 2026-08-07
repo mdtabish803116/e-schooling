@@ -128,7 +128,9 @@ async function runSeed() {
     );
 
     if (dbStudents.length === 0) {
-      console.log('⚠️ No students found in database. Cannot create student fee assignments.');
+      console.log(
+        '⚠️ No students found in database. Cannot create student fee assignments.',
+      );
       return;
     }
 
@@ -220,7 +222,6 @@ async function runSeed() {
             '${invoiceNumber}', 'CREDIT', 'PAYMENT', 30000.00, 'Payment received via UPI', '${payment[0].id}'
           );
         `);
-
       } else if (invoiceCount === 2) {
         // Simran/Student 2: Scholarship 10000. Outstanding 50000
         const scholarship = await dataSource.query(`
@@ -247,7 +248,10 @@ async function runSeed() {
 
     console.log('🎉 Fees Seeding completed successfully!');
   } catch (error) {
-    console.error('❌ Exception occurred during fees seeding:', (error as Error).message);
+    console.error(
+      '❌ Exception occurred during fees seeding:',
+      (error as Error).message,
+    );
   } finally {
     if (dataSource && dataSource.isInitialized) {
       await dataSource.destroy();

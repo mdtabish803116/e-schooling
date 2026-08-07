@@ -12,4 +12,3 @@ export const JobNames = {
   DAILY_CLEANUP: 'daily_cleanup_job',
   BULK_PROGRESSION: 'bulk_progression_job',
 };
-

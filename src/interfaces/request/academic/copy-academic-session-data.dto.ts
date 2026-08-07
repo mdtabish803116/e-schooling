@@ -14,7 +14,8 @@ export class CopyAcademicSessionDataDto {
 
   @ApiPropertyOptional({
     example: ['classes', 'sections', 'subjects', 'mappings', 'rooms'],
-    description: 'Modules to copy from previous academic session. Defaults to all if omitted.',
+    description:
+      'Modules to copy from previous academic session. Defaults to all if omitted.',
   })
   @IsOptional()
   @IsArray()

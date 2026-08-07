@@ -1,8 +1,16 @@
-import { Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  CanActivate,
+  ExecutionContext,
+  ForbiddenException,
+} from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { DataSource } from 'typeorm';
 import { RBACService } from '../../services/school-roles/rbac.service';
-import { PERMISSION_KEY, PermissionMetadata } from '../decorators/permission.decorator';
+import {
+  PERMISSION_KEY,
+  PermissionMetadata,
+} from '../decorators/permission.decorator';
 import { SchoolOwnerMember } from '../../models/entities/school/school-owner-member.entity';
 
 @Injectable()
@@ -14,10 +22,11 @@ export class PermissionGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const requiredPermission = this.reflector.getAllAndOverride<PermissionMetadata>(PERMISSION_KEY, [
-      context.getHandler(),
-      context.getClass(),
-    ]);
+    const requiredPermission =
+      this.reflector.getAllAndOverride<PermissionMetadata>(PERMISSION_KEY, [
+        context.getHandler(),
+        context.getClass(),
+      ]);
 
     const request = context.switchToHttp().getRequest();
     const user = request.user;
@@ -27,16 +36,28 @@ export class PermissionGuard implements CanActivate {
     }
 
     // SCHOOL ID TENANT VALIDATION & OWNERSHIP CHECK
-    const routeSchoolId = request.params?.schoolId || request.body?.schoolId || request.query?.schoolId;
+    const routeSchoolId =
+      request.params?.schoolId ||
+      request.body?.schoolId ||
+      request.query?.schoolId;
     if (routeSchoolId && routeSchoolId !== 'undefined') {
       if (user.actorType === 'school_owner') {
-        const membership = await this.dataSource.getRepository(SchoolOwnerMember).findOne({
-          where: { schoolOwnerId: user.id, schoolId: routeSchoolId, isActive: true },
-        });
+        const membership = await this.dataSource
+          .getRepository(SchoolOwnerMember)
+          .findOne({
+            where: {
+              schoolOwnerId: user.id,
+              schoolId: routeSchoolId,
+              isActive: true,
+            },
+          });
         if (!membership) {
           throw new ForbiddenException('Unauthorized access to this school');
         }
-      } else if (user.schoolId && String(user.schoolId) !== String(routeSchoolId)) {
+      } else if (
+        user.schoolId &&
+        String(user.schoolId) !== String(routeSchoolId)
+      ) {
         throw new ForbiddenException('Unauthorized access to this school');
       }
     }

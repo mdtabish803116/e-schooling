@@ -1,4 +1,12 @@
-import { Controller, Post, Param, Body, UseGuards, NotFoundException, HttpCode } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Param,
+  Body,
+  UseGuards,
+  NotFoundException,
+  HttpCode,
+} from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { DataSource } from 'typeorm';
 import { JwtAuthGuard } from '../../../../shared/guards/jwt-auth.guard';
@@ -16,9 +24,11 @@ export class StaffCredentialsController {
   @Post('generate')
   async generateCredential(@Body() body: { staffId: string }) {
     const { staffId } = body;
-    const user = await this.dataSource.getRepository(SchoolUser).findOne({ where: { id: staffId } });
+    const user = await this.dataSource
+      .getRepository(SchoolUser)
+      .findOne({ where: { id: staffId } });
     if (!user) throw new NotFoundException('Staff member not found');
-    
+
     if (user.username) {
       return {
         staffId: user.id,
@@ -48,8 +58,13 @@ export class StaffCredentialsController {
   @ApiOperation({ summary: 'Reset password' })
   @Post(':staffId/reset-password')
   @HttpCode(200)
-  async resetPassword(@Param('staffId') staffId: string, @Body() body?: { password?: string }) {
-    const user = await this.dataSource.getRepository(SchoolUser).findOne({ where: { id: staffId } });
+  async resetPassword(
+    @Param('staffId') staffId: string,
+    @Body() body?: { password?: string },
+  ) {
+    const user = await this.dataSource
+      .getRepository(SchoolUser)
+      .findOne({ where: { id: staffId } });
     if (!user) throw new NotFoundException('Staff member not found');
 
     const rawPass = body?.password || Math.random().toString(36).slice(-8);

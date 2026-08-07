@@ -3,7 +3,9 @@ import { DataSource } from 'typeorm';
 import AppDataSource from '../database/postgres/data-source';
 
 export async function seedLoginHistoryTable(dataSource: DataSource) {
-  console.log('📦 Creating table "e_schooling"."user_login_history" if not exists...');
+  console.log(
+    '📦 Creating table "e_schooling"."user_login_history" if not exists...',
+  );
 
   // 1. Table Creation
   await dataSource.query(`
@@ -67,7 +69,9 @@ export async function seedLoginHistoryTable(dataSource: DataSource) {
   console.log('✅ Table "user_login_history" & indexes verified.');
 
   // 3. Sample Data Seeding
-  const countRes = await dataSource.query(`SELECT COUNT(*)::int as count FROM "e_schooling"."user_login_history"`);
+  const countRes = await dataSource.query(
+    `SELECT COUNT(*)::int as count FROM "e_schooling"."user_login_history"`,
+  );
   const count = countRes[0]?.count || 0;
 
   if (count === 0) {
@@ -113,7 +117,9 @@ export async function seedLoginHistoryTable(dataSource: DataSource) {
     `);
     console.log('🎉 Seeded 4 initial user login history records!');
   } else {
-    console.log(`ℹ️ Login history table already contains ${count} records. Skipping data insertion.`);
+    console.log(
+      `ℹ️ Login history table already contains ${count} records. Skipping data insertion.`,
+    );
   }
 }
 

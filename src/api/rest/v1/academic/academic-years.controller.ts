@@ -23,12 +23,24 @@ import type { AuthContext } from '../../../../interfaces/auth-context.interface'
 export class AcademicYearsController {
   constructor(private readonly academicService: AcademicService) {}
 
-  private resolveSchoolId(req: any, user: AuthContext, paramSchoolId?: string): string {
-    if (paramSchoolId && paramSchoolId !== 'undefined' && paramSchoolId !== 'null') {
+  private resolveSchoolId(
+    req: any,
+    user: AuthContext,
+    paramSchoolId?: string,
+  ): string {
+    if (
+      paramSchoolId &&
+      paramSchoolId !== 'undefined' &&
+      paramSchoolId !== 'null'
+    ) {
       return paramSchoolId;
     }
     const headerSchoolId = req?.headers?.['x-school-id'];
-    if (headerSchoolId && headerSchoolId !== 'undefined' && headerSchoolId !== 'null') {
+    if (
+      headerSchoolId &&
+      headerSchoolId !== 'undefined' &&
+      headerSchoolId !== 'null'
+    ) {
       return String(headerSchoolId);
     }
     if (user?.schoolId) {
@@ -42,8 +54,8 @@ export class AcademicYearsController {
     const status = session.isCurrent
       ? 'ACTIVE'
       : session.isActive !== false
-      ? 'INACTIVE'
-      : 'CLOSED';
+        ? 'INACTIVE'
+        : 'CLOSED';
 
     return {
       ...session,
@@ -78,7 +90,8 @@ export class AcademicYearsController {
     @Param('schoolId') paramSchoolId?: string,
   ) {
     const schoolId = this.resolveSchoolId(req, user, paramSchoolId);
-    const current = await this.academicService.getCurrentAcademicSession(schoolId);
+    const current =
+      await this.academicService.getCurrentAcademicSession(schoolId);
     return this.mapSession(current);
   }
 
@@ -91,7 +104,10 @@ export class AcademicYearsController {
     @Param('schoolId') paramSchoolId?: string,
   ) {
     const schoolId = this.resolveSchoolId(req, user, paramSchoolId);
-    const session = await this.academicService.getAcademicSessionDetails(schoolId, id);
+    const session = await this.academicService.getAcademicSessionDetails(
+      schoolId,
+      id,
+    );
     return this.mapSession(session);
   }
 
@@ -140,8 +156,12 @@ export class AcademicYearsController {
         ...(sessionName ? { name: sessionName } : {}),
         ...(body.startDate ? { startDate: body.startDate } : {}),
         ...(body.endDate ? { endDate: body.endDate } : {}),
-        ...(body.isCurrent !== undefined ? { isCurrent: Boolean(body.isCurrent) } : {}),
-        ...(body.isActive !== undefined ? { isActive: Boolean(body.isActive) } : {}),
+        ...(body.isCurrent !== undefined
+          ? { isCurrent: Boolean(body.isCurrent) }
+          : {}),
+        ...(body.isActive !== undefined
+          ? { isActive: Boolean(body.isActive) }
+          : {}),
       },
       user?.id || '1',
     );
@@ -170,7 +190,11 @@ export class AcademicYearsController {
     @Param('schoolId') paramSchoolId?: string,
   ) {
     const schoolId = this.resolveSchoolId(req, user, paramSchoolId);
-    return await this.academicService.deleteAcademicSession(schoolId, id, user?.id || '1');
+    return await this.academicService.deleteAcademicSession(
+      schoolId,
+      id,
+      user?.id || '1',
+    );
   }
 
   @ApiOperation({ summary: 'Activate / set as current active academic year' })
@@ -195,7 +219,10 @@ export class AcademicYearsController {
   }
 
   @ApiOperation({ summary: 'Close an academic year' })
-  @Patch(['academic-years/:id/close', 'schools/:schoolId/academic-years/:id/close'])
+  @Patch([
+    'academic-years/:id/close',
+    'schools/:schoolId/academic-years/:id/close',
+  ])
   async closeAcademicYear(
     @Req() req: any,
     @CurrentUser() user: AuthContext,

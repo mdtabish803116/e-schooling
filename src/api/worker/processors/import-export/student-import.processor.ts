@@ -8,7 +8,10 @@ import { School } from '../../../../models/entities/school/school.entity';
 import { Class } from '../../../../models/entities/academic/class.entity';
 import { Section } from '../../../../models/entities/academic/section.entity';
 import { AcademicSession } from '../../../../models/entities/academic/academic-session.entity';
-import { EnrollmentStatusEnum, EnrollmentTypeEnum } from '../../../../models/enums/enums';
+import {
+  EnrollmentStatusEnum,
+  EnrollmentTypeEnum,
+} from '../../../../models/enums/enums';
 
 @Injectable()
 export class StudentImportProcessor {
@@ -18,18 +21,34 @@ export class StudentImportProcessor {
 
   async process(job: Job): Promise<unknown> {
     const { schoolId, caller, rows } = job.data;
-    this.logger.log(`[StudentImportProcessor] Processing student import job ${job.id} for school: ${schoolId} (${rows?.length || 0} rows)`);
+    this.logger.log(
+      `[StudentImportProcessor] Processing student import job ${job.id} for school: ${schoolId} (${rows?.length || 0} rows)`,
+    );
 
-    const school = await this.dataSource.getRepository(School).findOne({ where: { id: schoolId, isDeleted: false } });
+    const school = await this.dataSource
+      .getRepository(School)
+      .findOne({ where: { id: schoolId, isDeleted: false } });
     if (!school) throw new NotFoundException('School not found');
 
     const sessionRepo = this.dataSource.getRepository(AcademicSession);
-    let activeSession = await sessionRepo.findOne({ where: { schoolId, isCurrent: true, isDeleted: false } });
+    let activeSession = await sessionRepo.findOne({
+      where: { schoolId, isCurrent: true, isDeleted: false },
+    });
     if (!activeSession) {
-      activeSession = await sessionRepo.findOne({ where: { schoolId, isDeleted: false }, order: { createdAt: 'DESC' } });
+      activeSession = await sessionRepo.findOne({
+        where: { schoolId, isDeleted: false },
+        order: { createdAt: 'DESC' },
+      });
     }
     if (!activeSession) {
-      activeSession = await sessionRepo.save(sessionRepo.create({ schoolId, name: '2025-2026', isCurrent: true, isActive: true }));
+      activeSession = await sessionRepo.save(
+        sessionRepo.create({
+          schoolId,
+          name: '2025-2026',
+          isCurrent: true,
+          isActive: true,
+        }),
+      );
     }
 
     const classRepo = this.dataSource.getRepository(Class);
@@ -47,21 +66,35 @@ export class StudentImportProcessor {
           throw new Error('firstName and lastName are required');
         }
 
-        let targetClass = row.classId ? await classRepo.findOne({ where: { id: row.classId, schoolId } }) : null;
+        let targetClass = row.classId
+          ? await classRepo.findOne({ where: { id: row.classId, schoolId } })
+          : null;
         if (!targetClass && row.className) {
-          targetClass = await classRepo.findOne({ where: { name: row.className, schoolId } });
+          targetClass = await classRepo.findOne({
+            where: { name: row.className, schoolId },
+          });
         }
         if (!targetClass) {
-          targetClass = await classRepo.findOne({ where: { schoolId, isDeleted: false } });
+          targetClass = await classRepo.findOne({
+            where: { schoolId, isDeleted: false },
+          });
         }
         if (!targetClass) throw new Error('Target class not found');
 
-        let targetSection = row.sectionId ? await sectionRepo.findOne({ where: { id: row.sectionId, classId: targetClass.id } }) : null;
+        let targetSection = row.sectionId
+          ? await sectionRepo.findOne({
+              where: { id: row.sectionId, classId: targetClass.id },
+            })
+          : null;
         if (!targetSection && row.sectionName) {
-          targetSection = await sectionRepo.findOne({ where: { name: row.sectionName, classId: targetClass.id } });
+          targetSection = await sectionRepo.findOne({
+            where: { name: row.sectionName, classId: targetClass.id },
+          });
         }
         if (!targetSection) {
-          targetSection = await sectionRepo.findOne({ where: { classId: targetClass.id, isDeleted: false } });
+          targetSection = await sectionRepo.findOne({
+            where: { classId: targetClass.id, isDeleted: false },
+          });
         }
         if (!targetSection) throw new Error('Target section not found');
 

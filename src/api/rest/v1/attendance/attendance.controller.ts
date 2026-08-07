@@ -1,4 +1,13 @@
-import { Controller, Post, Patch, Get, Body, Param, Query, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Patch,
+  Get,
+  Body,
+  Param,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../../../shared/guards/jwt-auth.guard';
 import { FeatureGuard } from '../../../../shared/guards/feature.guard';
@@ -11,7 +20,10 @@ import { AttendanceService } from '../../../../services/attendance/attendance.se
 import type { AuthContext } from '../../../../interfaces/auth-context.interface';
 import { TakeAttendanceDto } from '../../../../interfaces/request/attendance/take-attendance.dto';
 import { UpdateAttendanceDto } from '../../../../interfaces/request/attendance/update-attendance.dto';
-import { LockAttendanceDto, UnlockAttendanceDto } from '../../../../interfaces/request/attendance/lock-attendance.dto';
+import {
+  LockAttendanceDto,
+  UnlockAttendanceDto,
+} from '../../../../interfaces/request/attendance/lock-attendance.dto';
 import { ResourceEnum, ActionEnum } from '../../../../models/enums/enums';
 
 @ApiTags('Attendance Management')
@@ -22,7 +34,10 @@ import { ResourceEnum, ActionEnum } from '../../../../models/enums/enums';
 export class AttendanceController {
   constructor(private readonly attendanceService: AttendanceService) {}
 
-  @ApiOperation({ summary: 'Get bulk attendance session by class/section/date/slot/academicSession' })
+  @ApiOperation({
+    summary:
+      'Get bulk attendance session by class/section/date/slot/academicSession',
+  })
   @Permission(ResourceEnum.ATTENDANCE, ActionEnum.VIEW)
   @Get()
   async getAttendanceSession(
@@ -77,7 +92,11 @@ export class AttendanceController {
     @Query('academicSessionId') querySessionId?: string,
   ) {
     const academicSessionId = querySessionId || sessionFromHeader || undefined;
-    return this.attendanceService.getAttendanceLocks(caller, schoolId, academicSessionId);
+    return this.attendanceService.getAttendanceLocks(
+      caller,
+      schoolId,
+      academicSessionId,
+    );
   }
 
   @ApiOperation({ summary: 'Take class/section student attendance in bulk' })
@@ -106,7 +125,14 @@ export class AttendanceController {
     @Query('limit') limit?: number,
   ) {
     const academicSessionId = querySessionId || sessionFromHeader || undefined;
-    return this.attendanceService.getAttendanceStudents(caller, schoolId, { classId, sectionId, academicSessionId, date, page, limit });
+    return this.attendanceService.getAttendanceStudents(caller, schoolId, {
+      classId,
+      sectionId,
+      academicSessionId,
+      date,
+      page,
+      limit,
+    });
   }
 
   @ApiOperation({ summary: 'Get student attendance history records' })
@@ -117,7 +143,11 @@ export class AttendanceController {
     @Param('studentId') studentId: string,
     @CurrentUser() caller: AuthContext,
   ) {
-    return this.attendanceService.getStudentHistory(caller, schoolId, studentId);
+    return this.attendanceService.getStudentHistory(
+      caller,
+      schoolId,
+      studentId,
+    );
   }
 
   @ApiOperation({ summary: 'Get attendance dashboard analytics summary' })
@@ -131,10 +161,13 @@ export class AttendanceController {
     @Query('academicSessionId') querySessionId?: string,
   ) {
     const academicSessionId = querySessionId || sessionFromHeader || undefined;
-    return this.attendanceService.getAttendanceDashboard(caller, schoolId, date, academicSessionId);
+    return this.attendanceService.getAttendanceDashboard(
+      caller,
+      schoolId,
+      date,
+      academicSessionId,
+    );
   }
-
-
 
   @ApiOperation({ summary: 'Get low attendance defaulters report' })
   @Permission(ResourceEnum.ATTENDANCE, ActionEnum.VIEW)
@@ -147,7 +180,12 @@ export class AttendanceController {
     @Query('academicSessionId') querySessionId?: string,
   ) {
     const academicSessionId = querySessionId || sessionFromHeader || undefined;
-    return this.attendanceService.getDefaultersReport(caller, schoolId, Number(threshold) || 75, academicSessionId);
+    return this.attendanceService.getDefaultersReport(
+      caller,
+      schoolId,
+      Number(threshold) || 75,
+      academicSessionId,
+    );
   }
 
   @ApiOperation({ summary: 'Get monthly attendance matrix report' })
@@ -180,6 +218,11 @@ export class AttendanceController {
     @CurrentUser() caller: AuthContext,
     @Body() dto: UpdateAttendanceDto,
   ) {
-    return this.attendanceService.updateAttendance(caller, schoolId, sessionId, dto);
+    return this.attendanceService.updateAttendance(
+      caller,
+      schoolId,
+      sessionId,
+      dto,
+    );
   }
 }

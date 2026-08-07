@@ -59,10 +59,20 @@ export class CreateUserLoginHistoryTable1784832500000 implements MigrationInterf
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`DROP INDEX IF EXISTS "e_schooling"."IDX_user_login_history_session_status";`);
-    await queryRunner.query(`DROP INDEX IF EXISTS "e_schooling"."IDX_user_login_history_session_id";`);
-    await queryRunner.query(`DROP INDEX IF EXISTS "e_schooling"."IDX_user_login_history_user_login_at";`);
-    await queryRunner.query(`DROP INDEX IF EXISTS "e_schooling"."IDX_user_login_history_school_login_at";`);
-    await queryRunner.query(`DROP TABLE IF EXISTS "e_schooling"."user_login_history";`);
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "e_schooling"."IDX_user_login_history_session_status";`,
+    );
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "e_schooling"."IDX_user_login_history_session_id";`,
+    );
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "e_schooling"."IDX_user_login_history_user_login_at";`,
+    );
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "e_schooling"."IDX_user_login_history_school_login_at";`,
+    );
+    await queryRunner.query(
+      `DROP TABLE IF EXISTS "e_schooling"."user_login_history";`,
+    );
   }
 }

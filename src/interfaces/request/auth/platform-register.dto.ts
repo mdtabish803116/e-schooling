@@ -8,7 +8,10 @@ export class PlatformRegisterDto {
   @IsNotEmpty()
   name: string;
 
-  @ApiProperty({ example: 'admin@eschool.com', description: 'Platform admin email' })
+  @ApiProperty({
+    example: 'admin@eschool.com',
+    description: 'Platform admin email',
+  })
   @IsEmail()
   @IsNotEmpty()
   email: string;
@@ -17,5 +20,4 @@ export class PlatformRegisterDto {
   @IsString()
   @IsNotEmpty()
   password: string;
-
 }

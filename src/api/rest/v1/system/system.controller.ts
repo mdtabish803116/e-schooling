@@ -10,9 +10,11 @@ import type { AuthContext } from '../../../../interfaces/auth-context.interface'
 @UseGuards(JwtAuthGuard)
 @Controller('system')
 export class SystemController {
-  constructor(private readonly sidebarService: SidebarService) { }
+  constructor(private readonly sidebarService: SidebarService) {}
 
-  @ApiOperation({ summary: 'Get dynamic sidebar menu based on entitlements and permissions' })
+  @ApiOperation({
+    summary: 'Get dynamic sidebar menu based on entitlements and permissions',
+  })
   @Get('sidebar')
   async getSidebar(
     @CurrentUser() user: AuthContext,

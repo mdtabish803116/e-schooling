@@ -1,11 +1,29 @@
-import { Controller, Post, UseGuards, UseInterceptors, UploadedFile, BadRequestException } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiConsumes, ApiBody, ApiProperty } from '@nestjs/swagger';
+import {
+  Controller,
+  Post,
+  UseGuards,
+  UseInterceptors,
+  UploadedFile,
+  BadRequestException,
+} from '@nestjs/common';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiBearerAuth,
+  ApiConsumes,
+  ApiBody,
+  ApiProperty,
+} from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../../../../shared/guards/jwt-auth.guard';
 import { StorageService } from '../../../../shared/storage/storage.service';
 
 export class FileUploadDto {
-  @ApiProperty({ type: 'string', format: 'binary', description: 'The file/image to upload' })
+  @ApiProperty({
+    type: 'string',
+    format: 'binary',
+    description: 'The file/image to upload',
+  })
   file: any;
 }
 
@@ -16,7 +34,9 @@ export class FileUploadDto {
 export class UploadController {
   constructor(private readonly storageService: StorageService) {}
 
-  @ApiOperation({ summary: 'Upload an image or file to storage (Cloudinary/GCS)' })
+  @ApiOperation({
+    summary: 'Upload an image or file to storage (Cloudinary/GCS)',
+  })
   @ApiConsumes('multipart/form-data')
   @ApiBody({
     description: 'File upload payload',

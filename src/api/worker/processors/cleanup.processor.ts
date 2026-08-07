@@ -13,8 +13,10 @@ export class CleanupProcessor {
     this.logger.log(`[CleanupProcessor] Processing job ${id} (${name})`);
 
     if (name === 'daily_cleanup_job') {
-      this.logger.log(`[System Maintenance] Initiating scheduled database and session logs purging...`);
-      
+      this.logger.log(
+        `[System Maintenance] Initiating scheduled database and session logs purging...`,
+      );
+
       await job.updateProgress(30);
       await new Promise((resolve) => setTimeout(resolve, 800));
 

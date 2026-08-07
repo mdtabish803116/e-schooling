@@ -4,6 +4,22 @@ export class AddMissingModulesAndPermissionsSeed1784832800000 implements Migrati
   name = 'AddMissingModulesAndPermissionsSeed1784832800000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
+    // 0. Sync primary key sequences to avoid key collision
+    await queryRunner.query(`
+      SELECT setval(
+        pg_get_serial_sequence('"e_schooling"."module_operation_permissions"', 'id'),
+        COALESCE((SELECT MAX(id) FROM "e_schooling"."module_operation_permissions"), 1)
+      );
+      SELECT setval(
+        pg_get_serial_sequence('"e_schooling"."module_masters"', 'id'),
+        COALESCE((SELECT MAX(id) FROM "e_schooling"."module_masters"), 1)
+      );
+      SELECT setval(
+        pg_get_serial_sequence('"e_schooling"."operation_masters"', 'id'),
+        COALESCE((SELECT MAX(id) FROM "e_schooling"."operation_masters"), 1)
+      );
+    `);
+
     // 1. Seed Operations if missing
     await queryRunner.query(`
       INSERT INTO "e_schooling"."operation_masters" ("name", "code", "description", "is_active", "is_delete")

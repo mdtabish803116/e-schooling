@@ -10,7 +10,6 @@ import { QueueModule } from '../../../worker/queues/queue.module';
   imports: [RBACModule, QueueModule],
   controllers: [StudentAdmissionsController, StudentCredentialsController],
   providers: [StudentAdmissionsService, EntitlementService],
-  exports: [StudentAdmissionsService]
+  exports: [StudentAdmissionsService],
 })
 export class StudentModule {}
-

@@ -109,7 +109,12 @@ export class AcademicController {
     @CurrentUser() user: AuthContext,
     @Body() body: { teacherId: string | null },
   ) {
-    return this.academicService.assignClassTeacher(schoolId, id, body.teacherId, user.id);
+    return this.academicService.assignClassTeacher(
+      schoolId,
+      id,
+      body.teacherId,
+      user.id,
+    );
   }
 
   // SECTIONS
@@ -135,7 +140,12 @@ export class AcademicController {
     @Query('academicSessionId') querySessionId?: string,
   ) {
     const academicSessionId = querySessionId || sessionFromHeader || undefined;
-    return this.academicService.getSections(schoolId, user, classId, academicSessionId);
+    return this.academicService.getSections(
+      schoolId,
+      user,
+      classId,
+      academicSessionId,
+    );
   }
 
   @ApiOperation({ summary: 'Get section details by ID' })
@@ -181,7 +191,12 @@ export class AcademicController {
     @CurrentUser() user: AuthContext,
     @Body() body: { classTeacherId: string | null },
   ) {
-    return this.academicService.assignSectionTeacher(schoolId, id, body.classTeacherId, user.id);
+    return this.academicService.assignSectionTeacher(
+      schoolId,
+      id,
+      body.classTeacherId,
+      user.id,
+    );
   }
 
   @ApiOperation({ summary: 'Bulk transfer students to a section' })
@@ -258,7 +273,12 @@ export class AcademicController {
     @Query('academicSessionId') querySessionId?: string,
   ) {
     const academicSessionId = querySessionId || sessionFromHeader || undefined;
-    return this.academicService.getMappings(schoolId, classId, sectionId, academicSessionId);
+    return this.academicService.getMappings(
+      schoolId,
+      classId,
+      sectionId,
+      academicSessionId,
+    );
   }
 
   @ApiOperation({ summary: 'Remove academic mapping' })
@@ -290,7 +310,10 @@ export class AcademicController {
     return this.academicService.createAcademicSession(schoolId, dto, user.id);
   }
 
-  @ApiOperation({ summary: 'Copy academic session data (classes, sections, subjects, etc.) from previous session' })
+  @ApiOperation({
+    summary:
+      'Copy academic session data (classes, sections, subjects, etc.) from previous session',
+  })
   @Permission(ResourceEnum.ACADEMIC_SESSIONS, ActionEnum.CREATE)
   @Post('sessions/copy-data')
   async copyAcademicSessionData(
@@ -327,7 +350,12 @@ export class AcademicController {
     @CurrentUser() user: AuthContext,
     @Body() dto: UpdateAcademicSessionDto,
   ) {
-    return this.academicService.updateAcademicSession(schoolId, id, dto, user.id);
+    return this.academicService.updateAcademicSession(
+      schoolId,
+      id,
+      dto,
+      user.id,
+    );
   }
 
   @ApiOperation({ summary: 'Delete an academic session' })
@@ -341,7 +369,9 @@ export class AcademicController {
     return this.academicService.deleteAcademicSession(schoolId, id, user.id);
   }
 
-  @ApiOperation({ summary: 'Set an academic session as the current active session' })
+  @ApiOperation({
+    summary: 'Set an academic session as the current active session',
+  })
   @Permission(ResourceEnum.ACADEMIC_SESSIONS, ActionEnum.UPDATE)
   @Patch('sessions/:id/set-current')
   async setAsCurrentAcademicSession(
@@ -349,7 +379,11 @@ export class AcademicController {
     @Param('id') id: string,
     @CurrentUser() user: AuthContext,
   ) {
-    return this.academicService.setAsCurrentAcademicSession(schoolId, id, user.id);
+    return this.academicService.setAsCurrentAcademicSession(
+      schoolId,
+      id,
+      user.id,
+    );
   }
 
   // ROOMS / CLASSROOMS
@@ -419,5 +453,18 @@ export class AcademicController {
     @Body() dto: AllocateRoomDto,
   ) {
     return this.academicService.allocateRoom(schoolId, id, dto, user.id);
+  }
+
+  @ApiOperation({ summary: 'Get academic audit logs' })
+  @Permission(ResourceEnum.CLASSES, ActionEnum.VIEW)
+  @Get('audit-logs')
+  async getAcademicAuditLogs(
+    @Param('schoolId') schoolId: string,
+    @Query('academicSessionId') academicSessionId?: string,
+  ) {
+    return this.academicService.getAcademicAuditLogs(
+      schoolId,
+      academicSessionId,
+    );
   }
 }

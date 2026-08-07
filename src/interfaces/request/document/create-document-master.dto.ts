@@ -1,4 +1,14 @@
-import { IsString, IsNotEmpty, IsOptional, IsBoolean, IsArray, IsInt, Min, Max, IsEnum } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  IsBoolean,
+  IsArray,
+  IsInt,
+  Min,
+  Max,
+  IsEnum,
+} from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateDocumentMasterDto {
@@ -7,12 +17,18 @@ export class CreateDocumentMasterDto {
   @IsNotEmpty()
   name: string;
 
-  @ApiPropertyOptional({ description: 'Unique slug code per school', example: 'aadhaar-card' })
+  @ApiPropertyOptional({
+    description: 'Unique slug code per school',
+    example: 'aadhaar-card',
+  })
   @IsString()
   @IsOptional()
   code?: string;
 
-  @ApiPropertyOptional({ description: 'Description', example: 'Government identity' })
+  @ApiPropertyOptional({
+    description: 'Description',
+    example: 'Government identity',
+  })
   @IsString()
   @IsOptional()
   description?: string;
@@ -22,7 +38,10 @@ export class CreateDocumentMasterDto {
   @IsNotEmpty()
   category: string;
 
-  @ApiProperty({ description: 'Accepted file extensions', example: ['pdf', 'jpg', 'png'] })
+  @ApiProperty({
+    description: 'Accepted file extensions',
+    example: ['pdf', 'jpg', 'png'],
+  })
   @IsArray()
   @IsString({ each: true })
   acceptedFileTypes: string[];
@@ -38,7 +57,10 @@ export class CreateDocumentMasterDto {
   @IsOptional()
   isMandatory?: boolean;
 
-  @ApiPropertyOptional({ description: 'Applicable modules', example: ['students', 'staff'] })
+  @ApiPropertyOptional({
+    description: 'Applicable modules',
+    example: ['students', 'staff'],
+  })
   @IsArray()
   @IsString({ each: true })
   @IsOptional()

@@ -11,7 +11,9 @@ export class StaffExportProcessor {
 
   async process(job: Job): Promise<unknown> {
     const { schoolId } = job.data;
-    this.logger.log(`[StaffExportProcessor] Processing staff export job ${job.id} for school: ${schoolId}`);
+    this.logger.log(
+      `[StaffExportProcessor] Processing staff export job ${job.id} for school: ${schoolId}`,
+    );
 
     await job.updateProgress(20);
 
@@ -24,14 +26,16 @@ export class StaffExportProcessor {
     await job.updateProgress(60);
 
     const headers = ['ID', 'Name', 'Username', 'Phone', 'User Type', 'Status'];
-    const rows = users.map((u) => [
-      `"${u.id}"`,
-      `"${u.name || ''}"`,
-      `"${u.username || ''}"`,
-      `"${u.phone || ''}"`,
-      `"${u.userType || ''}"`,
-      `"${u.isActive ? 'ACTIVE' : 'INACTIVE'}"`,
-    ].join(','));
+    const rows = users.map((u) =>
+      [
+        `"${u.id}"`,
+        `"${u.name || ''}"`,
+        `"${u.username || ''}"`,
+        `"${u.phone || ''}"`,
+        `"${u.userType || ''}"`,
+        `"${u.isActive ? 'ACTIVE' : 'INACTIVE'}"`,
+      ].join(','),
+    );
 
     const csvContent = [headers.join(','), ...rows].join('\n');
     await job.updateProgress(100);

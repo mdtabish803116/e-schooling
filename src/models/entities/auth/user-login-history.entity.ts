@@ -80,10 +80,19 @@ export class UserLoginHistory {
   })
   loginStatus: string;
 
-  @Column({ name: 'failure_reason', type: 'varchar', length: 255, nullable: true })
+  @Column({
+    name: 'failure_reason',
+    type: 'varchar',
+    length: 255,
+    nullable: true,
+  })
   failureReason: string | null;
 
-  @Column({ name: 'login_at', type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
+  @Column({
+    name: 'login_at',
+    type: 'timestamp',
+    default: () => 'CURRENT_TIMESTAMP',
+  })
   loginAt: Date;
 
   @Column({ name: 'logout_at', type: 'timestamp', nullable: true })
@@ -95,7 +104,12 @@ export class UserLoginHistory {
   @Column({ name: 'session_id', type: 'varchar', length: 255, nullable: true })
   sessionId: string | null;
 
-  @Column({ name: 'refresh_token_id', type: 'varchar', length: 255, nullable: true })
+  @Column({
+    name: 'refresh_token_id',
+    type: 'varchar',
+    length: 255,
+    nullable: true,
+  })
   refreshTokenId: string | null;
 
   @Column({
@@ -106,25 +120,50 @@ export class UserLoginHistory {
   })
   sessionStatus: string;
 
-  @Column({ name: 'device_type', type: 'varchar', length: 50, default: 'Desktop' })
+  @Column({
+    name: 'device_type',
+    type: 'varchar',
+    length: 50,
+    default: 'Desktop',
+  })
   deviceType: string;
 
-  @Column({ name: 'device_name', type: 'varchar', length: 100, default: 'Unknown Device' })
+  @Column({
+    name: 'device_name',
+    type: 'varchar',
+    length: 100,
+    default: 'Unknown Device',
+  })
   deviceName: string;
 
   @Column({ type: 'varchar', length: 100, default: 'Unknown Browser' })
   browser: string;
 
-  @Column({ name: 'browser_version', type: 'varchar', length: 50, nullable: true })
+  @Column({
+    name: 'browser_version',
+    type: 'varchar',
+    length: 50,
+    nullable: true,
+  })
   browserVersion: string | null;
 
-  @Column({ name: 'operating_system', type: 'varchar', length: 100, default: 'Unknown OS' })
+  @Column({
+    name: 'operating_system',
+    type: 'varchar',
+    length: 100,
+    default: 'Unknown OS',
+  })
   operatingSystem: string;
 
   @Column({ name: 'user_agent', type: 'text', nullable: true })
   userAgent: string | null;
 
-  @Column({ name: 'ip_address', type: 'varchar', length: 100, default: '127.0.0.1' })
+  @Column({
+    name: 'ip_address',
+    type: 'varchar',
+    length: 100,
+    default: '127.0.0.1',
+  })
   ipAddress: string;
 
   @Column({ type: 'varchar', length: 150, nullable: true })

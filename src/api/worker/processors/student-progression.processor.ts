@@ -12,7 +12,9 @@ export class StudentProgressionProcessor {
 
   async process(job: Job): Promise<unknown> {
     const { name, data, id } = job;
-    this.logger.log(`[StudentProgressionProcessor] Processing job ${id} (${name})`);
+    this.logger.log(
+      `[StudentProgressionProcessor] Processing job ${id} (${name})`,
+    );
 
     if (name === 'bulk_progression_job') {
       const { schoolId, caller, dto } = data as {
@@ -22,12 +24,16 @@ export class StudentProgressionProcessor {
       };
 
       this.logger.log(
-        `[Bulk Progression] Processing ${dto.studentIds.length} students for school ${schoolId} with action ${dto.actionType}`
+        `[Bulk Progression] Processing ${dto.studentIds.length} students for school ${schoolId} with action ${dto.actionType}`,
       );
 
       await job.updateProgress(10);
-      
-      const result = await this.admissionsService.bulkProgressStudents(caller, schoolId, dto);
+
+      const result = await this.admissionsService.bulkProgressStudents(
+        caller,
+        schoolId,
+        dto,
+      );
 
       await job.updateProgress(100);
 
@@ -37,6 +43,8 @@ export class StudentProgressionProcessor {
       };
     }
 
-    throw new Error(`Unsupported job action: ${name} inside student_progression queue`);
+    throw new Error(
+      `Unsupported job action: ${name} inside student_progression queue`,
+    );
   }
 }

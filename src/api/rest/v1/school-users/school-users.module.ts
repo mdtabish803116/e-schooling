@@ -7,7 +7,11 @@ import { StaffCredentialsController } from './staff-credentials.controller';
 
 @Module({
   imports: [RBACModule],
-  controllers: [SchoolUsersController, StaffController, StaffCredentialsController],
+  controllers: [
+    SchoolUsersController,
+    StaffController,
+    StaffCredentialsController,
+  ],
   providers: [SchoolUsersService],
 })
 export class SchoolUsersModule {}

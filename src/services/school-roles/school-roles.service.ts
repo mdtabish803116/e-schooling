@@ -351,7 +351,40 @@ export class SchoolRolesService {
       order: { createdAt: 'DESC' },
     });
 
-    return { roles };
+    const roleIds = roles.map((r) => r.id);
+    const countsMap = new Map<string, number>();
+
+    if (roleIds.length > 0) {
+      const counts = await this.dataSource
+        .getRepository(SchoolRolePermission)
+        .createQueryBuilder('rp')
+        .select('rp.roleId', 'roleId')
+        .addSelect('COUNT(rp.id)', 'count')
+        .where('rp.roleId IN (:...roleIds)', { roleIds })
+        .andWhere('rp.isActive = true')
+        .andWhere('rp.is_delete = false')
+        .groupBy('rp.roleId')
+        .getRawMany();
+
+      for (const c of counts) {
+        const rId = String(c.roleId ?? c.roleid ?? c.role_id ?? '');
+        const cnt = parseInt(c.count ?? c.COUNT ?? 0, 10);
+        if (rId) {
+          countsMap.set(rId, cnt);
+        }
+      }
+    }
+
+    const rolesWithCounts = roles.map((r) => {
+      const pCount = countsMap.get(String(r.id)) || 0;
+      return {
+        ...r,
+        permissionCount: pCount,
+        permissionsCount: pCount,
+      };
+    });
+
+    return { roles: rolesWithCounts };
   }
 
   /**

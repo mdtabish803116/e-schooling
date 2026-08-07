@@ -38,7 +38,9 @@ export class TimetableService {
     this.timetableRepo = this.dataSource.getRepository(Timetable);
     this.periodRepo = this.dataSource.getRepository(TimetablePeriod);
     this.slotRepo = this.dataSource.getRepository(TimetableSlot);
-    this.substitutionRepo = this.dataSource.getRepository(TimetableSubstitution);
+    this.substitutionRepo = this.dataSource.getRepository(
+      TimetableSubstitution,
+    );
     this.eventRepo = this.dataSource.getRepository(TimetableEvent);
     this.classRepo = this.dataSource.getRepository(Class);
     this.sectionRepo = this.dataSource.getRepository(Section);
@@ -219,14 +221,18 @@ export class TimetableService {
     if (slot.section) {
       sectionName = slot.section.name;
     } else if (slot.sectionId) {
-      const sec = await this.sectionRepo.findOne({ where: { id: slot.sectionId } });
+      const sec = await this.sectionRepo.findOne({
+        where: { id: slot.sectionId },
+      });
       if (sec) sectionName = sec.name;
     }
 
     if (slot.subject) {
       subjectName = slot.subject.name;
     } else if (slot.subjectId) {
-      const sub = await this.subjectRepo.findOne({ where: { id: slot.subjectId } });
+      const sub = await this.subjectRepo.findOne({
+        where: { id: slot.subjectId },
+      });
       if (sub) subjectName = sub.name;
     }
 
@@ -246,7 +252,9 @@ export class TimetableService {
       startTime = slot.period.startTime;
       endTime = slot.period.endTime;
     } else if (slot.periodId) {
-      const per = await this.periodRepo.findOne({ where: { id: slot.periodId } });
+      const per = await this.periodRepo.findOne({
+        where: { id: slot.periodId },
+      });
       if (per) {
         periodName = per.name;
         startTime = per.startTime;
@@ -254,7 +262,10 @@ export class TimetableService {
       }
     }
 
-    const timeStr = startTime && endTime ? `${startTime} - ${endTime}` : (periodName || `Period ${slot.periodId}`);
+    const timeStr =
+      startTime && endTime
+        ? `${startTime} - ${endTime}`
+        : periodName || `Period ${slot.periodId}`;
 
     return {
       id: slot.id,
@@ -293,7 +304,8 @@ export class TimetableService {
         relations: ['class', 'section', 'teacher'],
       });
       if (teacherConflict) {
-        const teacherName = teacherConflict.teacher?.name || payload.teacherName || 'Teacher';
+        const teacherName =
+          teacherConflict.teacher?.name || payload.teacherName || 'Teacher';
         const clsName = teacherConflict.class?.name || 'Class';
         const secName = teacherConflict.section?.name || 'Section';
         throw new BadRequestException(
@@ -352,8 +364,10 @@ export class TimetableService {
     const timetableId = payload.timetableId || existing.timetableId;
     const day = payload.day || existing.day;
     const periodId = payload.periodId || existing.periodId;
-    const teacherId = payload.teacherId !== undefined ? payload.teacherId : existing.teacherId;
-    const roomNo = payload.roomNo !== undefined ? payload.roomNo : existing.roomNo;
+    const teacherId =
+      payload.teacherId !== undefined ? payload.teacherId : existing.teacherId;
+    const roomNo =
+      payload.roomNo !== undefined ? payload.roomNo : existing.roomNo;
 
     // Check teacher conflict
     if (teacherId) {
@@ -369,7 +383,8 @@ export class TimetableService {
         relations: ['class', 'section', 'teacher'],
       });
       if (teacherConflict && teacherConflict.id !== id) {
-        const teacherName = teacherConflict.teacher?.name || payload.teacherName || 'Teacher';
+        const teacherName =
+          teacherConflict.teacher?.name || payload.teacherName || 'Teacher';
         const clsName = teacherConflict.class?.name || 'Class';
         const secName = teacherConflict.section?.name || 'Section';
         throw new BadRequestException(
@@ -457,12 +472,22 @@ export class TimetableService {
     let sectionId: string | null = null;
 
     try {
-      const enrollment = await this.dataSource.getRepository(StudentEnrollment).findOne({
-        where: [
-          { studentId: String(studentId), schoolId: String(schoolId), isDeleted: false },
-          { id: String(studentId), schoolId: String(schoolId), isDeleted: false },
-        ],
-      });
+      const enrollment = await this.dataSource
+        .getRepository(StudentEnrollment)
+        .findOne({
+          where: [
+            {
+              studentId: String(studentId),
+              schoolId: String(schoolId),
+              isDeleted: false,
+            },
+            {
+              id: String(studentId),
+              schoolId: String(schoolId),
+              isDeleted: false,
+            },
+          ],
+        });
 
       if (enrollment) {
         classId = String(enrollment.classId);
@@ -549,7 +574,11 @@ export class TimetableService {
       where: { schoolId, isDeleted: false },
     });
     const activeTimetable = await this.timetableRepo.findOne({
-      where: { schoolId, status: TimetableStatusEnum.PUBLISHED, isDeleted: false },
+      where: {
+        schoolId,
+        status: TimetableStatusEnum.PUBLISHED,
+        isDeleted: false,
+      },
     });
     const slotsCount = await this.slotRepo.count({
       where: { schoolId, isDeleted: false },
@@ -574,8 +603,14 @@ export class TimetableService {
 
   // 14. Assign Substitute Teacher
   async assignSubstituteTeacher(schoolId: string, payload: any) {
-    if (!payload.slotId || !payload.originalTeacherId || !payload.substituteTeacherId) {
-      throw new BadRequestException('slotId, originalTeacherId, and substituteTeacherId are required');
+    if (
+      !payload.slotId ||
+      !payload.originalTeacherId ||
+      !payload.substituteTeacherId
+    ) {
+      throw new BadRequestException(
+        'slotId, originalTeacherId, and substituteTeacherId are required',
+      );
     }
     const sub = this.substitutionRepo.create({
       schoolId,
@@ -652,12 +687,20 @@ export class TimetableService {
 
     Object.assign(existing, {
       title: payload.title !== undefined ? payload.title : existing.title,
-      description: payload.description !== undefined ? payload.description : existing.description,
+      description:
+        payload.description !== undefined
+          ? payload.description
+          : existing.description,
       date: payload.date !== undefined ? payload.date : existing.date,
-      startTime: payload.startTime !== undefined ? payload.startTime : existing.startTime,
-      endTime: payload.endTime !== undefined ? payload.endTime : existing.endTime,
+      startTime:
+        payload.startTime !== undefined
+          ? payload.startTime
+          : existing.startTime,
+      endTime:
+        payload.endTime !== undefined ? payload.endTime : existing.endTime,
       type: payload.type !== undefined ? payload.type : existing.type,
-      location: payload.location !== undefined ? payload.location : existing.location,
+      location:
+        payload.location !== undefined ? payload.location : existing.location,
     });
 
     const saved = await this.eventRepo.save(existing);

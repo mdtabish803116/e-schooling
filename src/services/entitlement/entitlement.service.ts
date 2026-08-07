@@ -24,13 +24,19 @@ export class EntitlementService {
     const feature = await featureRepo.findOne({ where: { code: featureCode } });
 
     if (!feature) {
-      throw new NotFoundException(`Platform feature capability '${featureCode}' is unrecognized`);
+      throw new NotFoundException(
+        `Platform feature capability '${featureCode}' is unrecognized`,
+      );
     }
 
     if (!feature.isActive) {
       return {
         isAllowed: false,
-        featureDetails: { code: feature.code, name: feature.name, usageUnit: feature.usageUnit },
+        featureDetails: {
+          code: feature.code,
+          name: feature.name,
+          usageUnit: feature.usageUnit,
+        },
         reason: 'FeatureGloballyDeactivated',
       };
     }
@@ -42,7 +48,11 @@ export class EntitlementService {
     if (!subscription) {
       return {
         isAllowed: false,
-        featureDetails: { code: feature.code, name: feature.name, usageUnit: feature.usageUnit },
+        featureDetails: {
+          code: feature.code,
+          name: feature.name,
+          usageUnit: feature.usageUnit,
+        },
         reason: 'NoActiveSubscriptionTierFound',
       };
     }
@@ -52,15 +62,24 @@ export class EntitlementService {
     if (subscription.currentPeriodEnd && subscription.currentPeriodEnd < now) {
       return {
         isAllowed: false,
-        featureDetails: { code: feature.code, name: feature.name, usageUnit: feature.usageUnit },
+        featureDetails: {
+          code: feature.code,
+          name: feature.name,
+          usageUnit: feature.usageUnit,
+        },
         reason: 'SubscriptionExpired',
       };
     }
 
     // Retrieve global plan feature baseline configuration
-    const planFeatureRepo = this.dataSource.getRepository(SubscriptionPlanPlatformFeatureMapping);
+    const planFeatureRepo = this.dataSource.getRepository(
+      SubscriptionPlanPlatformFeatureMapping,
+    );
     const planFeature = await planFeatureRepo.findOne({
-      where: { subscriptionPlanId: subscription.subscriptionPlanId, platformFeatureId: feature.id },
+      where: {
+        subscriptionPlanId: subscription.subscriptionPlanId,
+        platformFeatureId: feature.id,
+      },
     });
 
     // Retrieve per-school specific override priority rules
@@ -72,7 +91,9 @@ export class EntitlementService {
 
     // Precedence rule application
     let isEnabled = planFeature?.isEnabled ?? false;
-    let baseLimit = planFeature?.limitValue ? parseInt(planFeature.limitValue, 10) : null;
+    const baseLimit = planFeature?.limitValue
+      ? parseInt(planFeature.limitValue, 10)
+      : null;
     let appliedRuleType = 'GlobalPlanBaseline';
 
     // Retrieve and evaluate all active overrides
@@ -82,11 +103,19 @@ export class EntitlementService {
       return o.isActive && !o.isDeleted && started && unexpired;
     });
 
-    const activeOverride = activeLimitOverrides.find((o) => o.overrideType === OverrideTypeEnum.DISABLE || o.overrideType === OverrideTypeEnum.ENABLE || o.overrideType === OverrideTypeEnum.CUSTOM_LIMIT);
+    const activeOverride = activeLimitOverrides.find(
+      (o) =>
+        o.overrideType === OverrideTypeEnum.DISABLE ||
+        o.overrideType === OverrideTypeEnum.ENABLE ||
+        o.overrideType === OverrideTypeEnum.CUSTOM_LIMIT,
+    );
 
     if (activeOverride) {
       appliedRuleType = `TenantOverride:${activeOverride.overrideType}`;
-      if (activeOverride.overrideType === OverrideTypeEnum.DISABLE || !activeOverride.isEnabled) {
+      if (
+        activeOverride.overrideType === OverrideTypeEnum.DISABLE ||
+        !activeOverride.isEnabled
+      ) {
         isEnabled = false;
       } else {
         isEnabled = true;
@@ -110,7 +139,11 @@ export class EntitlementService {
     if (!isEnabled) {
       return {
         isAllowed: false,
-        featureDetails: { code: feature.code, name: feature.name, usageUnit: feature.usageUnit },
+        featureDetails: {
+          code: feature.code,
+          name: feature.name,
+          usageUnit: feature.usageUnit,
+        },
         appliedRuleType,
         reason: 'CapabilityDisabledForTargetTenant',
       };
@@ -131,7 +164,9 @@ export class EntitlementService {
         .createQueryBuilder('log')
         .select('SUM(CAST(log.usageCount AS BIGINT))', 'total')
         .where('log.schoolId = :schoolId', { schoolId })
-        .andWhere('log.platformFeatureId = :platformFeatureId', { platformFeatureId: feature.id })
+        .andWhere('log.platformFeatureId = :platformFeatureId', {
+          platformFeatureId: feature.id,
+        })
         .andWhere('log.usageDate >= :startOfMonth', { startOfMonth })
         .getRawOne();
 
@@ -140,9 +175,16 @@ export class EntitlementService {
       if (currentUsageCount >= limitValue) {
         return {
           isAllowed: false,
-          featureDetails: { code: feature.code, name: feature.name, usageUnit: feature.usageUnit },
+          featureDetails: {
+            code: feature.code,
+            name: feature.name,
+            usageUnit: feature.usageUnit,
+          },
           appliedRuleType,
-          quotas: { consumedUnits: currentUsageCount, limitCeiling: limitValue },
+          quotas: {
+            consumedUnits: currentUsageCount,
+            limitCeiling: limitValue,
+          },
           reason: 'MonthlyMeteredQuotaExceeded',
         };
       }
@@ -150,13 +192,18 @@ export class EntitlementService {
 
     return {
       isAllowed: true,
-      featureDetails: { code: feature.code, name: feature.name, usageUnit: feature.usageUnit },
+      featureDetails: {
+        code: feature.code,
+        name: feature.name,
+        usageUnit: feature.usageUnit,
+      },
       appliedRuleType,
       quotas: {
         isMetered: feature.isMetered,
         consumedUnits: currentUsageCount,
         limitCeiling: limitValue,
-        remainingUnits: limitValue !== null ? limitValue - currentUsageCount : null,
+        remainingUnits:
+          limitValue !== null ? limitValue - currentUsageCount : null,
       },
     };
   }
@@ -164,17 +211,28 @@ export class EntitlementService {
   /**
    * Tracks metered resource logging increments for billing engine consolidation pipelines.
    */
-  async logUsageEvent(schoolId: string, featureCode: string, unitsConsumed: number, telemetryPayload?: Record<string, any>) {
+  async logUsageEvent(
+    schoolId: string,
+    featureCode: string,
+    unitsConsumed: number,
+    telemetryPayload?: Record<string, any>,
+  ) {
     if (unitsConsumed <= 0) {
-      throw new BadRequestException('Units consumed must represent a strictly positive increment');
+      throw new BadRequestException(
+        'Units consumed must represent a strictly positive increment',
+      );
     }
 
-    const feature = await this.dataSource.getRepository(PlatformFeature).findOne({
-      where: { code: featureCode },
-    });
+    const feature = await this.dataSource
+      .getRepository(PlatformFeature)
+      .findOne({
+        where: { code: featureCode },
+      });
 
     if (!feature) {
-      throw new NotFoundException(`Target feature code '${featureCode}' is missing`);
+      throw new NotFoundException(
+        `Target feature code '${featureCode}' is missing`,
+      );
     }
 
     const log = new PlatformFeatureUsageLog();
@@ -184,7 +242,9 @@ export class EntitlementService {
     log.usageDate = new Date();
     log.metadata = telemetryPayload || {};
 
-    const savedLog = await this.dataSource.getRepository(PlatformFeatureUsageLog).save(log);
+    const savedLog = await this.dataSource
+      .getRepository(PlatformFeatureUsageLog)
+      .save(log);
 
     return {
       message: 'Usage metrics seamlessly ingested into telemetry log',

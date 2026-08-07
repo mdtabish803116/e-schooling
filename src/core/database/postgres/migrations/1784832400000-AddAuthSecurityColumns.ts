@@ -4,7 +4,12 @@ export class AddAuthSecurityColumns1784832400000 implements MigrationInterface {
   name = 'AddAuthSecurityColumns1784832400000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
-    const tables = ['school_owners', 'school_users', 'students', 'platform_users'];
+    const tables = [
+      'school_owners',
+      'school_users',
+      'students',
+      'platform_users',
+    ];
 
     for (const table of tables) {
       await queryRunner.query(`
@@ -19,7 +24,12 @@ export class AddAuthSecurityColumns1784832400000 implements MigrationInterface {
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    const tables = ['school_owners', 'school_users', 'students', 'platform_users'];
+    const tables = [
+      'school_owners',
+      'school_users',
+      'students',
+      'platform_users',
+    ];
 
     for (const table of tables) {
       await queryRunner.query(`

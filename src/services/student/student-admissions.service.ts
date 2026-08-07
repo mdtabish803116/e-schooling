@@ -1,4 +1,10 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+  OnModuleInit,
+} from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { DataSource, In } from 'typeorm';
 import { AuthContext } from '../../interfaces/auth-context.interface';
@@ -18,20 +24,34 @@ import { PromotionLog } from '../../models/entities/student/promotion-log.entity
 import { StudentEnrollment } from '../../models/entities/student/student-enrollment.entity';
 import { Student } from '../../models/entities/student/student.entity';
 import { SchoolSubscription } from '../../models/entities/subscription/school-subscription.entity';
-import { ActionTypeEnum, EnrollmentStatusEnum, EnrollmentTypeEnum, OverrideTypeEnum } from '../../models/enums/enums';
+import {
+  ActionTypeEnum,
+  EnrollmentStatusEnum,
+  EnrollmentTypeEnum,
+  OverrideTypeEnum,
+} from '../../models/enums/enums';
 
 @Injectable()
 export class StudentAdmissionsService {
-  constructor(private dataSource: DataSource) { }
+  constructor(private dataSource: DataSource) {}
 
-  private async assertOwnership(ownerId: string, schoolId: string): Promise<School> {
-    const membership = await this.dataSource.getRepository(SchoolOwnerMember).findOne({
-      where: { schoolOwnerId: ownerId, schoolId }
-    });
+  private async assertOwnership(
+    ownerId: string,
+    schoolId: string,
+  ): Promise<School> {
+    const membership = await this.dataSource
+      .getRepository(SchoolOwnerMember)
+      .findOne({
+        where: { schoolOwnerId: ownerId, schoolId },
+      });
     if (!membership) {
-      throw new ForbiddenException('You do not have permission to admit students to this school');
+      throw new ForbiddenException(
+        'You do not have permission to admit students to this school',
+      );
     }
-    const school = await this.dataSource.getRepository(School).findOne({ where: { id: schoolId } });
+    const school = await this.dataSource
+      .getRepository(School)
+      .findOne({ where: { id: schoolId } });
     if (!school) throw new NotFoundException('School not found');
     return school;
   }
@@ -39,7 +59,9 @@ export class StudentAdmissionsService {
   private async generateStudentCode(schoolCode: string): Promise<string> {
     const randomSuffix = Math.floor(1000 + Math.random() * 9000);
     const code = `${schoolCode}-${randomSuffix}`;
-    const existing = await this.dataSource.getRepository(Student).findOne({ where: { studentCode: code } });
+    const existing = await this.dataSource
+      .getRepository(Student)
+      .findOne({ where: { studentCode: code } });
     if (existing) return this.generateStudentCode(schoolCode);
     return code;
   }
@@ -47,60 +69,98 @@ export class StudentAdmissionsService {
   /* ────────────────────────────────────────────────────
      ADMIT STUDENT
   ──────────────────────────────────────────────────── */
-  async admitStudent(caller: AuthContext, schoolId: string, dto: StudentAdmissionDto) {
+  async admitStudent(
+    caller: AuthContext,
+    schoolId: string,
+    dto: StudentAdmissionDto,
+  ) {
     const school = await this.assertOwnership(caller.id, schoolId);
 
     if (!dto.academicSessionId) {
-      const activeSession = await this.dataSource.getRepository(AcademicSession).findOne({
-        where: { schoolId, isCurrent: true, isDeleted: false },
-      });
+      const activeSession = await this.dataSource
+        .getRepository(AcademicSession)
+        .findOne({
+          where: { schoolId, isCurrent: true, isDeleted: false },
+        });
       dto.academicSessionId = activeSession?.id || '1';
     }
 
     // Check subscription quota
     const subRepo = this.dataSource.getRepository(SchoolSubscription);
-    const subscription = await subRepo.findOne({ where: { schoolId }, relations: ['subscriptionPlan'] });
-    if (!subscription) throw new BadRequestException('No active subscription found for this school branch.');
+    const subscription = await subRepo.findOne({
+      where: { schoolId },
+      relations: ['subscriptionPlan'],
+    });
+    if (!subscription)
+      throw new BadRequestException(
+        'No active subscription found for this school branch.',
+      );
 
-    let allowedLimit: number | null = subscription.subscriptionPlan?.maxStudents || null;
+    let allowedLimit: number | null =
+      subscription.subscriptionPlan?.maxStudents || null;
     if (allowedLimit !== null) {
       const overrideRepo = this.dataSource.getRepository(SchoolFeatureOverride);
-      const studentFeature = await this.dataSource.getRepository(PlatformFeature).findOne({ where: { code: 'STUDENT_MANAGEMENT' } });
+      const studentFeature = await this.dataSource
+        .getRepository(PlatformFeature)
+        .findOne({ where: { code: 'STUDENT_MANAGEMENT' } });
       if (studentFeature) {
         const now = new Date();
         const activeOverrides = await overrideRepo.find({
-          where: { schoolId, platformFeatureId: studentFeature.id, overrideType: OverrideTypeEnum.CUSTOM_LIMIT, isActive: true, isDeleted: false }
+          where: {
+            schoolId,
+            platformFeatureId: studentFeature.id,
+            overrideType: OverrideTypeEnum.CUSTOM_LIMIT,
+            isActive: true,
+            isDeleted: false,
+          },
         });
         for (const o of activeOverrides) {
           const started = !o.startDate || o.startDate <= now;
           const unexpired = !o.endDate || o.endDate >= now;
-          if (started && unexpired && o.limitValue) allowedLimit += parseInt(o.limitValue, 10);
+          if (started && unexpired && o.limitValue)
+            allowedLimit += parseInt(o.limitValue, 10);
         }
       }
     }
     if (allowedLimit !== null) {
-      const studentCount = await this.dataSource.getRepository(Student).count({ where: { schoolId, isDeleted: false } });
+      const studentCount = await this.dataSource
+        .getRepository(Student)
+        .count({ where: { schoolId, isDeleted: false } });
       if (studentCount >= allowedLimit) {
-        throw new BadRequestException(`Student admission capacity exceeded (${studentCount}/${allowedLimit}). Please upgrade your subscription plan.`);
+        throw new BadRequestException(
+          `Student admission capacity exceeded (${studentCount}/${allowedLimit}). Please upgrade your subscription plan.`,
+        );
       }
     }
 
     // Validate academic references
-    const targetClass = await this.dataSource.getRepository(Class).findOne({ where: { id: dto.classId, schoolId } });
+    const targetClass = await this.dataSource
+      .getRepository(Class)
+      .findOne({ where: { id: dto.classId, schoolId } });
     if (!targetClass) throw new NotFoundException('Class not found');
-    const targetSection = await this.dataSource.getRepository(Section).findOne({ where: { id: dto.sectionId, schoolId } });
+    const targetSection = await this.dataSource
+      .getRepository(Section)
+      .findOne({ where: { id: dto.sectionId, schoolId } });
     if (!targetSection) throw new NotFoundException('Section not found');
-    const targetSession = await this.dataSource.getRepository(AcademicSession).findOne({ where: { id: dto.academicSessionId, schoolId } });
-    if (!targetSession) throw new NotFoundException('Academic session not found');
-    const targetRole = await this.dataSource.getRepository(SchoolRole).findOne({ where: { id: dto.roleId, schoolId } });
-    if (!targetRole) throw new NotFoundException('Role not found for this school');
+    const targetSession = await this.dataSource
+      .getRepository(AcademicSession)
+      .findOne({ where: { id: dto.academicSessionId, schoolId } });
+    if (!targetSession)
+      throw new NotFoundException('Academic session not found');
+    const targetRole = await this.dataSource
+      .getRepository(SchoolRole)
+      .findOne({ where: { id: dto.roleId, schoolId } });
+    if (!targetRole)
+      throw new NotFoundException('Role not found for this school');
 
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
     try {
-      const studentCode = await this.generateStudentCode(school.internalSchoolCode);
+      const studentCode = await this.generateStudentCode(
+        school.internalSchoolCode,
+      );
       const salt = await bcrypt.genSalt(10);
       const passwordHash = await bcrypt.hash(dto.dob || '2010-01-01', salt);
 
@@ -148,9 +208,12 @@ export class StudentAdmissionsService {
       if (dto.guardianMobile) student.guardianMobile = dto.guardianMobile;
       if (dto.guardianEmail) student.guardianEmail = dto.guardianEmail;
       // Emergency
-      if (dto.emergencyContactName) student.emergencyContactName = dto.emergencyContactName;
-      if (dto.emergencyContactPhone) student.emergencyContactPhone = dto.emergencyContactPhone;
-      if (dto.emergencyContactRelation) student.emergencyContactRelation = dto.emergencyContactRelation;
+      if (dto.emergencyContactName)
+        student.emergencyContactName = dto.emergencyContactName;
+      if (dto.emergencyContactPhone)
+        student.emergencyContactPhone = dto.emergencyContactPhone;
+      if (dto.emergencyContactRelation)
+        student.emergencyContactRelation = dto.emergencyContactRelation;
       // Medical
       if (dto.medicalCondition) student.medicalCondition = dto.medicalCondition;
       if (dto.allergies) student.allergies = dto.allergies;
@@ -217,30 +280,62 @@ export class StudentAdmissionsService {
   async getStudents(
     caller: AuthContext,
     schoolId: string,
-    query: { classId?: string; sectionId?: string; academicSessionId?: string; search?: string; page?: number; limit?: number },
+    query: {
+      classId?: string;
+      sectionId?: string;
+      academicSessionId?: string;
+      search?: string;
+      page?: number;
+      limit?: number;
+    },
   ) {
-    const membership = await this.dataSource.getRepository(SchoolOwnerMember).findOne({ where: { schoolOwnerId: caller.id, schoolId } });
-    if (!membership && caller.actorType === 'school_owner') throw new ForbiddenException('You do not have permission to view students of this school');
-    else if (caller.actorType === 'school_user' && String(caller.schoolId) !== String(schoolId)) throw new ForbiddenException('You do not belong to this school');
+    const membership = await this.dataSource
+      .getRepository(SchoolOwnerMember)
+      .findOne({ where: { schoolOwnerId: caller.id, schoolId } });
+    if (!membership && caller.actorType === 'school_owner')
+      throw new ForbiddenException(
+        'You do not have permission to view students of this school',
+      );
+    else if (
+      caller.actorType === 'school_user' &&
+      String(caller.schoolId) !== String(schoolId)
+    )
+      throw new ForbiddenException('You do not belong to this school');
 
     const studentRepo = this.dataSource.getRepository(Student);
     const enrollmentRepo = this.dataSource.getRepository(StudentEnrollment);
 
     const page = query.page ? Math.max(1, parseInt(String(query.page), 10)) : 1;
-    const limit = query.limit ? Math.max(1, parseInt(String(query.limit), 10)) : 10;
+    const limit = query.limit
+      ? Math.max(1, parseInt(String(query.limit), 10))
+      : 10;
     const skip = (page - 1) * limit;
 
-    const queryBuilder = studentRepo.createQueryBuilder('student')
+    const queryBuilder = studentRepo
+      .createQueryBuilder('student')
       .where('student.schoolId = :schoolId', { schoolId })
       .andWhere('student.is_delete = :isDeleted', { isDeleted: false });
 
     if (query.classId || query.sectionId || query.academicSessionId) {
-      queryBuilder.innerJoin(StudentEnrollment, 'enrollment',
+      queryBuilder.innerJoin(
+        StudentEnrollment,
+        'enrollment',
         'enrollment.student_id = student.id AND enrollment.is_current = :isCurrent AND enrollment.is_delete = :enrollmentDeleted',
-        { isCurrent: true, enrollmentDeleted: false });
-      if (query.classId) queryBuilder.andWhere('enrollment.class_id = :classId', { classId: query.classId });
-      if (query.sectionId) queryBuilder.andWhere('enrollment.section_id = :sectionId', { sectionId: query.sectionId });
-      if (query.academicSessionId) queryBuilder.andWhere('enrollment.academic_session_id = :academicSessionId', { academicSessionId: query.academicSessionId });
+        { isCurrent: true, enrollmentDeleted: false },
+      );
+      if (query.classId)
+        queryBuilder.andWhere('enrollment.class_id = :classId', {
+          classId: query.classId,
+        });
+      if (query.sectionId)
+        queryBuilder.andWhere('enrollment.section_id = :sectionId', {
+          sectionId: query.sectionId,
+        });
+      if (query.academicSessionId)
+        queryBuilder.andWhere(
+          'enrollment.academic_session_id = :academicSessionId',
+          { academicSessionId: query.academicSessionId },
+        );
     }
 
     if (query.search) {
@@ -252,19 +347,45 @@ export class StudentAdmissionsService {
     }
 
     const total = await queryBuilder.getCount();
-    const students = await queryBuilder.orderBy('student.createdAt', 'DESC').skip(skip).take(limit).getMany();
+    const students = await queryBuilder
+      .orderBy('student.createdAt', 'DESC')
+      .skip(skip)
+      .take(limit)
+      .getMany();
 
-    const studentIds = students.map(s => s.id);
-    const enrollments = studentIds.length > 0
-      ? await enrollmentRepo.find({ where: { studentId: In(studentIds), schoolId, isCurrent: true, isDeleted: false } })
-      : [];
-    const classes = studentIds.length > 0 ? await this.dataSource.getRepository(Class).find({ where: { schoolId, isDeleted: false } }) : [];
-    const sections = studentIds.length > 0 ? await this.dataSource.getRepository(Section).find({ where: { schoolId, isDeleted: false } }) : [];
+    const studentIds = students.map((s) => s.id);
+    const enrollments =
+      studentIds.length > 0
+        ? await enrollmentRepo.find({
+            where: {
+              studentId: In(studentIds),
+              schoolId,
+              isCurrent: true,
+              isDeleted: false,
+            },
+          })
+        : [];
+    const classes =
+      studentIds.length > 0
+        ? await this.dataSource
+            .getRepository(Class)
+            .find({ where: { schoolId, isDeleted: false } })
+        : [];
+    const sections =
+      studentIds.length > 0
+        ? await this.dataSource
+            .getRepository(Section)
+            .find({ where: { schoolId, isDeleted: false } })
+        : [];
 
-    const data = students.map(student => {
-      const e = enrollments.find(env => env.studentId === student.id);
-      const cls = e ? classes.find(c => String(c.id) === String(e.classId)) : null;
-      const sec = e ? sections.find(s => String(s.id) === String(e.sectionId)) : null;
+    const data = students.map((student) => {
+      const e = enrollments.find((env) => env.studentId === student.id);
+      const cls = e
+        ? classes.find((c) => String(c.id) === String(e.classId))
+        : null;
+      const sec = e
+        ? sections.find((s) => String(s.id) === String(e.sectionId))
+        : null;
       return {
         id: student.id,
         studentCode: student.studentCode,
@@ -295,27 +416,62 @@ export class StudentAdmissionsService {
       };
     });
 
-    return { data, meta: { page, limit, total, totalPages: Math.ceil(total / limit) } };
+    return {
+      data,
+      meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
+    };
   }
 
   /* ────────────────────────────────────────────────────
      GET STUDENT BY ID (full profile)
   ──────────────────────────────────────────────────── */
-  async getStudentById(caller: AuthContext, schoolId: string, studentId: string) {
-    const membership = await this.dataSource.getRepository(SchoolOwnerMember).findOne({ where: { schoolOwnerId: caller.id, schoolId } });
-    if (!membership && caller.actorType === 'school_owner') throw new ForbiddenException('You do not have permission to view students of this school');
-    else if (caller.actorType === 'school_user' && String(caller.schoolId) !== String(schoolId)) throw new ForbiddenException('You do not belong to this school');
+  async getStudentById(
+    caller: AuthContext,
+    schoolId: string,
+    studentId: string,
+  ) {
+    const membership = await this.dataSource
+      .getRepository(SchoolOwnerMember)
+      .findOne({ where: { schoolOwnerId: caller.id, schoolId } });
+    if (!membership && caller.actorType === 'school_owner')
+      throw new ForbiddenException(
+        'You do not have permission to view students of this school',
+      );
+    else if (
+      caller.actorType === 'school_user' &&
+      String(caller.schoolId) !== String(schoolId)
+    )
+      throw new ForbiddenException('You do not belong to this school');
 
-    const student = await this.dataSource.getRepository(Student).findOne({ where: { id: studentId, schoolId, isDeleted: false } });
+    const student = await this.dataSource
+      .getRepository(Student)
+      .findOne({ where: { id: studentId, schoolId, isDeleted: false } });
     if (!student) throw new NotFoundException('Student not found');
 
-    let enrollment = await this.dataSource.getRepository(StudentEnrollment).findOne({ where: { studentId, schoolId, isCurrent: true, isDeleted: false } });
+    let enrollment = await this.dataSource
+      .getRepository(StudentEnrollment)
+      .findOne({
+        where: { studentId, schoolId, isCurrent: true, isDeleted: false },
+      });
     if (!enrollment) {
-      enrollment = await this.dataSource.getRepository(StudentEnrollment).findOne({ where: { studentId, schoolId, isDeleted: false }, order: { createdAt: 'DESC' } });
+      enrollment = await this.dataSource
+        .getRepository(StudentEnrollment)
+        .findOne({
+          where: { studentId, schoolId, isDeleted: false },
+          order: { createdAt: 'DESC' },
+        });
     }
 
-    const cls = enrollment?.classId ? await this.dataSource.getRepository(Class).findOne({ where: { id: enrollment.classId } }) : null;
-    const sec = enrollment?.sectionId ? await this.dataSource.getRepository(Section).findOne({ where: { id: enrollment.sectionId } }) : null;
+    const cls = enrollment?.classId
+      ? await this.dataSource
+          .getRepository(Class)
+          .findOne({ where: { id: enrollment.classId } })
+      : null;
+    const sec = enrollment?.sectionId
+      ? await this.dataSource
+          .getRepository(Section)
+          .findOne({ where: { id: enrollment.sectionId } })
+      : null;
 
     return {
       id: student.id,
@@ -402,27 +558,79 @@ export class StudentAdmissionsService {
   /* ────────────────────────────────────────────────────
      UPDATE STUDENT
   ──────────────────────────────────────────────────── */
-  async updateStudent(caller: AuthContext, schoolId: string, studentId: string, dto: UpdateStudentDto) {
-    const membership = await this.dataSource.getRepository(SchoolOwnerMember).findOne({ where: { schoolOwnerId: caller.id, schoolId } });
-    if (!membership && caller.actorType === 'school_owner') throw new ForbiddenException('You do not have permission to update student records');
-    else if (caller.actorType === 'school_user' && String(caller.schoolId) !== String(schoolId)) throw new ForbiddenException('You do not belong to this school');
+  async updateStudent(
+    caller: AuthContext,
+    schoolId: string,
+    studentId: string,
+    dto: UpdateStudentDto,
+  ) {
+    const membership = await this.dataSource
+      .getRepository(SchoolOwnerMember)
+      .findOne({ where: { schoolOwnerId: caller.id, schoolId } });
+    if (!membership && caller.actorType === 'school_owner')
+      throw new ForbiddenException(
+        'You do not have permission to update student records',
+      );
+    else if (
+      caller.actorType === 'school_user' &&
+      String(caller.schoolId) !== String(schoolId)
+    )
+      throw new ForbiddenException('You do not belong to this school');
 
-    const student = await this.dataSource.getRepository(Student).findOne({ where: { id: studentId, schoolId, isDeleted: false } });
+    const student = await this.dataSource
+      .getRepository(Student)
+      .findOne({ where: { id: studentId, schoolId, isDeleted: false } });
     if (!student) throw new NotFoundException('Student not found');
 
     const studentFields: (keyof Student)[] = [
-      'firstName', 'lastName', 'gender', 'dob',
-      'bloodGroup', 'religion', 'category', 'nationality', 'aadhaarNumber',
-      'phone', 'mobile', 'alternateMobile', 'email',
-      'address', 'village', 'district', 'state', 'pincode',
-      'parentName', 'parentPhone',
-      'fatherName', 'fatherOccupation', 'fatherMobile', 'fatherEmail', 'fatherAadhaar',
-      'motherName', 'motherOccupation', 'motherMobile', 'motherEmail', 'motherAadhaar',
-      'guardianName', 'guardianRelation', 'guardianMobile', 'guardianEmail',
-      'emergencyContactName', 'emergencyContactPhone', 'emergencyContactRelation',
-      'medicalCondition', 'allergies', 'disability', 'doctorName', 'doctorPhone',
-      'admissionNumber', 'admissionDate', 'joiningDate', 'admissionType',
-      'previousSchool', 'profilePicUrl',
+      'firstName',
+      'lastName',
+      'gender',
+      'dob',
+      'bloodGroup',
+      'religion',
+      'category',
+      'nationality',
+      'aadhaarNumber',
+      'phone',
+      'mobile',
+      'alternateMobile',
+      'email',
+      'address',
+      'village',
+      'district',
+      'state',
+      'pincode',
+      'parentName',
+      'parentPhone',
+      'fatherName',
+      'fatherOccupation',
+      'fatherMobile',
+      'fatherEmail',
+      'fatherAadhaar',
+      'motherName',
+      'motherOccupation',
+      'motherMobile',
+      'motherEmail',
+      'motherAadhaar',
+      'guardianName',
+      'guardianRelation',
+      'guardianMobile',
+      'guardianEmail',
+      'emergencyContactName',
+      'emergencyContactPhone',
+      'emergencyContactRelation',
+      'medicalCondition',
+      'allergies',
+      'disability',
+      'doctorName',
+      'doctorPhone',
+      'admissionNumber',
+      'admissionDate',
+      'joiningDate',
+      'admissionType',
+      'previousSchool',
+      'profilePicUrl',
     ];
 
     for (const field of studentFields) {
@@ -437,14 +645,18 @@ export class StudentAdmissionsService {
 
     // rollNumber lives on the enrollment record
     if (dto.rollNumber !== undefined) {
-      let enrollment = await this.dataSource.getRepository(StudentEnrollment).findOne({
-        where: { studentId, schoolId, isCurrent: true, isDeleted: false },
-      });
-      if (!enrollment) {
-        enrollment = await this.dataSource.getRepository(StudentEnrollment).findOne({
-          where: { studentId, schoolId, isDeleted: false },
-          order: { createdAt: 'DESC' },
+      let enrollment = await this.dataSource
+        .getRepository(StudentEnrollment)
+        .findOne({
+          where: { studentId, schoolId, isCurrent: true, isDeleted: false },
         });
+      if (!enrollment) {
+        enrollment = await this.dataSource
+          .getRepository(StudentEnrollment)
+          .findOne({
+            where: { studentId, schoolId, isDeleted: false },
+            order: { createdAt: 'DESC' },
+          });
       }
       if (enrollment) {
         enrollment.isCurrent = true;
@@ -459,74 +671,130 @@ export class StudentAdmissionsService {
   /* ────────────────────────────────────────────────────
      UPDATE PHOTO
   ──────────────────────────────────────────────────── */
-  async updateStudentPhoto(caller: AuthContext, schoolId: string, studentId: string, profilePicUrl: string) {
-    const membership = await this.dataSource.getRepository(SchoolOwnerMember).findOne({ where: { schoolOwnerId: caller.id, schoolId } });
-    if (!membership && caller.actorType === 'school_owner') throw new ForbiddenException('You do not have permission to update student photo');
-    else if (caller.actorType === 'school_user' && String(caller.schoolId) !== String(schoolId)) throw new ForbiddenException('You do not belong to this school');
+  async updateStudentPhoto(
+    caller: AuthContext,
+    schoolId: string,
+    studentId: string,
+    profilePicUrl: string,
+  ) {
+    const membership = await this.dataSource
+      .getRepository(SchoolOwnerMember)
+      .findOne({ where: { schoolOwnerId: caller.id, schoolId } });
+    if (!membership && caller.actorType === 'school_owner')
+      throw new ForbiddenException(
+        'You do not have permission to update student photo',
+      );
+    else if (
+      caller.actorType === 'school_user' &&
+      String(caller.schoolId) !== String(schoolId)
+    )
+      throw new ForbiddenException('You do not belong to this school');
 
-    const student = await this.dataSource.getRepository(Student).findOne({ where: { id: studentId, schoolId, isDeleted: false } });
+    const student = await this.dataSource
+      .getRepository(Student)
+      .findOne({ where: { id: studentId, schoolId, isDeleted: false } });
     if (!student) throw new NotFoundException('Student not found');
 
     student.profilePicUrl = profilePicUrl;
     student.updatedById = caller.id;
     await this.dataSource.getRepository(Student).save(student);
 
-    return { message: 'Student photo updated successfully', profilePicUrl: student.profilePicUrl, studentId: student.id };
+    return {
+      message: 'Student photo updated successfully',
+      profilePicUrl: student.profilePicUrl,
+      studentId: student.id,
+    };
   }
 
   /* ────────────────────────────────────────────────────
      BULK PROGRESS STUDENTS
   ──────────────────────────────────────────────────── */
-  async bulkProgressStudents(caller: AuthContext, schoolId: string, dto: BulkProgressionDto) {
+  async bulkProgressStudents(
+    caller: AuthContext,
+    schoolId: string,
+    dto: BulkProgressionDto,
+  ) {
     await this.assertOwnership(caller.id, schoolId);
 
-    const targetClass = await this.dataSource.getRepository(Class).findOne({ where: { id: dto.targetClassId, schoolId } });
+    const targetClass = await this.dataSource
+      .getRepository(Class)
+      .findOne({ where: { id: dto.targetClassId, schoolId } });
     if (!targetClass) throw new NotFoundException('Target class not found');
-    const targetSection = await this.dataSource.getRepository(Section).findOne({ where: { id: dto.targetSectionId, schoolId } });
+    const targetSection = await this.dataSource
+      .getRepository(Section)
+      .findOne({ where: { id: dto.targetSectionId, schoolId } });
     if (!targetSection) throw new NotFoundException('Target section not found');
 
     // Auto-resolve active academic session if not supplied
     let resolvedSessionId = dto.targetSessionId;
     if (!resolvedSessionId) {
       const sessionRepo = this.dataSource.getRepository(AcademicSession);
-      let activeSession = await sessionRepo.findOne({ where: { schoolId, isCurrent: true, isDeleted: false } });
+      let activeSession = await sessionRepo.findOne({
+        where: { schoolId, isCurrent: true, isDeleted: false },
+      });
       if (!activeSession) {
-        activeSession = await sessionRepo.findOne({ where: { schoolId, isDeleted: false }, order: { createdAt: 'DESC' } });
+        activeSession = await sessionRepo.findOne({
+          where: { schoolId, isDeleted: false },
+          order: { createdAt: 'DESC' },
+        });
       }
       if (!activeSession) {
         // Create a default session if none exists
-        const newSession = sessionRepo.create({ schoolId, name: '2025-2026', startDate: '2025-04-01', endDate: '2026-03-31', isCurrent: true, isActive: true });
+        const newSession = sessionRepo.create({
+          schoolId,
+          name: '2025-2026',
+          startDate: '2025-04-01',
+          endDate: '2026-03-31',
+          isCurrent: true,
+          isActive: true,
+        });
         const savedSession = await sessionRepo.save(newSession);
         resolvedSessionId = savedSession.id;
       } else {
         resolvedSessionId = activeSession.id;
       }
     } else {
-      const targetSession = await this.dataSource.getRepository(AcademicSession).findOne({ where: { id: resolvedSessionId, schoolId } });
-      if (!targetSession) throw new NotFoundException('Target academic session not found');
+      const targetSession = await this.dataSource
+        .getRepository(AcademicSession)
+        .findOne({ where: { id: resolvedSessionId, schoolId } });
+      if (!targetSession)
+        throw new NotFoundException('Target academic session not found');
     }
 
     let enrollmentType: EnrollmentTypeEnum;
     let oldEnrollmentState: EnrollmentStatusEnum;
 
-    if (dto.actionType === ActionTypeEnum.PROMOTION) { enrollmentType = EnrollmentTypeEnum.PROMOTION; oldEnrollmentState = EnrollmentStatusEnum.PROMOTED; }
-    else if (dto.actionType === ActionTypeEnum.DEMOTION) { enrollmentType = EnrollmentTypeEnum.DEMOTION; oldEnrollmentState = EnrollmentStatusEnum.DEMOTED; }
-    else if (dto.actionType === ActionTypeEnum.REPEAT) { enrollmentType = EnrollmentTypeEnum.REPEAT; oldEnrollmentState = EnrollmentStatusEnum.COMPLETED; }
-    else if (dto.actionType === ActionTypeEnum.SPECIAL_PROMOTION) { enrollmentType = EnrollmentTypeEnum.SPECIAL_PROMOTION; oldEnrollmentState = EnrollmentStatusEnum.PROMOTED; }
-    else if (dto.actionType === ActionTypeEnum.SECTION_TRANSFER) { enrollmentType = EnrollmentTypeEnum.TRANSFER; oldEnrollmentState = EnrollmentStatusEnum.TRANSFERRED; }
-    else throw new BadRequestException('Invalid action type');
+    if (dto.actionType === ActionTypeEnum.PROMOTION) {
+      enrollmentType = EnrollmentTypeEnum.PROMOTION;
+      oldEnrollmentState = EnrollmentStatusEnum.PROMOTED;
+    } else if (dto.actionType === ActionTypeEnum.DEMOTION) {
+      enrollmentType = EnrollmentTypeEnum.DEMOTION;
+      oldEnrollmentState = EnrollmentStatusEnum.DEMOTED;
+    } else if (dto.actionType === ActionTypeEnum.REPEAT) {
+      enrollmentType = EnrollmentTypeEnum.REPEAT;
+      oldEnrollmentState = EnrollmentStatusEnum.COMPLETED;
+    } else if (dto.actionType === ActionTypeEnum.SPECIAL_PROMOTION) {
+      enrollmentType = EnrollmentTypeEnum.SPECIAL_PROMOTION;
+      oldEnrollmentState = EnrollmentStatusEnum.PROMOTED;
+    } else if (dto.actionType === ActionTypeEnum.SECTION_TRANSFER) {
+      enrollmentType = EnrollmentTypeEnum.TRANSFER;
+      oldEnrollmentState = EnrollmentStatusEnum.TRANSFERRED;
+    } else throw new BadRequestException('Invalid action type');
 
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
     try {
-      const enrollmentRepo = queryRunner.manager.getRepository(StudentEnrollment);
+      const enrollmentRepo =
+        queryRunner.manager.getRepository(StudentEnrollment);
       const logRepo = queryRunner.manager.getRepository(PromotionLog);
       const processedStudentIds: string[] = [];
 
       for (const studentId of dto.studentIds) {
-        const currentEnrollment = await enrollmentRepo.findOne({ where: { studentId, schoolId, isCurrent: true, isDeleted: false } });
+        const currentEnrollment = await enrollmentRepo.findOne({
+          where: { studentId, schoolId, isCurrent: true, isDeleted: false },
+        });
         let previousEnrollmentId: string | undefined;
 
         if (currentEnrollment) {
@@ -547,7 +815,8 @@ export class StudentAdmissionsService {
         newEnrollment.enrollmentType = enrollmentType;
         newEnrollment.enrollmentState = EnrollmentStatusEnum.ACTIVE;
         newEnrollment.isCurrent = true;
-        if (previousEnrollmentId) newEnrollment.previousEnrollmentId = previousEnrollmentId;
+        if (previousEnrollmentId)
+          newEnrollment.previousEnrollmentId = previousEnrollmentId;
         newEnrollment.createdById = caller.id;
         newEnrollment.startDate = new Date().toISOString().split('T')[0];
         const savedNewEnrollment = await enrollmentRepo.save(newEnrollment);
@@ -557,12 +826,15 @@ export class StudentAdmissionsService {
         log.studentId = studentId;
         if (previousEnrollmentId) log.fromEnrollmentId = previousEnrollmentId;
         log.toEnrollmentId = savedNewEnrollment.id;
-        if (currentEnrollment?.classId) log.fromClassId = currentEnrollment.classId;
-        if (currentEnrollment?.sectionId) log.fromSectionId = currentEnrollment.sectionId;
+        if (currentEnrollment?.classId)
+          log.fromClassId = currentEnrollment.classId;
+        if (currentEnrollment?.sectionId)
+          log.fromSectionId = currentEnrollment.sectionId;
         log.toClassId = dto.targetClassId;
         log.toSectionId = dto.targetSectionId;
         log.actionType = dto.actionType;
-        log.remarks = dto.remarks || `Bulk progression of type: ${dto.actionType}`;
+        log.remarks =
+          dto.remarks || `Bulk progression of type: ${dto.actionType}`;
         log.performedBy = caller.id;
         log.performedAt = new Date();
         log.isActive = true;
@@ -573,7 +845,10 @@ export class StudentAdmissionsService {
       }
 
       await queryRunner.commitTransaction();
-      return { message: `Successfully processed ${processedStudentIds.length} student(s) for ${dto.actionType}.`, processedStudentIds };
+      return {
+        message: `Successfully processed ${processedStudentIds.length} student(s) for ${dto.actionType}.`,
+        processedStudentIds,
+      };
     } catch (error) {
       await queryRunner.rollbackTransaction();
       throw error;
@@ -585,7 +860,11 @@ export class StudentAdmissionsService {
   /* ────────────────────────────────────────────────────
      STUDENT DOCUMENTS
   ──────────────────────────────────────────────────── */
-  async getStudentDocuments(caller: AuthContext, schoolId: string, studentId: string) {
+  async getStudentDocuments(
+    caller: AuthContext,
+    schoolId: string,
+    studentId: string,
+  ) {
     const student = await this.dataSource.getRepository(Student).findOne({
       where: { id: studentId, schoolId, isDeleted: false },
     });
@@ -606,7 +885,9 @@ export class StudentAdmissionsService {
     if (!student) throw new NotFoundException('Student not found');
 
     const documents = Array.isArray(student.documents) ? student.documents : [];
-    const fileName = dto.file ? dto.file.split('/').pop() || 'document.pdf' : 'document.pdf';
+    const fileName = dto.file
+      ? dto.file.split('/').pop() || 'document.pdf'
+      : 'document.pdf';
     const newDoc = {
       id: `doc-${Date.now()}`,
       fileUrl: dto.file,
@@ -641,5 +922,4 @@ export class StudentAdmissionsService {
     await studentRepo.save(student);
     return { message: 'Document deleted successfully' };
   }
-
 }

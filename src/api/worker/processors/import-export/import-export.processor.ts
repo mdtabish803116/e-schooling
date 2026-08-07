@@ -18,16 +18,21 @@ export class ImportExportProcessor {
 
   async process(job: Job): Promise<unknown> {
     const { name, data, id } = job;
-    this.logger.log(`[ImportExportProcessor] Routing job ${id} (${name}) on queue '${job.queueName}'`);
+    this.logger.log(
+      `[ImportExportProcessor] Routing job ${id} (${name}) on queue '${job.queueName}'`,
+    );
 
-    const entityName = (data.entityName || data.entityType || '').toLowerCase().trim();
+    const entityName = (data.entityName || data.entityType || '')
+      .toLowerCase()
+      .trim();
 
     // 1. STUDENT IMPORT
     if (
       name === 'student_import' ||
       name === 'import_student_csv' ||
       name === 'import_csv_job' ||
-      (name === 'generic_import' && (entityName === 'student' || entityName === 'students'))
+      (name === 'generic_import' &&
+        (entityName === 'student' || entityName === 'students'))
     ) {
       return this.studentImportProcessor.process(job);
     }
@@ -37,7 +42,8 @@ export class ImportExportProcessor {
       name === 'student_export' ||
       name === 'export_student_csv' ||
       name === 'export_excel_job' ||
-      (name === 'generic_export' && (entityName === 'student' || entityName === 'students'))
+      (name === 'generic_export' &&
+        (entityName === 'student' || entityName === 'students'))
     ) {
       return this.studentExportProcessor.process(job);
     }
@@ -46,7 +52,10 @@ export class ImportExportProcessor {
     if (
       name === 'staff_export' ||
       name === 'export_staff' ||
-      (name === 'generic_export' && (entityName === 'staff' || entityName === 'schooluser' || entityName === 'users'))
+      (name === 'generic_export' &&
+        (entityName === 'staff' ||
+          entityName === 'schooluser' ||
+          entityName === 'users'))
     ) {
       return this.staffExportProcessor.process(job);
     }
@@ -55,11 +64,14 @@ export class ImportExportProcessor {
     if (
       name === 'class_export' ||
       name === 'export_class' ||
-      (name === 'generic_export' && (entityName === 'class' || entityName === 'classes'))
+      (name === 'generic_export' &&
+        (entityName === 'class' || entityName === 'classes'))
     ) {
       return this.classExportProcessor.process(job);
     }
 
-    throw new BadRequestException(`Unsupported job action '${name}' for entity '${entityName || 'unspecified'}' inside imports_exports worker queue.`);
+    throw new BadRequestException(
+      `Unsupported job action '${name}' for entity '${entityName || 'unspecified'}' inside imports_exports worker queue.`,
+    );
   }
 }

@@ -1,5 +1,20 @@
-import { Controller, Post, Get, Patch, Delete, Query, Body, Param, UseGuards } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import {
+  Controller,
+  Post,
+  Get,
+  Patch,
+  Delete,
+  Query,
+  Body,
+  Param,
+  UseGuards,
+} from '@nestjs/common';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import { StudentAdmissionsService } from '../../../../services/student/student-admissions.service';
 import { StudentAdmissionDto } from '../../../../interfaces/request/student/student-admission.dto';
 import { UpdateStudentDto } from '../../../../interfaces/request/student/update-student.dto';
@@ -9,7 +24,12 @@ import { FeatureGuard } from '../../../../shared/guards/feature.guard';
 import { PermissionGuard } from '../../../../shared/guards/permission.guard';
 import { Permission } from '../../../../shared/decorators/permission.decorator';
 import { Feature } from '../../../../shared/decorators/feature.decorator';
-import { ResourceEnum, ActionEnum, JobTypeEnum, ActionTypeEnum } from '../../../../models/enums/enums';
+import {
+  ResourceEnum,
+  ActionEnum,
+  JobTypeEnum,
+  ActionTypeEnum,
+} from '../../../../models/enums/enums';
 import { CurrentUser } from '../../../../shared/decorators/current-user.decorator';
 import { CurrentAcademicSession } from '../../../../shared/decorators/current-academic-session.decorator';
 import type { AuthContext } from '../../../../interfaces/auth-context.interface';
@@ -28,8 +48,8 @@ export class StudentAdmissionsController {
   ) {}
 
   @ApiOperation({ summary: 'Admit a new student to the school' })
-  @ApiResponse({ 
-    status: 201, 
+  @ApiResponse({
+    status: 201,
     description: 'Student admitted successfully',
     schema: {
       example: {
@@ -37,22 +57,24 @@ export class StudentAdmissionsController {
         studentCode: 'SCH-BLUE-2024-001',
         firstName: 'Amit',
         lastName: 'Kumar',
-        status: 'active'
-      }
-    }
+        status: 'active',
+      },
+    },
   })
   @Post('admissions')
   @Permission(ResourceEnum.STUDENTS, ActionEnum.CREATE)
-  @Feature('STUDENT_MANAGEMENT') 
+  @Feature('STUDENT_MANAGEMENT')
   async admitStudent(
     @CurrentUser() caller: AuthContext,
     @Param('schoolId') schoolId: string,
-    @Body() dto: StudentAdmissionDto
+    @Body() dto: StudentAdmissionDto,
   ) {
     return this.admissionsService.admitStudent(caller, schoolId, dto);
   }
 
-  @ApiOperation({ summary: 'Get all students (optionally class/section/academicSession wise)' })
+  @ApiOperation({
+    summary: 'Get all students (optionally class/section/academicSession wise)',
+  })
   @Get()
   @Permission(ResourceEnum.STUDENTS, ActionEnum.VIEW)
   @Feature('STUDENT_MANAGEMENT')
@@ -68,7 +90,14 @@ export class StudentAdmissionsController {
     @Query('limit') limit?: number,
   ) {
     const academicSessionId = querySessionId || sessionFromHeader || undefined;
-    return this.admissionsService.getStudents(caller, schoolId, { classId, sectionId, academicSessionId, search, page, limit });
+    return this.admissionsService.getStudents(caller, schoolId, {
+      classId,
+      sectionId,
+      academicSessionId,
+      search,
+      page,
+      limit,
+    });
   }
 
   @ApiOperation({ summary: 'Get student by ID' })
@@ -93,7 +122,12 @@ export class StudentAdmissionsController {
     @Param('studentId') studentId: string,
     @Body() dto: UpdateStudentDto,
   ) {
-    return this.admissionsService.updateStudent(caller, schoolId, studentId, dto);
+    return this.admissionsService.updateStudent(
+      caller,
+      schoolId,
+      studentId,
+      dto,
+    );
   }
 
   @ApiOperation({ summary: 'Bulk promote, demote, or repeat students' })
@@ -103,12 +137,18 @@ export class StudentAdmissionsController {
   async bulkProgress(
     @CurrentUser() caller: AuthContext,
     @Param('schoolId') schoolId: string,
-    @Body() dto: BulkProgressionDto
+    @Body() dto: BulkProgressionDto,
   ) {
     let jobType: JobTypeEnum;
-    if (dto.actionType === ActionTypeEnum.PROMOTION || dto.actionType === ActionTypeEnum.SPECIAL_PROMOTION) {
+    if (
+      dto.actionType === ActionTypeEnum.PROMOTION ||
+      dto.actionType === ActionTypeEnum.SPECIAL_PROMOTION
+    ) {
       jobType = JobTypeEnum.PROMOTION;
-    } else if (dto.actionType === ActionTypeEnum.DEMOTION || dto.actionType === ActionTypeEnum.REPEAT) {
+    } else if (
+      dto.actionType === ActionTypeEnum.DEMOTION ||
+      dto.actionType === ActionTypeEnum.REPEAT
+    ) {
       jobType = JobTypeEnum.DEMOTION;
     } else {
       jobType = JobTypeEnum.SECTION_TRANSFER;
@@ -143,7 +183,12 @@ export class StudentAdmissionsController {
     @Param('studentId') studentId: string,
     @Body() body: { profilePicUrl: string },
   ) {
-    return this.admissionsService.updateStudentPhoto(caller, schoolId, studentId, body.profilePicUrl);
+    return this.admissionsService.updateStudentPhoto(
+      caller,
+      schoolId,
+      studentId,
+      body.profilePicUrl,
+    );
   }
 
   @ApiOperation({ summary: 'Get student documents' })
@@ -155,7 +200,11 @@ export class StudentAdmissionsController {
     @Param('schoolId') schoolId: string,
     @Param('studentId') studentId: string,
   ) {
-    return this.admissionsService.getStudentDocuments(caller, schoolId, studentId);
+    return this.admissionsService.getStudentDocuments(
+      caller,
+      schoolId,
+      studentId,
+    );
   }
 
   @ApiOperation({ summary: 'Upload document for student' })
@@ -166,9 +215,15 @@ export class StudentAdmissionsController {
     @CurrentUser() caller: AuthContext,
     @Param('schoolId') schoolId: string,
     @Param('studentId') studentId: string,
-    @Body() body: { file: string; type: string; name?: string; originalName?: string },
+    @Body()
+    body: { file: string; type: string; name?: string; originalName?: string },
   ) {
-    return this.admissionsService.uploadStudentDocument(caller, schoolId, studentId, body);
+    return this.admissionsService.uploadStudentDocument(
+      caller,
+      schoolId,
+      studentId,
+      body,
+    );
   }
 
   @ApiOperation({ summary: 'Delete document for student' })
@@ -181,20 +236,30 @@ export class StudentAdmissionsController {
     @Param('studentId') studentId: string,
     @Param('documentId') documentId: string,
   ) {
-    return this.admissionsService.deleteStudentDocument(caller, schoolId, studentId, documentId);
+    return this.admissionsService.deleteStudentDocument(
+      caller,
+      schoolId,
+      studentId,
+      documentId,
+    );
   }
 
-  @ApiOperation({ summary: 'Seed sample students across all classes and sections for testing' })
+  @ApiOperation({
+    summary: 'Seed sample students across all classes and sections for testing',
+  })
   @Post('seed')
   @Permission(ResourceEnum.STUDENTS, ActionEnum.CREATE)
   @Feature('STUDENT_MANAGEMENT')
-  async seedStudents(
-    @Param('schoolId') schoolId: string,
-  ) {
-    return seedStudentsForSchool((this.admissionsService as any).dataSource, schoolId);
+  async seedStudents(@Param('schoolId') schoolId: string) {
+    return seedStudentsForSchool(
+      (this.admissionsService as any).dataSource,
+      schoolId,
+    );
   }
 
-  @ApiOperation({ summary: 'Queue bulk student CSV import via BullMQ Redis worker' })
+  @ApiOperation({
+    summary: 'Queue bulk student CSV import via BullMQ Redis worker',
+  })
   @Post('import-csv')
   @Permission(ResourceEnum.STUDENTS, ActionEnum.CREATE)
   @Feature('STUDENT_MANAGEMENT')
@@ -216,13 +281,16 @@ export class StudentAdmissionsController {
     });
 
     return {
-      message: 'Bulk student CSV import job successfully queued in background worker mode.',
+      message:
+        'Bulk student CSV import job successfully queued in background worker mode.',
       jobId: job.jobId,
       status: job.status,
     };
   }
 
-  @ApiOperation({ summary: 'Queue bulk student CSV export via BullMQ Redis worker' })
+  @ApiOperation({
+    summary: 'Queue bulk student CSV export via BullMQ Redis worker',
+  })
   @Post('export-csv')
   @Permission(ResourceEnum.STUDENTS, ActionEnum.VIEW)
   @Feature('STUDENT_MANAGEMENT')
@@ -248,7 +316,8 @@ export class StudentAdmissionsController {
     });
 
     return {
-      message: 'Bulk student CSV export job successfully queued in background worker mode.',
+      message:
+        'Bulk student CSV export job successfully queued in background worker mode.',
       jobId: job.jobId,
       status: job.status,
     };

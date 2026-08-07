@@ -99,7 +99,13 @@ export class FeeStructure {
   @Column({ name: 'expiry_date', type: 'date', nullable: true })
   expiryDate: string | null;
 
-  @Column({ name: 'total_amount', type: 'decimal', precision: 12, scale: 2, default: 0.00 })
+  @Column({
+    name: 'total_amount',
+    type: 'decimal',
+    precision: 12,
+    scale: 2,
+    default: 0.0,
+  })
   totalAmount: number;
 
   @Column({ type: 'varchar', default: 'ACTIVE' })
@@ -140,7 +146,7 @@ export class FeeStructureItem {
   @Column({ name: 'fee_head_id', type: 'bigint' })
   feeHeadId: string;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0.00 })
+  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0.0 })
   amount: number;
 
   @Column({ name: 'is_optional', type: 'boolean', default: false })
@@ -187,7 +193,11 @@ export class FeeAssignment {
   @Column({ name: 'section_id', type: 'bigint', nullable: true })
   sectionId: string | null;
 
-  @Column({ name: 'assigned_at', type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
+  @Column({
+    name: 'assigned_at',
+    type: 'timestamp',
+    default: () => 'CURRENT_TIMESTAMP',
+  })
   assignedAt: Date;
 
   @Column({ name: 'created_by', type: 'bigint', nullable: true })
@@ -272,7 +282,7 @@ export class FeeScheduleInstallment {
   @Column({ name: 'due_date', type: 'date' })
   dueDate: string;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0.00 })
+  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0.0 })
   amount: number;
 
   @Column({ name: 'created_by', type: 'bigint', nullable: true })
@@ -320,7 +330,7 @@ export class StudentFeeLedger {
   @Column({ name: 'entry_type', type: 'varchar' }) // TUITION_GENERATED | TRANSPORT | FINE | ADDITIONAL_CHARGE | PAYMENT | SCHOLARSHIP | DISCOUNT | CONCESSION
   entryType: string;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0.00 })
+  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0.0 })
   amount: number;
 
   @Column({ type: 'text', nullable: true })
@@ -365,7 +375,7 @@ export class FeePayment {
   @Column({ name: 'invoice_id', type: 'varchar', nullable: true })
   invoiceId: string | null;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0.00 })
+  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0.0 })
   amount: number;
 
   @Column({ name: 'payment_method', type: 'varchar', default: 'CASH' })
@@ -383,7 +393,11 @@ export class FeePayment {
   @Column({ type: 'text', nullable: true })
   remarks: string | null;
 
-  @Column({ name: 'paid_at', type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
+  @Column({
+    name: 'paid_at',
+    type: 'timestamp',
+    default: () => 'CURRENT_TIMESTAMP',
+  })
   paidAt: Date;
 
   @Column({ type: 'varchar', default: 'PAID' })
@@ -427,7 +441,7 @@ export class PaymentAllocation {
   @Column({ name: 'fee_structure_item_id', type: 'bigint', nullable: true })
   feeStructureItemId: string | null;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0.00 })
+  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0.0 })
   amount: number;
 
   @Column({ name: 'created_by', type: 'bigint', nullable: true })
@@ -471,7 +485,11 @@ export class FeeReceipt {
   @Column({ name: 'barcode_data', type: 'text', nullable: true })
   barcodeData: string | null;
 
-  @Column({ name: 'issued_at', type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
+  @Column({
+    name: 'issued_at',
+    type: 'timestamp',
+    default: () => 'CURRENT_TIMESTAMP',
+  })
   issuedAt: Date;
 
   @Column({ name: 'download_url', type: 'varchar', nullable: true })
@@ -515,7 +533,7 @@ export class ReceiptItem {
   @Column({ name: 'fee_head_name', type: 'varchar' })
   feeHeadName: string;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0.00 })
+  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0.0 })
   amount: number;
 
   @Column({ name: 'created_by', type: 'bigint', nullable: true })
@@ -562,7 +580,7 @@ export class Discount {
   @Column({ name: 'discount_type', type: 'varchar', default: 'FIXED' })
   discountType: string;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0.00 })
+  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0.0 })
   value: number;
 
   @Column({ type: 'text', nullable: true })
@@ -609,13 +627,17 @@ export class Scholarship {
   @Column({ type: 'varchar' })
   title: string;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0.00 })
+  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0.0 })
   amount: number;
 
   @Column({ name: 'approved_by', type: 'varchar', nullable: true })
   approvedBy: string | null;
 
-  @Column({ name: 'applied_at', type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
+  @Column({
+    name: 'applied_at',
+    type: 'timestamp',
+    default: () => 'CURRENT_TIMESTAMP',
+  })
   appliedAt: Date;
 
   @Column({ name: 'created_by', type: 'bigint', nullable: true })
@@ -656,13 +678,17 @@ export class Concession {
   @Column({ type: 'varchar' })
   reason: string;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0.00 })
+  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0.0 })
   amount: number;
 
   @Column({ name: 'approved_by', type: 'varchar', nullable: true })
   approvedBy: string | null;
 
-  @Column({ name: 'applied_at', type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
+  @Column({
+    name: 'applied_at',
+    type: 'timestamp',
+    default: () => 'CURRENT_TIMESTAMP',
+  })
   appliedAt: Date;
 
   @Column({ name: 'created_by', type: 'bigint', nullable: true })
@@ -697,13 +723,19 @@ export class Fine {
   @Column({ name: 'student_id', type: 'bigint' })
   studentId: string;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0.00 })
+  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0.0 })
   amount: number;
 
   @Column({ type: 'text', nullable: true })
   reason: string | null;
 
-  @Column({ name: 'waived_amount', type: 'decimal', precision: 12, scale: 2, default: 0.00 })
+  @Column({
+    name: 'waived_amount',
+    type: 'decimal',
+    precision: 12,
+    scale: 2,
+    default: 0.0,
+  })
   waivedAmount: number;
 
   @Column({ name: 'waived_by', type: 'varchar', nullable: true })
@@ -744,7 +776,7 @@ export class Refund {
   @Column({ name: 'payment_id', type: 'varchar' })
   paymentId: string;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0.00 })
+  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0.0 })
   amount: number;
 
   @Column({ type: 'text', nullable: true })
@@ -756,7 +788,11 @@ export class Refund {
   @Column({ name: 'authorized_by', type: 'varchar', nullable: true })
   authorizedBy: string | null;
 
-  @Column({ name: 'requested_at', type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
+  @Column({
+    name: 'requested_at',
+    type: 'timestamp',
+    default: () => 'CURRENT_TIMESTAMP',
+  })
   requestedAt: Date;
 
   @Column({ name: 'created_by', type: 'bigint', nullable: true })
@@ -791,7 +827,7 @@ export class AdvanceBalance {
   @Column({ name: 'student_id', type: 'bigint' })
   studentId: string;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0.00 })
+  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0.0 })
   amount: number;
 
   @Column({ name: 'created_by', type: 'bigint', nullable: true })
@@ -876,7 +912,11 @@ export class ReminderLog {
   @Column({ type: 'varchar', default: 'SENT' })
   status: string;
 
-  @Column({ name: 'sent_at', type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
+  @Column({
+    name: 'sent_at',
+    type: 'timestamp',
+    default: () => 'CURRENT_TIMESTAMP',
+  })
   sentAt: Date;
 
   @Column({ name: 'created_by', type: 'bigint', nullable: true })

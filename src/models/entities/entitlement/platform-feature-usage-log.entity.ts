@@ -8,32 +8,78 @@ import {
 
 @Entity({ name: 'platform_feature_usage_logs', schema: 'e_schooling' })
 export class PlatformFeatureUsageLog {
-  @PrimaryGeneratedColumn('increment', { type: 'bigint', comment: 'Primary key' })
+  @PrimaryGeneratedColumn('increment', {
+    type: 'bigint',
+    comment: 'Primary key',
+  })
   id: string;
 
   @Index()
-  @Column({ name: 'school_id', type: 'bigint', nullable: false, comment: 'Target school context consuming resource' })
+  @Column({
+    name: 'school_id',
+    type: 'bigint',
+    nullable: false,
+    comment: 'Target school context consuming resource',
+  })
   schoolId: string;
 
   @Index()
-  @Column({ name: 'platform_feature_id', type: 'bigint', nullable: false, comment: 'Target PlatformFeature reference' })
+  @Column({
+    name: 'platform_feature_id',
+    type: 'bigint',
+    nullable: false,
+    comment: 'Target PlatformFeature reference',
+  })
   platformFeatureId: string;
 
-  @Column({ name: 'usage_count', type: 'bigint', nullable: false, default: 1, comment: 'Units consumed in event tracking payload' })
+  @Column({
+    name: 'usage_count',
+    type: 'bigint',
+    nullable: false,
+    default: 1,
+    comment: 'Units consumed in event tracking payload',
+  })
   usageCount: string;
 
-  @Column({ name: 'usage_date', type: 'timestamp', nullable: false, default: () => 'CURRENT_TIMESTAMP', comment: 'Timestamp of consumption' })
+  @Column({
+    name: 'usage_date',
+    type: 'timestamp',
+    nullable: false,
+    default: () => 'CURRENT_TIMESTAMP',
+    comment: 'Timestamp of consumption',
+  })
   usageDate: Date;
 
-  @Column({ name: 'metadata', type: 'jsonb', nullable: true, comment: 'Event telemetry tracking details' })
+  @Column({
+    name: 'metadata',
+    type: 'jsonb',
+    nullable: true,
+    comment: 'Event telemetry tracking details',
+  })
   metadata: Record<string, any>;
 
-  @Column({ name: 'is_active', type: 'boolean', nullable: false, default: true, comment: 'Active status toggle' })
+  @Column({
+    name: 'is_active',
+    type: 'boolean',
+    nullable: false,
+    default: true,
+    comment: 'Active status toggle',
+  })
   isActive: boolean;
 
-  @Column({ name: 'is_delete', type: 'boolean', nullable: false, default: false, comment: 'Soft delete marker' })
+  @Column({
+    name: 'is_delete',
+    type: 'boolean',
+    nullable: false,
+    default: false,
+    comment: 'Soft delete marker',
+  })
   isDeleted: boolean;
 
-  @CreateDateColumn({ name: 'created_at', type: 'timestamp', comment: 'Creation log insertion timestamp' })
+  @CreateDateColumn({
+    name: 'created_at',
+    type: 'timestamp',
+    comment: 'Creation log insertion timestamp',
+  })
   createdAt: Date;
 }

@@ -418,36 +418,78 @@ export class AddFeeManagementTables1784832600000 implements MigrationInterface {
 
     // Create Indexes for isolated querying
     const tables = [
-      'fee_heads', 'fee_structures', 'fee_structure_items', 'fee_assignments',
-      'fee_schedules', 'fee_schedule_installments', 'student_fee_ledgers',
-      'fee_payments', 'payment_allocations', 'fee_receipts', 'receipt_items',
-      'discounts', 'scholarships', 'concessions', 'fines', 'refunds',
-      'advance_balances', 'reminder_templates', 'reminder_logs', 'fee_settings',
-      'fee_audit_logs'
+      'fee_heads',
+      'fee_structures',
+      'fee_structure_items',
+      'fee_assignments',
+      'fee_schedules',
+      'fee_schedule_installments',
+      'student_fee_ledgers',
+      'fee_payments',
+      'payment_allocations',
+      'fee_receipts',
+      'receipt_items',
+      'discounts',
+      'scholarships',
+      'concessions',
+      'fines',
+      'refunds',
+      'advance_balances',
+      'reminder_templates',
+      'reminder_logs',
+      'fee_settings',
+      'fee_audit_logs',
     ];
 
     for (const table of tables) {
-      await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_${table}_school_id" ON "e_schooling"."${table}" ("school_id");`);
-      await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_${table}_academic_session_id" ON "e_schooling"."${table}" ("academic_session_id");`);
+      await queryRunner.query(
+        `CREATE INDEX IF NOT EXISTS "IDX_${table}_school_id" ON "e_schooling"."${table}" ("school_id");`,
+      );
+      await queryRunner.query(
+        `CREATE INDEX IF NOT EXISTS "IDX_${table}_academic_session_id" ON "e_schooling"."${table}" ("academic_session_id");`,
+      );
     }
 
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_fee_structures_class_id" ON "e_schooling"."fee_structures" ("class_id");`);
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_student_fee_ledgers_student_id" ON "e_schooling"."student_fee_ledgers" ("student_id");`);
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_fee_payments_student_id" ON "e_schooling"."fee_payments" ("student_id");`);
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "IDX_fee_structures_class_id" ON "e_schooling"."fee_structures" ("class_id");`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "IDX_student_fee_ledgers_student_id" ON "e_schooling"."student_fee_ledgers" ("student_id");`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "IDX_fee_payments_student_id" ON "e_schooling"."fee_payments" ("student_id");`,
+    );
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
     const tables = [
-      'fee_audit_logs', 'fee_settings', 'reminder_logs', 'reminder_templates',
-      'advance_balances', 'refunds', 'fines', 'concessions', 'scholarships',
-      'discounts', 'receipt_items', 'fee_receipts', 'payment_allocations',
-      'fee_payments', 'student_fee_ledgers', 'fee_schedule_installments',
-      'fee_schedules', 'fee_assignments', 'fee_structure_items',
-      'fee_structures', 'fee_heads'
+      'fee_audit_logs',
+      'fee_settings',
+      'reminder_logs',
+      'reminder_templates',
+      'advance_balances',
+      'refunds',
+      'fines',
+      'concessions',
+      'scholarships',
+      'discounts',
+      'receipt_items',
+      'fee_receipts',
+      'payment_allocations',
+      'fee_payments',
+      'student_fee_ledgers',
+      'fee_schedule_installments',
+      'fee_schedules',
+      'fee_assignments',
+      'fee_structure_items',
+      'fee_structures',
+      'fee_heads',
     ];
 
     for (const table of tables) {
-      await queryRunner.query(`DROP TABLE IF EXISTS "e_schooling"."${table}" CASCADE;`);
+      await queryRunner.query(
+        `DROP TABLE IF EXISTS "e_schooling"."${table}" CASCADE;`,
+      );
     }
   }
 }

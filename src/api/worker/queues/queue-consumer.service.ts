@@ -1,4 +1,9 @@
-import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleInit,
+  OnModuleDestroy,
+} from '@nestjs/common';
 import { Worker, Job } from 'bullmq';
 import { DataSource } from 'typeorm';
 import { Config } from '../../../config/index';
@@ -27,17 +32,21 @@ export class QueueConsumerService implements OnModuleInit, OnModuleDestroy {
     private readonly paymentReconciliationProcessor: PaymentReconciliationProcessor,
     private readonly studentProgressionProcessor: StudentProgressionProcessor,
     private readonly queueProducerService: QueueProducerService,
-  ) { }
+  ) {}
 
   async onModuleInit() {
     const serverMode = Config.getSecret('SERVER_MODE', String) || 'rest';
 
     if (serverMode !== 'worker') {
-      this.logger.log('[QueueConsumerService] Running in API Mode. Skipping background worker boots.');
+      this.logger.log(
+        '[QueueConsumerService] Running in API Mode. Skipping background worker boots.',
+      );
       return;
     }
 
-    this.logger.log('[QueueConsumerService] Booting in worker mode... Initializing BullMQ queues and workers.');
+    this.logger.log(
+      '[QueueConsumerService] Booting in worker mode... Initializing BullMQ queues and workers.',
+    );
 
     // 1. Initialize Notification Queue Worker
     this.createWorker(QueueNames.NOTIFICATIONS, async (job) => {
@@ -64,7 +73,9 @@ export class QueueConsumerService implements OnModuleInit, OnModuleDestroy {
 
     // 5. Register the Repeatable Payment Reconciliation Cron Task: Runs every 2 hours
     try {
-      this.logger.log('[QueueConsumerService] Scheduling payment reconciliation task to execute every 2 hours...');
+      this.logger.log(
+        '[QueueConsumerService] Scheduling payment reconciliation task to execute every 2 hours...',
+      );
       await this.queueProducerService.addJob({
         queueName: QueueNames.CLEANUP,
         jobType: JobTypeEnum.PAYMENT_RECONCILIATION,
@@ -73,14 +84,19 @@ export class QueueConsumerService implements OnModuleInit, OnModuleDestroy {
       });
     } catch (err: unknown) {
       const errorObj = err as Error;
-      this.logger.error(`[QueueConsumerService] Failed to schedule payment reconciliation task: ${errorObj.message}`);
+      this.logger.error(
+        `[QueueConsumerService] Failed to schedule payment reconciliation task: ${errorObj.message}`,
+      );
     }
   }
 
   /**
    * Universal helper to instantiate a BullMQ worker with database status listeners hooked in
    */
-  private createWorker(queueName: string, processCallback: (job: Job) => Promise<unknown>): void {
+  private createWorker(
+    queueName: string,
+    processCallback: (job: Job) => Promise<unknown>,
+  ): void {
     const connection = this.redisConnectionService.getConnection();
 
     const worker = new Worker(queueName, processCallback, {
@@ -91,7 +107,9 @@ export class QueueConsumerService implements OnModuleInit, OnModuleDestroy {
     // Event Hook: Active / Processing Started
     worker.on('active', async (job) => {
       const jobId = job.id;
-      this.logger.log(`[Queue: ${queueName}] Job ${jobId} status transitioned to ACTIVE`);
+      this.logger.log(
+        `[Queue: ${queueName}] Job ${jobId} status transitioned to ACTIVE`,
+      );
 
       await this.updateJobInDB(jobId!, {
         status: JobStatusEnum.ACTIVE,
@@ -104,7 +122,9 @@ export class QueueConsumerService implements OnModuleInit, OnModuleDestroy {
     worker.on('progress', async (job, progress: number | object) => {
       const jobId = job.id;
       const progressValue = typeof progress === 'number' ? progress : 0;
-      this.logger.debug(`[Queue: ${queueName}] Job ${jobId} updated progress: ${progressValue}%`);
+      this.logger.debug(
+        `[Queue: ${queueName}] Job ${jobId} updated progress: ${progressValue}%`,
+      );
 
       await this.updateJobInDB(jobId!, {
         progress: progressValue,
@@ -114,27 +134,39 @@ export class QueueConsumerService implements OnModuleInit, OnModuleDestroy {
     // Event Hook: Completed Successfully
     worker.on('completed', async (job, result) => {
       const jobId = job.id;
-      this.logger.log(`[Queue: ${queueName}] Job ${jobId} COMPLETED successfully!`);
+      this.logger.log(
+        `[Queue: ${queueName}] Job ${jobId} COMPLETED successfully!`,
+      );
 
       await this.updateJobInDB(jobId!, {
         status: JobStatusEnum.COMPLETED,
         progress: 100,
         completedAt: new Date(),
-        response: typeof result === 'object' ? result as Record<string, unknown> : { result },
+        response:
+          typeof result === 'object'
+            ? (result as Record<string, unknown>)
+            : { result },
       });
     });
 
     // Event Hook: Failed
     worker.on('failed', async (job, err) => {
       const jobId = job?.id || 'unknown';
-      this.logger.error(`[Queue: ${queueName}] Job ${jobId} FAILED: ${err.message}`, err.stack);
+      this.logger.error(
+        `[Queue: ${queueName}] Job ${jobId} FAILED: ${err.message}`,
+        err.stack,
+      );
 
       if (job) {
         const isRetrying = job.attemptsMade < (job.opts.attempts || 3);
         await this.updateJobInDB(jobId, {
           status: isRetrying ? JobStatusEnum.RETRYING : JobStatusEnum.FAILED,
           failedAt: new Date(),
-          error: { message: err.message, stack: err.stack, attemptsMade: job.attemptsMade },
+          error: {
+            message: err.message,
+            stack: err.stack,
+            attemptsMade: job.attemptsMade,
+          },
         });
       }
     });
@@ -142,7 +174,10 @@ export class QueueConsumerService implements OnModuleInit, OnModuleDestroy {
     this.workersList.push(worker);
   }
 
-  private async updateJobInDB(jobId: string, data: Partial<BackGroundJob>): Promise<void> {
+  private async updateJobInDB(
+    jobId: string,
+    data: Partial<BackGroundJob>,
+  ): Promise<void> {
     try {
       const dbJobRepo = this.dataSource.getRepository(BackGroundJob);
       const job = await dbJobRepo.findOne({ where: { jobId } });
@@ -152,7 +187,9 @@ export class QueueConsumerService implements OnModuleInit, OnModuleDestroy {
       }
     } catch (err: unknown) {
       const errorObj = err as Error;
-      this.logger.error(`Failed to update DB audit ledger for JobId ${jobId}: ${errorObj.message}`);
+      this.logger.error(
+        `Failed to update DB audit ledger for JobId ${jobId}: ${errorObj.message}`,
+      );
     }
   }
 

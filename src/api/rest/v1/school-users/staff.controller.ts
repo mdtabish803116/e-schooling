@@ -31,40 +31,46 @@ export class StaffController {
   private getSchoolId(headers: any, caller: AuthContext): string {
     const schoolId = headers['x-school-id'] || caller.schoolId;
     if (!schoolId) {
-      throw new BadRequestException('schoolId must be specified in headers or token');
+      throw new BadRequestException(
+        'schoolId must be specified in headers or token',
+      );
     }
     return String(schoolId);
   }
 
   @ApiOperation({ summary: 'List all staff in the school context' })
   @Get()
-  async listStaff(
-    @Headers() headers: any,
-    @CurrentUser() caller: AuthContext,
-  ) {
+  async listStaff(@Headers() headers: any, @CurrentUser() caller: AuthContext) {
     const schoolId = this.getSchoolId(headers, caller);
     const users = await this.dataSource.getRepository(SchoolUser).find({
       where: { schoolId, isDeleted: false },
       order: { createdAt: 'DESC' },
     });
 
-    const userIds = users.map(u => u.id);
-    const profiles = userIds.length > 0 
-      ? await this.dataSource.getRepository(SchoolUserProfile).find({
-          where: { schoolUserId: typeof userIds[0] === 'string' ? users.map(u => u.id) as any : users.map(u => u.id) as any }
-        })
-      : [];
+    const userIds = users.map((u) => u.id);
+    const profiles =
+      userIds.length > 0
+        ? await this.dataSource.getRepository(SchoolUserProfile).find({
+            where: {
+              schoolUserId:
+                typeof userIds[0] === 'string'
+                  ? (users.map((u) => u.id) as any)
+                  : (users.map((u) => u.id) as any),
+            },
+          })
+        : [];
 
-    const profilesMap = new Map(profiles.map(p => [p.schoolUserId, p]));
+    const profilesMap = new Map(profiles.map((p) => [p.schoolUserId, p]));
 
-    return users.map(user => {
+    return users.map((user) => {
       const profile = profilesMap.get(user.id);
       return {
         id: user.id,
         schoolId: user.schoolId,
         employeeCode: `EMP-STF-${user.id}`,
         firstName: profile?.firstName || user.name?.split(' ')[0] || '',
-        lastName: profile?.lastName || user.name?.split(' ').slice(1).join(' ') || '',
+        lastName:
+          profile?.lastName || user.name?.split(' ').slice(1).join(' ') || '',
         email: profile?.email || '',
         mobile: user.phone || '',
         photoUrl: profile?.profilePicUrl || undefined,
@@ -77,10 +83,12 @@ export class StaffController {
         documents: profile?.documents || [],
         assignedClasses: profile?.assignedClasses || [],
         assignedSubjects: profile?.assignedSubjects || [],
-        credentials: user.username ? {
-          username: user.username,
-          status: user.isActive ? 'ACTIVE' : 'LOCKED'
-        } : undefined
+        credentials: user.username
+          ? {
+              username: user.username,
+              status: user.isActive ? 'ACTIVE' : 'LOCKED',
+            }
+          : undefined,
       };
     });
   }
@@ -94,13 +102,15 @@ export class StaffController {
   ) {
     const schoolId = this.getSchoolId(headers, caller);
     const user = await this.dataSource.getRepository(SchoolUser).findOne({
-      where: { id: staffId, schoolId, isDeleted: false }
+      where: { id: staffId, schoolId, isDeleted: false },
     });
     if (!user) throw new NotFoundException('Staff member not found');
 
-    let profile = await this.dataSource.getRepository(SchoolUserProfile).findOne({
-      where: { schoolUserId: staffId }
-    });
+    let profile = await this.dataSource
+      .getRepository(SchoolUserProfile)
+      .findOne({
+        where: { schoolUserId: staffId },
+      });
 
     if (!profile) {
       profile = new SchoolUserProfile();
@@ -118,7 +128,8 @@ export class StaffController {
       schoolId: user.schoolId,
       employeeCode: `EMP-STF-${user.id}`,
       firstName: profile?.firstName || user.name?.split(' ')[0] || '',
-      lastName: profile?.lastName || user.name?.split(' ').slice(1).join(' ') || '',
+      lastName:
+        profile?.lastName || user.name?.split(' ').slice(1).join(' ') || '',
       email: profile?.email || '',
       mobile: user.phone || '',
       photoUrl: profile?.profilePicUrl || undefined,
@@ -131,10 +142,12 @@ export class StaffController {
       documents: profile?.documents || [],
       assignedClasses: profile?.assignedClasses || [],
       assignedSubjects: profile?.assignedSubjects || [],
-      credentials: user.username ? {
-        username: user.username,
-        status: user.isActive ? 'ACTIVE' : 'LOCKED'
-      } : undefined
+      credentials: user.username
+        ? {
+            username: user.username,
+            status: user.isActive ? 'ACTIVE' : 'LOCKED',
+          }
+        : undefined,
     };
   }
 
@@ -149,18 +162,21 @@ export class StaffController {
 
     const user = new SchoolUser();
     user.schoolId = schoolId;
-    user.schoolOwnerId = caller.actorType === 'school_owner' ? caller.id : (null as any);
+    user.schoolOwnerId =
+      caller.actorType === 'school_owner' ? caller.id : (null as any);
     user.name = `${body.firstName} ${body.lastName}`;
     user.phone = body.mobile;
-    
-    const isAcademic = ['teacher', 'instructor', 'principal', 'hod'].some(keyword => 
-      body.designation?.toLowerCase().includes(keyword)
+
+    const isAcademic = ['teacher', 'instructor', 'principal', 'hod'].some(
+      (keyword) => body.designation?.toLowerCase().includes(keyword),
     );
     user.userType = isAcademic ? ('academic' as any) : ('non_academic' as any);
     user.isActive = true;
     user.createdById = caller.id;
 
-    const savedUser = await this.dataSource.getRepository(SchoolUser).save(user);
+    const savedUser = await this.dataSource
+      .getRepository(SchoolUser)
+      .save(user);
 
     const profile = new SchoolUserProfile();
     profile.schoolUserId = savedUser.id;
@@ -176,7 +192,9 @@ export class StaffController {
     profile.assignedClasses = [];
     profile.assignedSubjects = [];
 
-    const savedProfile = await this.dataSource.getRepository(SchoolUserProfile).save(profile);
+    const savedProfile = await this.dataSource
+      .getRepository(SchoolUserProfile)
+      .save(profile);
 
     return {
       id: savedUser.id,
@@ -208,14 +226,20 @@ export class StaffController {
   ) {
     const schoolId = this.getSchoolId(headers, caller);
     const user = await this.dataSource.getRepository(SchoolUser).findOne({
-      where: { id: staffId, schoolId, isDeleted: false }
+      where: { id: staffId, schoolId, isDeleted: false },
     });
     if (!user) throw new NotFoundException('Staff member not found');
 
     if (body.firstName !== undefined || body.lastName !== undefined) {
-      const profile = await this.dataSource.getRepository(SchoolUserProfile).findOne({ where: { schoolUserId: staffId } });
-      const first = body.firstName !== undefined ? body.firstName : (profile?.firstName || '');
-      const last = body.lastName !== undefined ? body.lastName : (profile?.lastName || '');
+      const profile = await this.dataSource
+        .getRepository(SchoolUserProfile)
+        .findOne({ where: { schoolUserId: staffId } });
+      const first =
+        body.firstName !== undefined
+          ? body.firstName
+          : profile?.firstName || '';
+      const last =
+        body.lastName !== undefined ? body.lastName : profile?.lastName || '';
       user.name = `${first} ${last}`.trim();
     }
     if (body.mobile !== undefined) user.phone = body.mobile;
@@ -223,9 +247,11 @@ export class StaffController {
 
     await this.dataSource.getRepository(SchoolUser).save(user);
 
-    let profile = await this.dataSource.getRepository(SchoolUserProfile).findOne({
-      where: { schoolUserId: staffId }
-    });
+    let profile = await this.dataSource
+      .getRepository(SchoolUserProfile)
+      .findOne({
+        where: { schoolUserId: staffId },
+      });
 
     if (!profile) {
       profile = new SchoolUserProfile();
@@ -233,9 +259,18 @@ export class StaffController {
     }
 
     const fields = [
-      'firstName', 'lastName', 'email', 'designation', 'joiningDate', 'departmentName',
-      'qualifications', 'experience', 'documents', 'assignedClasses', 'assignedSubjects',
-      'profilePicUrl'
+      'firstName',
+      'lastName',
+      'email',
+      'designation',
+      'joiningDate',
+      'departmentName',
+      'qualifications',
+      'experience',
+      'documents',
+      'assignedClasses',
+      'assignedSubjects',
+      'profilePicUrl',
     ];
     for (const f of fields) {
       if (body[f] !== undefined) {
@@ -243,7 +278,9 @@ export class StaffController {
       }
     }
 
-    const savedProfile = await this.dataSource.getRepository(SchoolUserProfile).save(profile);
+    const savedProfile = await this.dataSource
+      .getRepository(SchoolUserProfile)
+      .save(profile);
 
     return {
       id: user.id,
@@ -276,7 +313,7 @@ export class StaffController {
   ) {
     const schoolId = this.getSchoolId(headers, caller);
     const user = await this.dataSource.getRepository(SchoolUser).findOne({
-      where: { id: staffId, schoolId, isDeleted: false }
+      where: { id: staffId, schoolId, isDeleted: false },
     });
     if (!user) throw new NotFoundException('Staff member not found');
 
@@ -294,11 +331,13 @@ export class StaffController {
   ) {
     const schoolId = this.getSchoolId(headers, caller);
     const user = await this.dataSource.getRepository(SchoolUser).findOne({
-      where: { id: staffId, schoolId, isDeleted: false }
+      where: { id: staffId, schoolId, isDeleted: false },
     });
     if (!user) throw new NotFoundException('Staff member not found');
 
-    const profile = await this.dataSource.getRepository(SchoolUserProfile).findOne({ where: { schoolUserId: staffId } });
+    const profile = await this.dataSource
+      .getRepository(SchoolUserProfile)
+      .findOne({ where: { schoolUserId: staffId } });
     if (!profile) throw new NotFoundException('Profile details not found');
 
     const qualifications = profile.qualifications || [];
@@ -319,11 +358,13 @@ export class StaffController {
   ) {
     const schoolId = this.getSchoolId(headers, caller);
     const user = await this.dataSource.getRepository(SchoolUser).findOne({
-      where: { id: staffId, schoolId, isDeleted: false }
+      where: { id: staffId, schoolId, isDeleted: false },
     });
     if (!user) throw new NotFoundException('Staff member not found');
 
-    const profile = await this.dataSource.getRepository(SchoolUserProfile).findOne({ where: { schoolUserId: staffId } });
+    const profile = await this.dataSource
+      .getRepository(SchoolUserProfile)
+      .findOne({ where: { schoolUserId: staffId } });
     if (!profile) throw new NotFoundException('Profile details not found');
 
     const experience = profile.experience || [];
@@ -344,11 +385,13 @@ export class StaffController {
   ) {
     const schoolId = this.getSchoolId(headers, caller);
     const user = await this.dataSource.getRepository(SchoolUser).findOne({
-      where: { id: staffId, schoolId, isDeleted: false }
+      where: { id: staffId, schoolId, isDeleted: false },
     });
     if (!user) throw new NotFoundException('Staff member not found');
 
-    const profile = await this.dataSource.getRepository(SchoolUserProfile).findOne({ where: { schoolUserId: staffId } });
+    const profile = await this.dataSource
+      .getRepository(SchoolUserProfile)
+      .findOne({ where: { schoolUserId: staffId } });
     if (!profile) throw new NotFoundException('Profile details not found');
 
     const assignedClasses = profile.assignedClasses || [];
@@ -369,11 +412,13 @@ export class StaffController {
   ) {
     const schoolId = this.getSchoolId(headers, caller);
     const user = await this.dataSource.getRepository(SchoolUser).findOne({
-      where: { id: staffId, schoolId, isDeleted: false }
+      where: { id: staffId, schoolId, isDeleted: false },
     });
     if (!user) throw new NotFoundException('Staff member not found');
 
-    const profile = await this.dataSource.getRepository(SchoolUserProfile).findOne({ where: { schoolUserId: staffId } });
+    const profile = await this.dataSource
+      .getRepository(SchoolUserProfile)
+      .findOne({ where: { schoolUserId: staffId } });
     if (!profile) throw new NotFoundException('Profile details not found');
 
     const assignedSubjects = profile.assignedSubjects || [];
@@ -394,11 +439,13 @@ export class StaffController {
   ) {
     const schoolId = this.getSchoolId(headers, caller);
     const user = await this.dataSource.getRepository(SchoolUser).findOne({
-      where: { id: staffId, schoolId, isDeleted: false }
+      where: { id: staffId, schoolId, isDeleted: false },
     });
     if (!user) throw new NotFoundException('Staff member not found');
 
-    const profile = await this.dataSource.getRepository(SchoolUserProfile).findOne({ where: { schoolUserId: staffId } });
+    const profile = await this.dataSource
+      .getRepository(SchoolUserProfile)
+      .findOne({ where: { schoolUserId: staffId } });
     if (!profile) throw new NotFoundException('Profile details not found');
 
     const documents = profile.documents || [];
@@ -428,11 +475,13 @@ export class StaffController {
   ) {
     const schoolId = this.getSchoolId(headers, caller);
     const user = await this.dataSource.getRepository(SchoolUser).findOne({
-      where: { id: staffId, schoolId, isDeleted: false }
+      where: { id: staffId, schoolId, isDeleted: false },
     });
     if (!user) throw new NotFoundException('Staff member not found');
 
-    const profile = await this.dataSource.getRepository(SchoolUserProfile).findOne({ where: { schoolUserId: staffId } });
+    const profile = await this.dataSource
+      .getRepository(SchoolUserProfile)
+      .findOne({ where: { schoolUserId: staffId } });
     if (!profile) throw new NotFoundException('Profile details not found');
 
     const documents = profile.documents || [];

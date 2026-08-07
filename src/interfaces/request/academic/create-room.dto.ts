@@ -1,4 +1,11 @@
-import { IsString, IsNotEmpty, IsOptional, IsInt, Min, IsArray } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  IsInt,
+  Min,
+  IsArray,
+} from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateRoomDto {
@@ -30,7 +37,11 @@ export class CreateRoomDto {
   @IsOptional()
   equipment?: string[];
 
-  @ApiProperty({ example: '1', required: false, description: 'Academic Session ID' })
+  @ApiProperty({
+    example: '1',
+    required: false,
+    description: 'Academic Session ID',
+  })
   @IsString()
   @IsOptional()
   academicSessionId?: string;

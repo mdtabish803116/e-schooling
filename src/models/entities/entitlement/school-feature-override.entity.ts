@@ -10,15 +10,28 @@ import { OverrideTypeEnum, FeatureBillingCycleEnum } from '../../enums/enums';
 
 @Entity({ name: 'school_feature_overrides', schema: 'e_schooling' })
 export class SchoolFeatureOverride {
-  @PrimaryGeneratedColumn('increment', { type: 'bigint', comment: 'Primary key' })
+  @PrimaryGeneratedColumn('increment', {
+    type: 'bigint',
+    comment: 'Primary key',
+  })
   id: string;
 
   @Index()
-  @Column({ name: 'school_id', type: 'bigint', nullable: false, comment: 'Target School branch context' })
+  @Column({
+    name: 'school_id',
+    type: 'bigint',
+    nullable: false,
+    comment: 'Target School branch context',
+  })
   schoolId: string;
 
   @Index()
-  @Column({ name: 'platform_feature_id', type: 'bigint', nullable: false, comment: 'Target PlatformFeature reference' })
+  @Column({
+    name: 'platform_feature_id',
+    type: 'bigint',
+    nullable: false,
+    comment: 'Target PlatformFeature reference',
+  })
   platformFeatureId: string;
 
   @Column({
@@ -29,10 +42,23 @@ export class SchoolFeatureOverride {
   })
   overrideType: OverrideTypeEnum;
 
-  @Column({ name: 'is_enabled', type: 'boolean', nullable: false, default: true, comment: 'Feature toggle override state' })
+  @Column({
+    name: 'is_enabled',
+    type: 'boolean',
+    nullable: false,
+    default: true,
+    comment: 'Feature toggle override state',
+  })
   isEnabled: boolean;
 
-  @Column({ name: 'custom_price', type: 'decimal', precision: 12, scale: 2, nullable: true, comment: 'Custom enterprise price mapping' })
+  @Column({
+    name: 'custom_price',
+    type: 'decimal',
+    precision: 12,
+    scale: 2,
+    nullable: true,
+    comment: 'Custom enterprise price mapping',
+  })
   customPrice: number | null;
 
   @Column({
@@ -43,31 +69,76 @@ export class SchoolFeatureOverride {
   })
   billingCycle: FeatureBillingCycleEnum | null;
 
-  @Column({ name: 'limit_value', type: 'bigint', nullable: true, comment: 'Tenant custom cap overriding global plan' })
+  @Column({
+    name: 'limit_value',
+    type: 'bigint',
+    nullable: true,
+    comment: 'Tenant custom cap overriding global plan',
+  })
   limitValue: string | null;
 
-  @Column({ name: 'start_date', type: 'timestamp', nullable: true, comment: 'Custom access boundary activation' })
+  @Column({
+    name: 'start_date',
+    type: 'timestamp',
+    nullable: true,
+    comment: 'Custom access boundary activation',
+  })
   startDate: Date | null;
 
-  @Column({ name: 'end_date', type: 'timestamp', nullable: true, comment: 'Custom access expiration. Null signifies endless' })
+  @Column({
+    name: 'end_date',
+    type: 'timestamp',
+    nullable: true,
+    comment: 'Custom access expiration. Null signifies endless',
+  })
   endDate: Date | null;
 
-  @Column({ name: 'remarks', type: 'text', nullable: true, comment: 'Administrative approval context notes' })
+  @Column({
+    name: 'remarks',
+    type: 'text',
+    nullable: true,
+    comment: 'Administrative approval context notes',
+  })
   remarks: string;
 
   @Index()
-  @Column({ name: 'created_by', type: 'bigint', nullable: true, comment: 'Platform user ID who enacted override' })
+  @Column({
+    name: 'created_by',
+    type: 'bigint',
+    nullable: true,
+    comment: 'Platform user ID who enacted override',
+  })
   createdBy: string;
 
-  @Column({ name: 'is_active', type: 'boolean', nullable: false, default: true, comment: 'Active status toggle' })
+  @Column({
+    name: 'is_active',
+    type: 'boolean',
+    nullable: false,
+    default: true,
+    comment: 'Active status toggle',
+  })
   isActive: boolean;
 
-  @Column({ name: 'is_delete', type: 'boolean', nullable: false, default: false, comment: 'Soft delete marker' })
+  @Column({
+    name: 'is_delete',
+    type: 'boolean',
+    nullable: false,
+    default: false,
+    comment: 'Soft delete marker',
+  })
   isDeleted: boolean;
 
-  @CreateDateColumn({ name: 'created_at', type: 'timestamp', comment: 'Creation timestamp' })
+  @CreateDateColumn({
+    name: 'created_at',
+    type: 'timestamp',
+    comment: 'Creation timestamp',
+  })
   createdAt: Date;
 
-  @UpdateDateColumn({ name: 'updated_at', type: 'timestamp', comment: 'Last update timestamp' })
+  @UpdateDateColumn({
+    name: 'updated_at',
+    type: 'timestamp',
+    comment: 'Last update timestamp',
+  })
   updatedAt: Date;
 }

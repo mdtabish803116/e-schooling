@@ -13,26 +13,40 @@ export class InitiateOrderDto {
   @IsString()
   planId?: string;
 
-  @ApiProperty({ enum: BillingCycleEnum, example: BillingCycleEnum.MONTHLY, description: 'Required if planId is provided' })
+  @ApiProperty({
+    enum: BillingCycleEnum,
+    example: BillingCycleEnum.MONTHLY,
+    description: 'Required if planId is provided',
+  })
   @IsOptional()
   @IsEnum(BillingCycleEnum)
   billingCycle?: BillingCycleEnum;
 
-  @ApiProperty({ enum: AddonTypeEnum, example: AddonTypeEnum.STUDENT_BOOSTER_MEDIUM, description: 'Optional: Addon/Booster type (Capacity)' })
+  @ApiProperty({
+    enum: AddonTypeEnum,
+    example: AddonTypeEnum.STUDENT_BOOSTER_MEDIUM,
+    description: 'Optional: Addon/Booster type (Capacity)',
+  })
   @IsOptional()
   @IsEnum(AddonTypeEnum)
   addonType?: AddonTypeEnum;
 
-  @ApiProperty({ example: '5', description: 'Optional: Specific Feature ID for a-la-carte subscription' })
+  @ApiProperty({
+    example: '5',
+    description: 'Optional: Specific Feature ID for a-la-carte subscription',
+  })
   @IsOptional()
   @IsString()
   featureId?: string;
 
-  @ApiProperty({ enum: BillingCycleEnum, example: BillingCycleEnum.MONTHLY, description: 'Billing cycle for the specific feature' })
+  @ApiProperty({
+    enum: BillingCycleEnum,
+    example: BillingCycleEnum.MONTHLY,
+    description: 'Billing cycle for the specific feature',
+  })
   @IsOptional()
   @IsEnum(BillingCycleEnum)
   featureBillingCycle?: BillingCycleEnum;
-
 }
 
 export class VerifyPaymentDto {

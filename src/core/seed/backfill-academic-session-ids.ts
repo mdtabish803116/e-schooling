@@ -20,11 +20,13 @@ async function updateSessionIds() {
     'student_subjects',
   ];
 
-  console.log('🔄 Backfilling academic_session_id = 1 for all existing NULL records...');
+  console.log(
+    '🔄 Backfilling academic_session_id = 1 for all existing NULL records...',
+  );
 
   for (const table of tables) {
     const res = await dataSource.query(
-      `UPDATE "e_schooling"."${table}" SET "academic_session_id" = 1 WHERE "academic_session_id" IS NULL;`
+      `UPDATE "e_schooling"."${table}" SET "academic_session_id" = 1 WHERE "academic_session_id" IS NULL;`,
     );
     console.log(`✅ Updated table "e_schooling"."${table}"`);
   }

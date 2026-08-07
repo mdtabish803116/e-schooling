@@ -26,7 +26,10 @@ export class FeesController {
     @Param('schoolId') schoolId: string,
     @CurrentAcademicSession() sessionFromHeader: string | null,
   ) {
-    return this.feesService.getFeeWorkspace(schoolId, sessionFromHeader || undefined);
+    return this.feesService.getFeeWorkspace(
+      schoolId,
+      sessionFromHeader || undefined,
+    );
   }
 
   @ApiOperation({ summary: 'Get all fee structures' })
@@ -35,7 +38,10 @@ export class FeesController {
     @Param('schoolId') schoolId: string,
     @CurrentAcademicSession() sessionFromHeader: string | null,
   ) {
-    return this.feesService.getFeeStructures(schoolId, sessionFromHeader || undefined);
+    return this.feesService.getFeeStructures(
+      schoolId,
+      sessionFromHeader || undefined,
+    );
   }
 
   @ApiOperation({ summary: 'Create a fee structure' })
@@ -45,7 +51,11 @@ export class FeesController {
     @CurrentAcademicSession() sessionFromHeader: string | null,
     @Body() payload: any,
   ) {
-    return this.feesService.createFeeStructure(schoolId, sessionFromHeader || undefined, payload);
+    return this.feesService.createFeeStructure(
+      schoolId,
+      sessionFromHeader || undefined,
+      payload,
+    );
   }
 
   @ApiOperation({ summary: 'Update a fee structure' })
@@ -73,7 +83,10 @@ export class FeesController {
     @Param('schoolId') schoolId: string,
     @CurrentAcademicSession() sessionFromHeader: string | null,
   ) {
-    return this.feesService.getFeeCategories(schoolId, sessionFromHeader || undefined);
+    return this.feesService.getFeeCategories(
+      schoolId,
+      sessionFromHeader || undefined,
+    );
   }
 
   @ApiOperation({ summary: 'Create a fee category / head' })
@@ -83,7 +96,11 @@ export class FeesController {
     @CurrentAcademicSession() sessionFromHeader: string | null,
     @Body() payload: any,
   ) {
-    return this.feesService.createFeeCategory(schoolId, sessionFromHeader || undefined, payload);
+    return this.feesService.createFeeCategory(
+      schoolId,
+      sessionFromHeader || undefined,
+      payload,
+    );
   }
 
   @ApiOperation({ summary: 'Assign fee structure to student' })
@@ -93,7 +110,11 @@ export class FeesController {
     @CurrentAcademicSession() sessionFromHeader: string | null,
     @Body() payload: any,
   ) {
-    return this.feesService.assignFeesToStudents(schoolId, sessionFromHeader || undefined, payload);
+    return this.feesService.assignFeesToStudents(
+      schoolId,
+      sessionFromHeader || undefined,
+      payload,
+    );
   }
 
   @ApiOperation({ summary: 'Get student fee invoice ledger history' })
@@ -103,8 +124,13 @@ export class FeesController {
     @Param('studentId') studentId: string,
     @CurrentAcademicSession() sessionFromHeader: string | null,
   ) {
-    const workspace = await this.feesService.getFeeWorkspace(schoolId, sessionFromHeader || undefined);
-    const invoices = workspace.invoices.filter((inv: any) => inv.studentId === studentId);
+    const workspace = await this.feesService.getFeeWorkspace(
+      schoolId,
+      sessionFromHeader || undefined,
+    );
+    const invoices = workspace.invoices.filter(
+      (inv: any) => inv.studentId === studentId,
+    );
     return invoices.map((inv: any) => ({
       id: `sf-${inv.id}`,
       studentId: inv.studentId,
@@ -131,8 +157,13 @@ export class FeesController {
     @Param('studentId') studentId: string,
     @CurrentAcademicSession() sessionFromHeader: string | null,
   ) {
-    const workspace = await this.feesService.getFeeWorkspace(schoolId, sessionFromHeader || undefined);
-    const invoices = workspace.invoices.filter((inv: any) => inv.studentId === studentId && inv.outstandingAmount > 0);
+    const workspace = await this.feesService.getFeeWorkspace(
+      schoolId,
+      sessionFromHeader || undefined,
+    );
+    const invoices = workspace.invoices.filter(
+      (inv: any) => inv.studentId === studentId && inv.outstandingAmount > 0,
+    );
     return invoices.map((inv: any) => ({
       id: `sf-${inv.id}`,
       studentId: inv.studentId,
@@ -159,7 +190,11 @@ export class FeesController {
     @CurrentAcademicSession() sessionFromHeader: string | null,
     @Body() payload: any,
   ) {
-    return this.feesService.collectPayment(schoolId, sessionFromHeader || undefined, payload);
+    return this.feesService.collectPayment(
+      schoolId,
+      sessionFromHeader || undefined,
+      payload,
+    );
   }
 
   @ApiOperation({ summary: 'Initiate online payment order creation' })
@@ -169,7 +204,11 @@ export class FeesController {
     @CurrentAcademicSession() sessionFromHeader: string | null,
     @Body() payload: any,
   ) {
-    return this.feesService.initiateOnlinePayment(schoolId, sessionFromHeader || undefined, payload);
+    return this.feesService.initiateOnlinePayment(
+      schoolId,
+      sessionFromHeader || undefined,
+      payload,
+    );
   }
 
   @ApiOperation({ summary: 'Get payment details' })
@@ -188,9 +227,22 @@ export class FeesController {
     @CurrentAcademicSession() sessionFromHeader: string | null,
     @Body('paymentId') paymentId: string,
   ) {
-    const workspace = await this.feesService.getFeeWorkspace(schoolId, sessionFromHeader || undefined);
-    const match = workspace.receipts.find((r: any) => r.paymentId === paymentId);
-    return match || { id: 'mock', receiptNumber: 'RCPT-ERR', studentName: '', amount: 0, issuedAt: new Date().toISOString() };
+    const workspace = await this.feesService.getFeeWorkspace(
+      schoolId,
+      sessionFromHeader || undefined,
+    );
+    const match = workspace.receipts.find(
+      (r: any) => r.paymentId === paymentId,
+    );
+    return (
+      match || {
+        id: 'mock',
+        receiptNumber: 'RCPT-ERR',
+        studentName: '',
+        amount: 0,
+        issuedAt: new Date().toISOString(),
+      }
+    );
   }
 
   @ApiOperation({ summary: 'Get receipt details' })
@@ -200,7 +252,9 @@ export class FeesController {
     @Param('receiptId') receiptId: string,
   ) {
     const workspace = await this.feesService.getFeeWorkspace(schoolId);
-    const match = workspace.receipts.find((r: any) => r.id === receiptId || r.receiptNumber === receiptId);
+    const match = workspace.receipts.find(
+      (r: any) => r.id === receiptId || r.receiptNumber === receiptId,
+    );
     return match || null;
   }
 
@@ -211,7 +265,11 @@ export class FeesController {
     @CurrentAcademicSession() sessionFromHeader: string | null,
     @Body() payload: any,
   ) {
-    return this.feesService.createRefund(schoolId, sessionFromHeader || undefined, payload);
+    return this.feesService.createRefund(
+      schoolId,
+      sessionFromHeader || undefined,
+      payload,
+    );
   }
 
   @ApiOperation({ summary: 'Apply discount/concession' })
@@ -221,7 +279,11 @@ export class FeesController {
     @CurrentAcademicSession() sessionFromHeader: string | null,
     @Body() payload: any,
   ) {
-    return this.feesService.applyConcession(schoolId, sessionFromHeader || undefined, payload);
+    return this.feesService.applyConcession(
+      schoolId,
+      sessionFromHeader || undefined,
+      payload,
+    );
   }
 
   @ApiOperation({ summary: 'Apply scholarship' })
@@ -231,14 +293,25 @@ export class FeesController {
     @CurrentAcademicSession() sessionFromHeader: string | null,
     @Body() payload: any,
   ) {
-    return this.feesService.applyScholarship(schoolId, sessionFromHeader || undefined, payload);
+    return this.feesService.applyScholarship(
+      schoolId,
+      sessionFromHeader || undefined,
+      payload,
+    );
   }
 
   @ApiOperation({ summary: 'Get standard late fee rules' })
   @Get('fees/late-rules')
   async getLateFeeRules(@Param('schoolId') schoolId: string) {
     return [
-      { id: 'rule-standard', name: 'Standard fine rule', graceDays: 5, amountPerDay: 50, maxAmount: 1000, isActive: true },
+      {
+        id: 'rule-standard',
+        name: 'Standard fine rule',
+        graceDays: 5,
+        amountPerDay: 50,
+        maxAmount: 1000,
+        isActive: true,
+      },
     ];
   }
 
@@ -248,7 +321,10 @@ export class FeesController {
     @Param('schoolId') schoolId: string,
     @CurrentAcademicSession() sessionFromHeader: string | null,
   ) {
-    return this.feesService.getFeeReports(schoolId, sessionFromHeader || undefined);
+    return this.feesService.getFeeReports(
+      schoolId,
+      sessionFromHeader || undefined,
+    );
   }
 
   @ApiOperation({ summary: 'Get analytics summary' })
@@ -257,7 +333,10 @@ export class FeesController {
     @Param('schoolId') schoolId: string,
     @CurrentAcademicSession() sessionFromHeader: string | null,
   ) {
-    return this.feesService.getFeeAnalytics(schoolId, sessionFromHeader || undefined);
+    return this.feesService.getFeeAnalytics(
+      schoolId,
+      sessionFromHeader || undefined,
+    );
   }
 
   @ApiOperation({ summary: 'Send due reminders' })
@@ -266,7 +345,10 @@ export class FeesController {
     @Param('schoolId') schoolId: string,
     @CurrentAcademicSession() sessionFromHeader: string | null,
   ) {
-    return this.feesService.sendDueReminders(schoolId, sessionFromHeader || undefined);
+    return this.feesService.sendDueReminders(
+      schoolId,
+      sessionFromHeader || undefined,
+    );
   }
 
   @ApiOperation({ summary: 'Get fee system settings' })
@@ -275,7 +357,10 @@ export class FeesController {
     @Param('schoolId') schoolId: string,
     @CurrentAcademicSession() sessionFromHeader: string | null,
   ) {
-    return this.feesService.getFeeSettings(schoolId, sessionFromHeader || undefined);
+    return this.feesService.getFeeSettings(
+      schoolId,
+      sessionFromHeader || undefined,
+    );
   }
 
   @ApiOperation({ summary: 'Update fee system settings' })
@@ -285,6 +370,10 @@ export class FeesController {
     @CurrentAcademicSession() sessionFromHeader: string | null,
     @Body() payload: any,
   ) {
-    return this.feesService.updateFeeSettings(schoolId, sessionFromHeader || undefined, payload);
+    return this.feesService.updateFeeSettings(
+      schoolId,
+      sessionFromHeader || undefined,
+      payload,
+    );
   }
 }

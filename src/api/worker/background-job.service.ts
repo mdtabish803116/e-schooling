@@ -14,7 +14,7 @@ export class BackgroundJobService {
     private readonly dataSource: DataSource,
     private readonly queueProducerService: QueueProducerService,
     private readonly redisConnectionService: RedisConnectionService,
-  ) { }
+  ) {}
 
   /**
    * Adds an immediate execution job
@@ -69,9 +69,13 @@ export class BackgroundJobService {
    * Fetches job state from DB audit ledger
    */
   async getJobStatus(jobId: string): Promise<BackGroundJob> {
-    const job = await this.dataSource.getRepository(BackGroundJob).findOne({ where: { jobId } });
+    const job = await this.dataSource
+      .getRepository(BackGroundJob)
+      .findOne({ where: { jobId } });
     if (!job) {
-      throw new NotFoundException(`Background Job record ${jobId} not found in system.`);
+      throw new NotFoundException(
+        `Background Job record ${jobId} not found in system.`,
+      );
     }
     return job;
   }
@@ -91,7 +95,9 @@ export class BackgroundJobService {
     const bullJob = await queue.getJob(jobId);
     if (bullJob) {
       await bullJob.remove();
-      this.logger.log(`Removed Job ${jobId} from Redis queue: ${job.queueName}`);
+      this.logger.log(
+        `Removed Job ${jobId} from Redis queue: ${job.queueName}`,
+      );
     }
 
     job.status = JobStatusEnum.CANCELLED;
@@ -108,11 +114,18 @@ export class BackgroundJobService {
     const job = await dbJobRepo.findOne({ where: { jobId } });
     if (!job) throw new NotFoundException(`Job ${jobId} not found.`);
 
-    if (job.status !== JobStatusEnum.FAILED && job.status !== JobStatusEnum.CANCELLED) {
-      throw new Error(`Only FAILED or CANCELLED jobs can be retried. Current status: ${job.status}`);
+    if (
+      job.status !== JobStatusEnum.FAILED &&
+      job.status !== JobStatusEnum.CANCELLED
+    ) {
+      throw new Error(
+        `Only FAILED or CANCELLED jobs can be retried. Current status: ${job.status}`,
+      );
     }
 
-    this.logger.log(`Re-queueing Job ${jobId} (Type: ${job.jobType}) on queue ${job.queueName}`);
+    this.logger.log(
+      `Re-queueing Job ${jobId} (Type: ${job.jobType}) on queue ${job.queueName}`,
+    );
 
     // Update job to pending again and retry
     job.status = JobStatusEnum.PENDING;

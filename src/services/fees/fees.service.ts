@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { DataSource, Repository } from 'typeorm';
 import {
   FeeHead,
@@ -62,10 +66,13 @@ export class FeesService {
     this.feeStructureItemRepo = this.dataSource.getRepository(FeeStructureItem);
     this.feeAssignmentRepo = this.dataSource.getRepository(FeeAssignment);
     this.feeScheduleRepo = this.dataSource.getRepository(FeeSchedule);
-    this.feeScheduleInstallmentRepo = this.dataSource.getRepository(FeeScheduleInstallment);
+    this.feeScheduleInstallmentRepo = this.dataSource.getRepository(
+      FeeScheduleInstallment,
+    );
     this.studentFeeLedgerRepo = this.dataSource.getRepository(StudentFeeLedger);
     this.feePaymentRepo = this.dataSource.getRepository(FeePayment);
-    this.paymentAllocationRepo = this.dataSource.getRepository(PaymentAllocation);
+    this.paymentAllocationRepo =
+      this.dataSource.getRepository(PaymentAllocation);
     this.feeReceiptRepo = this.dataSource.getRepository(FeeReceipt);
     this.receiptItemRepo = this.dataSource.getRepository(ReceiptItem);
     this.discountRepo = this.dataSource.getRepository(Discount);
@@ -84,15 +91,24 @@ export class FeesService {
     this.sessionRepo = this.dataSource.getRepository(AcademicSession);
   }
 
-  private async resolveSessionId(schoolId: string, academicSessionId?: string): Promise<string> {
-    if (academicSessionId && academicSessionId !== 'undefined' && academicSessionId !== 'null') {
+  private async resolveSessionId(
+    schoolId: string,
+    academicSessionId?: string,
+  ): Promise<string> {
+    if (
+      academicSessionId &&
+      academicSessionId !== 'undefined' &&
+      academicSessionId !== 'null'
+    ) {
       return academicSessionId;
     }
     const currentSession = await this.sessionRepo.findOne({
       where: { schoolId, isCurrent: true, isActive: true },
     });
     if (!currentSession) {
-      throw new BadRequestException('No active academic session resolved for this school.');
+      throw new BadRequestException(
+        'No active academic session resolved for this school.',
+      );
     }
     return currentSession.id;
   }
@@ -116,7 +132,10 @@ export class FeesService {
   }
 
   // --- Fee Categories / Heads ---
-  async getFeeCategories(schoolId: string, academicSessionId?: string): Promise<FeeHead[]> {
+  async getFeeCategories(
+    schoolId: string,
+    academicSessionId?: string,
+  ): Promise<FeeHead[]> {
     const sessId = await this.resolveSessionId(schoolId, academicSessionId);
     return this.feeHeadRepo.find({
       where: { schoolId, academicSessionId: sessId },
@@ -144,12 +163,22 @@ export class FeesService {
     newHead.displayOrder = 0;
 
     const saved = await this.feeHeadRepo.save(newHead);
-    await this.writeAuditLog(schoolId, sessId, 'CATEGORY_CREATE', 'fee_heads', saved.id, payload);
+    await this.writeAuditLog(
+      schoolId,
+      sessId,
+      'CATEGORY_CREATE',
+      'fee_heads',
+      saved.id,
+      payload,
+    );
     return saved;
   }
 
   // --- Fee Structures ---
-  async getFeeStructures(schoolId: string, academicSessionId?: string): Promise<any[]> {
+  async getFeeStructures(
+    schoolId: string,
+    academicSessionId?: string,
+  ): Promise<any[]> {
     const sessId = await this.resolveSessionId(schoolId, academicSessionId);
     const structures = await this.feeStructureRepo.find({
       where: { schoolId, academicSessionId: sessId },
@@ -165,14 +194,18 @@ export class FeesService {
         where: { feeStructureId: struct.id, schoolId },
         order: { dueDate: 'ASC' },
       });
-      
-      const classObj = struct.classId ? await this.classRepo.findOne({ where: { id: struct.classId } }) : null;
+
+      const classObj = struct.classId
+        ? await this.classRepo.findOne({ where: { id: struct.classId } })
+        : null;
 
       enriched.push({
         id: struct.id,
         schoolId: struct.schoolId,
         academicYearId: sessId,
-        academicYearName: struct.name.includes('202') ? struct.name.match(/202\d-\d+/)?.[0] || '2026-27' : '2026-27',
+        academicYearName: struct.name.includes('202')
+          ? struct.name.match(/202\d-\d+/)?.[0] || '2026-27'
+          : '2026-27',
         name: struct.name,
         classId: struct.classId,
         className: classObj ? classObj.name : 'All Classes',
@@ -252,7 +285,9 @@ export class FeesService {
     schedule.academicSessionId = sessId;
     schedule.feeStructureId = savedStruct.id;
     schedule.scheduleType = payload.planType;
-    schedule.dueDate = new Date(new Date().setMonth(new Date().getMonth() + 1)).toISOString().split('T')[0];
+    schedule.dueDate = new Date(new Date().setMonth(new Date().getMonth() + 1))
+      .toISOString()
+      .split('T')[0];
     await this.feeScheduleRepo.save(schedule);
 
     const instCount = Math.max(payload.installmentCount || 1, 1);
@@ -277,11 +312,26 @@ export class FeesService {
       installments.push(await this.feeScheduleInstallmentRepo.save(inst));
     }
 
-    await this.writeAuditLog(schoolId, sessId, 'STRUCTURE_CREATE', 'fee_structures', savedStruct.id, payload);
+    await this.writeAuditLog(
+      schoolId,
+      sessId,
+      'STRUCTURE_CREATE',
+      'fee_structures',
+      savedStruct.id,
+      payload,
+    );
 
     return {
       ...savedStruct,
-      heads: [{ id: item.id, categoryId: defaultHead.id, name: defaultHead.name, amount: payload.totalAmount, isOptional: false }],
+      heads: [
+        {
+          id: item.id,
+          categoryId: defaultHead.id,
+          name: defaultHead.name,
+          amount: payload.totalAmount,
+          isOptional: false,
+        },
+      ],
       installments,
     };
   }
@@ -291,19 +341,30 @@ export class FeesService {
     id: string,
     payload: any,
   ): Promise<any> {
-    const struct = await this.feeStructureRepo.findOne({ where: { id, schoolId } });
+    const struct = await this.feeStructureRepo.findOne({
+      where: { id, schoolId },
+    });
     if (!struct) throw new NotFoundException('Fee structure not found');
 
     if (payload.name) struct.name = payload.name;
     if (payload.status) struct.status = payload.status;
     const saved = await this.feeStructureRepo.save(struct);
 
-    await this.writeAuditLog(schoolId, struct.academicSessionId, 'STRUCTURE_UPDATE', 'fee_structures', id, payload);
+    await this.writeAuditLog(
+      schoolId,
+      struct.academicSessionId,
+      'STRUCTURE_UPDATE',
+      'fee_structures',
+      id,
+      payload,
+    );
     return saved;
   }
 
   async deleteFeeStructure(schoolId: string, id: string): Promise<boolean> {
-    const struct = await this.feeStructureRepo.findOne({ where: { id, schoolId } });
+    const struct = await this.feeStructureRepo.findOne({
+      where: { id, schoolId },
+    });
     if (!struct) throw new NotFoundException('Fee structure not found');
 
     // Business Rule check: Prevent deleting fee structures that have student assignments
@@ -311,11 +372,20 @@ export class FeesService {
       where: { feeStructureId: id, schoolId },
     });
     if (assignmentsCount > 0) {
-      throw new BadRequestException('Cannot delete fee structure that is currently assigned to students.');
+      throw new BadRequestException(
+        'Cannot delete fee structure that is currently assigned to students.',
+      );
     }
 
     await this.feeStructureRepo.softRemove(struct);
-    await this.writeAuditLog(schoolId, struct.academicSessionId, 'STRUCTURE_DELETE', 'fee_structures', id, null);
+    await this.writeAuditLog(
+      schoolId,
+      struct.academicSessionId,
+      'STRUCTURE_DELETE',
+      'fee_structures',
+      id,
+      null,
+    );
     return true;
   }
 
@@ -326,7 +396,9 @@ export class FeesService {
     payload: { structureId: string; studentIds: string[] },
   ): Promise<any[]> {
     const sessId = await this.resolveSessionId(schoolId, academicSessionId);
-    const structure = await this.feeStructureRepo.findOne({ where: { id: payload.structureId, schoolId } });
+    const structure = await this.feeStructureRepo.findOne({
+      where: { id: payload.structureId, schoolId },
+    });
     if (!structure) throw new NotFoundException('Fee structure not found');
 
     const createdInvoices: any[] = [];
@@ -342,8 +414,12 @@ export class FeesService {
       await this.feeAssignmentRepo.save(assignment);
 
       // Resolve student info
-      const student = await this.studentRepo.findOne({ where: { id: studentId } });
-      const studentName = student ? `${student.firstName} ${student.lastName}`.trim() : `Student ${studentId}`;
+      const student = await this.studentRepo.findOne({
+        where: { id: studentId },
+      });
+      const studentName = student
+        ? `${student.firstName} ${student.lastName}`.trim()
+        : `Student ${studentId}`;
       const studentCode = student ? student.studentCode : `STU${studentId}`;
 
       // 2. Generate Debit Ledger entry
@@ -361,7 +437,11 @@ export class FeesService {
       // Generate invoice number
       const currentYear = new Date().getFullYear();
       const count = await this.studentFeeLedgerRepo.count({
-        where: { schoolId, transactionType: 'DEBIT', entryType: 'TUITION_GENERATED' },
+        where: {
+          schoolId,
+          transactionType: 'DEBIT',
+          entryType: 'TUITION_GENERATED',
+        },
       });
       const invoiceNumber = `INV-${currentYear}-${String(count + 1).padStart(5, '0')}`;
 
@@ -380,7 +460,9 @@ export class FeesService {
         invoiceNumber,
         academicYearName: '2026-27',
         issueDate: new Date().toISOString().split('T')[0],
-        dueDate: new Date(new Date().setDate(new Date().getDate() + 30)).toISOString().split('T')[0],
+        dueDate: new Date(new Date().setDate(new Date().getDate() + 30))
+          .toISOString()
+          .split('T')[0],
         totalAmount: Number(structure.totalAmount),
         paidAmount: 0,
         concessionAmount: 0,
@@ -391,7 +473,14 @@ export class FeesService {
       });
     }
 
-    await this.writeAuditLog(schoolId, sessId, 'FEES_ASSIGN', 'fee_assignments', payload.structureId, payload);
+    await this.writeAuditLog(
+      schoolId,
+      sessId,
+      'FEES_ASSIGN',
+      'fee_assignments',
+      payload.structureId,
+      payload,
+    );
     return createdInvoices;
   }
 
@@ -410,17 +499,21 @@ export class FeesService {
     const sessId = await this.resolveSessionId(schoolId, academicSessionId);
 
     if (payload.amount <= 0) {
-      throw new BadRequestException('Payment amount must be greater than zero.');
+      throw new BadRequestException(
+        'Payment amount must be greater than zero.',
+      );
     }
 
     const ledgerDebit = await this.studentFeeLedgerRepo.findOne({
       where: { id: payload.invoiceId, schoolId },
     });
-    if (!ledgerDebit) throw new NotFoundException('Invoice/ledger debit entry not found.');
+    if (!ledgerDebit)
+      throw new NotFoundException('Invoice/ledger debit entry not found.');
 
     const invoices = await this.compileInvoices(schoolId, sessId);
     const match = invoices.find((inv) => inv.id === payload.invoiceId);
-    if (!match) throw new NotFoundException('Resolved invoice details not found.');
+    if (!match)
+      throw new NotFoundException('Resolved invoice details not found.');
 
     if (payload.amount > match.outstandingAmount) {
       const excess = payload.amount - match.outstandingAmount;
@@ -437,7 +530,9 @@ export class FeesService {
     }
 
     const currentYear = new Date().getFullYear();
-    const countReceipts = await this.feeReceiptRepo.count({ where: { schoolId } });
+    const countReceipts = await this.feeReceiptRepo.count({
+      where: { schoolId },
+    });
     const receiptNumber = `RCPT-${currentYear}-${String(countReceipts + 1).padStart(5, '0')}`;
 
     // Create payment entry
@@ -481,7 +576,14 @@ export class FeesService {
     creditLedger.referenceId = savedPayment.id;
     await this.studentFeeLedgerRepo.save(creditLedger);
 
-    await this.writeAuditLog(schoolId, sessId, 'PAYMENT_COLLECT', 'fee_payments', savedPayment.id, payload);
+    await this.writeAuditLog(
+      schoolId,
+      sessId,
+      'PAYMENT_COLLECT',
+      'fee_payments',
+      savedPayment.id,
+      payload,
+    );
 
     return {
       success: true,
@@ -495,7 +597,11 @@ export class FeesService {
   }
 
   // --- Initiate Online Payment ---
-  async initiateOnlinePayment(schoolId: string, academicSessionId: string | undefined, payload: any): Promise<any> {
+  async initiateOnlinePayment(
+    schoolId: string,
+    academicSessionId: string | undefined,
+    payload: any,
+  ): Promise<any> {
     const sessId = await this.resolveSessionId(schoolId, academicSessionId);
     return {
       orderId: `order-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
@@ -510,10 +616,18 @@ export class FeesService {
   async applyConcession(
     schoolId: string,
     academicSessionId: string | undefined,
-    payload: { invoiceId: string; studentId: string; amount: number; reason: string; approvedBy: string },
+    payload: {
+      invoiceId: string;
+      studentId: string;
+      amount: number;
+      reason: string;
+      approvedBy: string;
+    },
   ): Promise<Concession> {
     const sessId = await this.resolveSessionId(schoolId, academicSessionId);
-    const ledgerDebit = await this.studentFeeLedgerRepo.findOne({ where: { id: payload.invoiceId, schoolId } });
+    const ledgerDebit = await this.studentFeeLedgerRepo.findOne({
+      where: { id: payload.invoiceId, schoolId },
+    });
     if (!ledgerDebit) throw new NotFoundException('Invoice not found');
 
     const concession = new Concession();
@@ -541,17 +655,32 @@ export class FeesService {
     creditLedger.referenceId = saved.id;
     await this.studentFeeLedgerRepo.save(creditLedger);
 
-    await this.writeAuditLog(schoolId, sessId, 'CONCESSION_APPLY', 'concessions', saved.id, payload);
+    await this.writeAuditLog(
+      schoolId,
+      sessId,
+      'CONCESSION_APPLY',
+      'concessions',
+      saved.id,
+      payload,
+    );
     return saved;
   }
 
   async applyScholarship(
     schoolId: string,
     academicSessionId: string | undefined,
-    payload: { invoiceId: string; studentId: string; amount: number; title: string; approvedBy: string },
+    payload: {
+      invoiceId: string;
+      studentId: string;
+      amount: number;
+      title: string;
+      approvedBy: string;
+    },
   ): Promise<Scholarship> {
     const sessId = await this.resolveSessionId(schoolId, academicSessionId);
-    const ledgerDebit = await this.studentFeeLedgerRepo.findOne({ where: { id: payload.invoiceId, schoolId } });
+    const ledgerDebit = await this.studentFeeLedgerRepo.findOne({
+      where: { id: payload.invoiceId, schoolId },
+    });
     if (!ledgerDebit) throw new NotFoundException('Invoice not found');
 
     const scholarship = new Scholarship();
@@ -578,7 +707,14 @@ export class FeesService {
     creditLedger.referenceId = saved.id;
     await this.studentFeeLedgerRepo.save(creditLedger);
 
-    await this.writeAuditLog(schoolId, sessId, 'SCHOLARSHIP_APPLY', 'scholarships', saved.id, payload);
+    await this.writeAuditLog(
+      schoolId,
+      sessId,
+      'SCHOLARSHIP_APPLY',
+      'scholarships',
+      saved.id,
+      payload,
+    );
     return saved;
   }
 
@@ -586,14 +722,23 @@ export class FeesService {
   async createRefund(
     schoolId: string,
     academicSessionId: string | undefined,
-    payload: { paymentId: string; amount: number; reason: string; authorizedBy: string },
+    payload: {
+      paymentId: string;
+      amount: number;
+      reason: string;
+      authorizedBy: string;
+    },
   ): Promise<Refund> {
     const sessId = await this.resolveSessionId(schoolId, academicSessionId);
-    const payment = await this.feePaymentRepo.findOne({ where: { id: payload.paymentId, schoolId } });
+    const payment = await this.feePaymentRepo.findOne({
+      where: { id: payload.paymentId, schoolId },
+    });
     if (!payment) throw new NotFoundException('Payment not found');
 
     if (payload.amount > Number(payment.amount)) {
-      throw new BadRequestException('Refund amount cannot exceed payment amount.');
+      throw new BadRequestException(
+        'Refund amount cannot exceed payment amount.',
+      );
     }
 
     const refund = new Refund();
@@ -607,7 +752,9 @@ export class FeesService {
     refund.requestedAt = new Date();
     const saved = await this.refundRepo.save(refund);
 
-    const ledgerDebit = await this.studentFeeLedgerRepo.findOne({ where: { id: payment.invoiceId || undefined } });
+    const ledgerDebit = await this.studentFeeLedgerRepo.findOne({
+      where: { id: payment.invoiceId || undefined },
+    });
 
     const refundDebit = new StudentFeeLedger();
     refundDebit.schoolId = schoolId;
@@ -622,12 +769,22 @@ export class FeesService {
     refundDebit.referenceId = saved.id;
     await this.studentFeeLedgerRepo.save(refundDebit);
 
-    await this.writeAuditLog(schoolId, sessId, 'REFUND_CREATE', 'refunds', saved.id, payload);
+    await this.writeAuditLog(
+      schoolId,
+      sessId,
+      'REFUND_CREATE',
+      'refunds',
+      saved.id,
+      payload,
+    );
     return saved;
   }
 
   // --- Due Reminders ---
-  async sendDueReminders(schoolId: string, academicSessionId?: string): Promise<any[]> {
+  async sendDueReminders(
+    schoolId: string,
+    academicSessionId?: string,
+  ): Promise<any[]> {
     const sessId = await this.resolveSessionId(schoolId, academicSessionId);
     const invoices = await this.compileInvoices(schoolId, sessId);
     const outstanding = invoices.filter((inv) => inv.outstandingAmount > 0);
@@ -650,41 +807,68 @@ export class FeesService {
   }
 
   // --- Dynamic Invoice Compilation ---
-  private async compileInvoices(schoolId: string, academicSessionId: string): Promise<any[]> {
+  private async compileInvoices(
+    schoolId: string,
+    academicSessionId: string,
+  ): Promise<any[]> {
     const debits = await this.studentFeeLedgerRepo.find({
-      where: { schoolId, academicSessionId, transactionType: 'DEBIT', entryType: 'TUITION_GENERATED' },
+      where: {
+        schoolId,
+        academicSessionId,
+        transactionType: 'DEBIT',
+        entryType: 'TUITION_GENERATED',
+      },
       order: { createdAt: 'DESC' },
     });
 
-    const session = await this.sessionRepo.findOne({ where: { id: academicSessionId } });
+    const session = await this.sessionRepo.findOne({
+      where: { id: academicSessionId },
+    });
     const academicYearName = session ? session.name : '2026-27';
 
     const list: any[] = [];
     for (const d of debits) {
-      const student = await this.studentRepo.findOne({ where: { id: d.studentId } });
-      const studentName = student ? `${student.firstName} ${student.lastName}`.trim() : `Student ${d.studentId}`;
+      const student = await this.studentRepo.findOne({
+        where: { id: d.studentId },
+      });
+      const studentName = student
+        ? `${student.firstName} ${student.lastName}`.trim()
+        : `Student ${d.studentId}`;
       const studentCode = student ? student.studentCode : `STU${d.studentId}`;
 
       const structure = d.feeStructureId
-        ? await this.feeStructureRepo.findOne({ where: { id: d.feeStructureId } })
+        ? await this.feeStructureRepo.findOne({
+            where: { id: d.feeStructureId },
+          })
         : null;
 
       let className = 'General';
       if (structure && structure.classId) {
-        const cls = await this.classRepo.findOne({ where: { id: structure.classId } });
+        const cls = await this.classRepo.findOne({
+          where: { id: structure.classId },
+        });
         if (cls) className = cls.name;
       }
 
       const schedule = d.feeStructureId
-        ? await this.feeScheduleRepo.findOne({ where: { feeStructureId: d.feeStructureId } })
+        ? await this.feeScheduleRepo.findOne({
+            where: { feeStructureId: d.feeStructureId },
+          })
         : null;
 
       const dueDateStr = schedule
         ? schedule.dueDate
-        : new Date(d.createdAt.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+        : new Date(d.createdAt.getTime() + 30 * 24 * 60 * 60 * 1000)
+            .toISOString()
+            .split('T')[0];
 
       const related = await this.studentFeeLedgerRepo.find({
-        where: { schoolId, academicSessionId, studentId: d.studentId, invoiceNumber: d.invoiceNumber || undefined },
+        where: {
+          schoolId,
+          academicSessionId,
+          studentId: d.studentId,
+          invoiceNumber: d.invoiceNumber || undefined,
+        },
       });
 
       let totalAmount = Number(d.amount);
@@ -697,16 +881,27 @@ export class FeesService {
         if (r.id === d.id) continue;
         if (r.transactionType === 'CREDIT') {
           if (r.entryType === 'PAYMENT') paidAmount += Number(r.amount);
-          if (r.entryType === 'CONCESSION') concessionAmount += Number(r.amount);
-          if (r.entryType === 'SCHOLARSHIP') scholarshipAmount += Number(r.amount);
+          if (r.entryType === 'CONCESSION')
+            concessionAmount += Number(r.amount);
+          if (r.entryType === 'SCHOLARSHIP')
+            scholarshipAmount += Number(r.amount);
         } else if (r.transactionType === 'DEBIT') {
           if (r.entryType === 'FINE') fineAmount += Number(r.amount);
-          if (r.entryType === 'ADDITIONAL_CHARGE') totalAmount += Number(r.amount);
+          if (r.entryType === 'ADDITIONAL_CHARGE')
+            totalAmount += Number(r.amount);
         }
       }
 
-      const outstandingAmount = Math.max(totalAmount + fineAmount - concessionAmount - scholarshipAmount - paidAmount, 0);
-      const isOverdue = outstandingAmount > 0 && new Date(dueDateStr) < new Date();
+      const outstandingAmount = Math.max(
+        totalAmount +
+          fineAmount -
+          concessionAmount -
+          scholarshipAmount -
+          paidAmount,
+        0,
+      );
+      const isOverdue =
+        outstandingAmount > 0 && new Date(dueDateStr) < new Date();
 
       list.push({
         id: d.id,
@@ -726,7 +921,14 @@ export class FeesService {
         scholarshipAmount,
         fineAmount,
         outstandingAmount,
-        status: outstandingAmount <= 0 ? 'PAID' : isOverdue ? 'OVERDUE' : paidAmount > 0 ? 'PARTIAL' : 'PENDING',
+        status:
+          outstandingAmount <= 0
+            ? 'PAID'
+            : isOverdue
+              ? 'OVERDUE'
+              : paidAmount > 0
+                ? 'PARTIAL'
+                : 'PENDING',
       });
     }
 
@@ -734,19 +936,43 @@ export class FeesService {
   }
 
   // --- Reports & Analytics ---
-  async getFeeAnalytics(schoolId: string, academicSessionId?: string): Promise<any> {
+  async getFeeAnalytics(
+    schoolId: string,
+    academicSessionId?: string,
+  ): Promise<any> {
     const sessId = await this.resolveSessionId(schoolId, academicSessionId);
     const invoices = await this.compileInvoices(schoolId, sessId);
-    const payments = await this.feePaymentRepo.find({ where: { schoolId, academicSessionId: sessId } });
-    const refunds = await this.refundRepo.find({ where: { schoolId, academicSessionId: sessId } });
-    const concessions = await this.concessionRepo.find({ where: { schoolId, academicSessionId: sessId } });
-    const scholarships = await this.scholarshipRepo.find({ where: { schoolId, academicSessionId: sessId } });
+    const payments = await this.feePaymentRepo.find({
+      where: { schoolId, academicSessionId: sessId },
+    });
+    const refunds = await this.refundRepo.find({
+      where: { schoolId, academicSessionId: sessId },
+    });
+    const concessions = await this.concessionRepo.find({
+      where: { schoolId, academicSessionId: sessId },
+    });
+    const scholarships = await this.scholarshipRepo.find({
+      where: { schoolId, academicSessionId: sessId },
+    });
 
-    const totalBillable = invoices.reduce((sum, inv) => sum + inv.totalAmount, 0);
-    const collectedAmount = invoices.reduce((sum, inv) => sum + inv.paidAmount, 0);
-    const outstandingAmount = invoices.reduce((sum, inv) => sum + inv.outstandingAmount, 0);
-    const overdueAmount = invoices.filter((inv) => inv.status === 'OVERDUE').reduce((sum, inv) => sum + inv.outstandingAmount, 0);
-    const overdueInvoices = invoices.filter((inv) => inv.status === 'OVERDUE').length;
+    const totalBillable = invoices.reduce(
+      (sum, inv) => sum + inv.totalAmount,
+      0,
+    );
+    const collectedAmount = invoices.reduce(
+      (sum, inv) => sum + inv.paidAmount,
+      0,
+    );
+    const outstandingAmount = invoices.reduce(
+      (sum, inv) => sum + inv.outstandingAmount,
+      0,
+    );
+    const overdueAmount = invoices
+      .filter((inv) => inv.status === 'OVERDUE')
+      .reduce((sum, inv) => sum + inv.outstandingAmount, 0);
+    const overdueInvoices = invoices.filter(
+      (inv) => inv.status === 'OVERDUE',
+    ).length;
     const paidInvoices = invoices.filter((inv) => inv.status === 'PAID').length;
 
     const paymentModeBreakdown = {
@@ -769,20 +995,32 @@ export class FeesService {
       collectedAmount,
       outstandingAmount,
       overdueAmount,
-      collectionRate: totalBillable ? Math.round((collectedAmount / totalBillable) * 100) : 0,
-      concessionsAmount: concessions.reduce((sum, item) => sum + Number(item.amount), 0),
-      scholarshipsAmount: scholarships.reduce((sum, item) => sum + Number(item.amount), 0),
-      refundsAmount: refunds.reduce((sum, item) => sum + Number(item.amount), 0),
+      collectionRate: totalBillable
+        ? Math.round((collectedAmount / totalBillable) * 100)
+        : 0,
+      concessionsAmount: concessions.reduce(
+        (sum, item) => sum + Number(item.amount),
+        0,
+      ),
+      scholarshipsAmount: scholarships.reduce(
+        (sum, item) => sum + Number(item.amount),
+        0,
+      ),
+      refundsAmount: refunds.reduce(
+        (sum, item) => sum + Number(item.amount),
+        0,
+      ),
       overdueInvoices,
       paidInvoices,
       paymentModeBreakdown,
-      monthlyRevenue: [
-        { month: 'Jul 26', amount: collectedAmount },
-      ],
+      monthlyRevenue: [{ month: 'Jul 26', amount: collectedAmount }],
     };
   }
 
-  async getFeeReports(schoolId: string, academicSessionId?: string): Promise<any> {
+  async getFeeReports(
+    schoolId: string,
+    academicSessionId?: string,
+  ): Promise<any> {
     const sessId = await this.resolveSessionId(schoolId, academicSessionId);
     const analytics = await this.getFeeAnalytics(schoolId, sessId);
     const structures = await this.getFeeStructures(schoolId, sessId);
@@ -796,7 +1034,8 @@ export class FeesService {
           amount: Math.round(inst.amount * analytics.collectionRate * 0.01),
         })),
       ),
-      scholarshipAndConcession: analytics.concessionsAmount + analytics.scholarshipsAmount,
+      scholarshipAndConcession:
+        analytics.concessionsAmount + analytics.scholarshipsAmount,
       refundTotal: analytics.refundsAmount,
       paymentModeAnalysis: analytics.paymentModeBreakdown,
       monthlyRevenue: analytics.monthlyRevenue,
@@ -805,28 +1044,47 @@ export class FeesService {
   }
 
   // --- Fee Workspace Aggregated Getter ---
-  async getFeeWorkspace(schoolId: string, academicSessionId?: string): Promise<any> {
+  async getFeeWorkspace(
+    schoolId: string,
+    academicSessionId?: string,
+  ): Promise<any> {
     const sessId = await this.resolveSessionId(schoolId, academicSessionId);
     const categories = await this.getFeeCategories(schoolId, sessId);
     const structures = await this.getFeeStructures(schoolId, sessId);
     const invoices = await this.compileInvoices(schoolId, sessId);
-    const payments = await this.feePaymentRepo.find({ where: { schoolId, academicSessionId: sessId } });
-    const receipts = await this.feeReceiptRepo.find({ where: { schoolId, academicSessionId: sessId } });
-    const refunds = await this.refundRepo.find({ where: { schoolId, academicSessionId: sessId } });
-    const concessions = await this.concessionRepo.find({ where: { schoolId, academicSessionId: sessId } });
-    const scholarships = await this.scholarshipRepo.find({ where: { schoolId, academicSessionId: sessId } });
+    const payments = await this.feePaymentRepo.find({
+      where: { schoolId, academicSessionId: sessId },
+    });
+    const receipts = await this.feeReceiptRepo.find({
+      where: { schoolId, academicSessionId: sessId },
+    });
+    const refunds = await this.refundRepo.find({
+      where: { schoolId, academicSessionId: sessId },
+    });
+    const concessions = await this.concessionRepo.find({
+      where: { schoolId, academicSessionId: sessId },
+    });
+    const scholarships = await this.scholarshipRepo.find({
+      where: { schoolId, academicSessionId: sessId },
+    });
     const analytics = await this.getFeeAnalytics(schoolId, sessId);
     const reports = await this.getFeeReports(schoolId, sessId);
 
     const formattedPayments: any[] = [];
     for (const p of payments) {
-      const student = await this.studentRepo.findOne({ where: { id: p.studentId } });
-      const rcpt = await this.feeReceiptRepo.findOne({ where: { feePaymentId: p.id } });
+      const student = await this.studentRepo.findOne({
+        where: { id: p.studentId },
+      });
+      const rcpt = await this.feeReceiptRepo.findOne({
+        where: { feePaymentId: p.id },
+      });
       formattedPayments.push({
         id: p.id,
         schoolId: p.schoolId,
         studentId: p.studentId,
-        studentName: student ? `${student.firstName} ${student.lastName}`.trim() : `Student ${p.studentId}`,
+        studentName: student
+          ? `${student.firstName} ${student.lastName}`.trim()
+          : `Student ${p.studentId}`,
         invoiceId: p.invoiceId,
         amount: Number(p.amount),
         paymentMethod: p.paymentMethod,
@@ -897,7 +1155,15 @@ export class FeesService {
         appliedAt: s.appliedAt.toISOString(),
       })),
       lateFeeRules: [
-        { id: 'rule-standard', schoolId, name: 'Standard fine rule', graceDays: 5, amountPerDay: 50, maxAmount: 1000, isActive: true },
+        {
+          id: 'rule-standard',
+          schoolId,
+          name: 'Standard fine rule',
+          graceDays: 5,
+          amountPerDay: 50,
+          maxAmount: 1000,
+          isActive: true,
+        },
       ],
       reminders: [],
       analytics,
@@ -906,7 +1172,10 @@ export class FeesService {
   }
 
   async getFeeSettings(schoolId: string, academicSessionId?: string) {
-    const sessionId = await this.resolveSessionId(schoolId, academicSessionId).catch(() => '1');
+    const sessionId = await this.resolveSessionId(
+      schoolId,
+      academicSessionId,
+    ).catch(() => '1');
     const settings = await this.feeSettingRepo.find({
       where: { schoolId, academicSessionId: sessionId },
     });
@@ -941,8 +1210,15 @@ export class FeesService {
     return result;
   }
 
-  async updateFeeSettings(schoolId: string, academicSessionId: string | undefined, payload: Record<string, any>) {
-    const sessionId = await this.resolveSessionId(schoolId, academicSessionId).catch(() => '1');
+  async updateFeeSettings(
+    schoolId: string,
+    academicSessionId: string | undefined,
+    payload: Record<string, any>,
+  ) {
+    const sessionId = await this.resolveSessionId(
+      schoolId,
+      academicSessionId,
+    ).catch(() => '1');
 
     for (const [key, value] of Object.entries(payload)) {
       let setting = await this.feeSettingRepo.findOne({

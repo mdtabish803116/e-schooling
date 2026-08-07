@@ -28,12 +28,24 @@ import type { AuthContext } from '../../../../interfaces/auth-context.interface'
 export class DocumentMasterController {
   constructor(private readonly documentMasterService: DocumentMasterService) {}
 
-  private resolveSchoolId(req: any, user: AuthContext, paramSchoolId?: string): string {
-    if (paramSchoolId && paramSchoolId !== 'undefined' && paramSchoolId !== 'null') {
+  private resolveSchoolId(
+    req: any,
+    user: AuthContext,
+    paramSchoolId?: string,
+  ): string {
+    if (
+      paramSchoolId &&
+      paramSchoolId !== 'undefined' &&
+      paramSchoolId !== 'null'
+    ) {
       return paramSchoolId;
     }
     const headerSchoolId = req?.headers?.['x-school-id'];
-    if (headerSchoolId && headerSchoolId !== 'undefined' && headerSchoolId !== 'null') {
+    if (
+      headerSchoolId &&
+      headerSchoolId !== 'undefined' &&
+      headerSchoolId !== 'null'
+    ) {
       return String(headerSchoolId);
     }
     if (user?.schoolId) {
@@ -44,7 +56,9 @@ export class DocumentMasterController {
 
   /* ─────────────────── DROPDOWN ─── */
 
-  @ApiOperation({ summary: 'Get lightweight dropdown of active document masters' })
+  @ApiOperation({
+    summary: 'Get lightweight dropdown of active document masters',
+  })
   @Get('schools/:schoolId/document-masters/dropdown')
   async getDropdown(
     @Param('schoolId') schoolIdParam: string,
@@ -53,7 +67,10 @@ export class DocumentMasterController {
     @CurrentUser() user: AuthContext,
   ) {
     const schoolId = this.resolveSchoolId(req, user, schoolIdParam);
-    return this.documentMasterService.getDocumentMasterDropdown(schoolId, moduleCode);
+    return this.documentMasterService.getDocumentMasterDropdown(
+      schoolId,
+      moduleCode,
+    );
   }
 
   /* ─────────────────── BULK ─── */
@@ -67,7 +84,11 @@ export class DocumentMasterController {
     @CurrentUser() user: AuthContext,
   ) {
     const schoolId = this.resolveSchoolId(req, user, schoolIdParam);
-    return this.documentMasterService.bulkUpdateDocumentMasters(schoolId, dto, user?.id);
+    return this.documentMasterService.bulkUpdateDocumentMasters(
+      schoolId,
+      dto,
+      user?.id,
+    );
   }
 
   /* ─────────────────── LIST ─── */
@@ -95,7 +116,11 @@ export class DocumentMasterController {
     @CurrentUser() user: AuthContext,
   ) {
     const schoolId = this.resolveSchoolId(req, user, schoolIdParam);
-    return this.documentMasterService.createDocumentMaster(schoolId, dto, user?.id);
+    return this.documentMasterService.createDocumentMaster(
+      schoolId,
+      dto,
+      user?.id,
+    );
   }
 
   /* ─────────────────── GET BY ID ─── */
@@ -124,7 +149,12 @@ export class DocumentMasterController {
     @CurrentUser() user: AuthContext,
   ) {
     const schoolId = this.resolveSchoolId(req, user, schoolIdParam);
-    return this.documentMasterService.updateDocumentMaster(schoolId, id, dto, user?.id);
+    return this.documentMasterService.updateDocumentMaster(
+      schoolId,
+      id,
+      dto,
+      user?.id,
+    );
   }
 
   /* ─────────────────── DELETE (SOFT) ─── */
@@ -138,7 +168,11 @@ export class DocumentMasterController {
     @CurrentUser() user: AuthContext,
   ) {
     const schoolId = this.resolveSchoolId(req, user, schoolIdParam);
-    await this.documentMasterService.deleteDocumentMaster(schoolId, id, user?.id);
+    await this.documentMasterService.deleteDocumentMaster(
+      schoolId,
+      id,
+      user?.id,
+    );
     return { success: true, message: 'Document master archived' };
   }
 
@@ -153,7 +187,11 @@ export class DocumentMasterController {
     @CurrentUser() user: AuthContext,
   ) {
     const schoolId = this.resolveSchoolId(req, user, schoolIdParam);
-    return this.documentMasterService.restoreDocumentMaster(schoolId, id, user?.id);
+    return this.documentMasterService.restoreDocumentMaster(
+      schoolId,
+      id,
+      user?.id,
+    );
   }
 
   /* ─────────────────── ENTITY DOCUMENTS ─── */
@@ -168,7 +206,11 @@ export class DocumentMasterController {
     @CurrentUser() user: AuthContext,
   ) {
     const schoolId = this.resolveSchoolId(req, user, schoolIdParam);
-    return this.documentMasterService.getEntityDocuments(schoolId, entityType, entityId);
+    return this.documentMasterService.getEntityDocuments(
+      schoolId,
+      entityType,
+      entityId,
+    );
   }
 
   @ApiOperation({ summary: 'Upload an entity document' })
@@ -180,7 +222,11 @@ export class DocumentMasterController {
     @CurrentUser() user: AuthContext,
   ) {
     const schoolId = this.resolveSchoolId(req, user, schoolIdParam);
-    return this.documentMasterService.uploadEntityDocument(schoolId, dto, user?.id);
+    return this.documentMasterService.uploadEntityDocument(
+      schoolId,
+      dto,
+      user?.id,
+    );
   }
 
   @ApiOperation({ summary: 'Verify or reject an entity document' })
@@ -193,7 +239,12 @@ export class DocumentMasterController {
     @CurrentUser() user: AuthContext,
   ) {
     const schoolId = this.resolveSchoolId(req, user, schoolIdParam);
-    return this.documentMasterService.verifyEntityDocument(schoolId, id, dto, user?.id);
+    return this.documentMasterService.verifyEntityDocument(
+      schoolId,
+      id,
+      dto,
+      user?.id,
+    );
   }
 
   @ApiOperation({ summary: 'Delete an entity document' })
@@ -205,7 +256,11 @@ export class DocumentMasterController {
     @CurrentUser() user: AuthContext,
   ) {
     const schoolId = this.resolveSchoolId(req, user, schoolIdParam);
-    await this.documentMasterService.deleteEntityDocument(schoolId, id, user?.id);
+    await this.documentMasterService.deleteEntityDocument(
+      schoolId,
+      id,
+      user?.id,
+    );
     return { success: true, message: 'Entity document deleted' };
   }
 }

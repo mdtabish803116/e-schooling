@@ -9,17 +9,29 @@ export class CloudinaryService extends StorageService {
       const uploadOptions: any = { folder: 'e-school', resource_type: 'auto' };
 
       if (file.path) {
-        cloudinary.uploader.upload(file.path, uploadOptions, (error, result) => {
-          if (error) return reject(error);
-          if (!result) return reject(new Error('Cloudinary upload returned undefined result'));
-          resolve(result.secure_url);
-        });
+        cloudinary.uploader.upload(
+          file.path,
+          uploadOptions,
+          (error, result) => {
+            if (error) return reject(error);
+            if (!result)
+              return reject(
+                new Error('Cloudinary upload returned undefined result'),
+              );
+            resolve(result.secure_url);
+          },
+        );
       } else if (file.buffer) {
-        cloudinary.uploader.upload_stream(uploadOptions, (error, result) => {
-          if (error) return reject(error);
-          if (!result) return reject(new Error('Cloudinary upload returned undefined result'));
-          resolve(result.secure_url);
-        }).end(file.buffer);
+        cloudinary.uploader
+          .upload_stream(uploadOptions, (error, result) => {
+            if (error) return reject(error);
+            if (!result)
+              return reject(
+                new Error('Cloudinary upload returned undefined result'),
+              );
+            resolve(result.secure_url);
+          })
+          .end(file.buffer);
       } else {
         reject(new Error('No file path or buffer found for upload'));
       }

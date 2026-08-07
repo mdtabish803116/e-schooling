@@ -1,8 +1,17 @@
-import { IsEmail, IsNotEmpty, IsString, IsOptional, IsBoolean } from 'class-validator';
+import {
+  IsEmail,
+  IsNotEmpty,
+  IsString,
+  IsOptional,
+  IsBoolean,
+} from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class SchoolOwnerLoginDto {
-  @ApiProperty({ example: 'rahul@school.com', description: 'Registered email or mobile number' })
+  @ApiProperty({
+    example: 'rahul@school.com',
+    description: 'Registered email or mobile number',
+  })
   @IsNotEmpty()
   @IsString()
   identifier: string;
@@ -12,9 +21,11 @@ export class SchoolOwnerLoginDto {
   @IsString()
   password: string;
 
-  @ApiPropertyOptional({ example: true, description: 'Force logout previous active session on conflict' })
+  @ApiPropertyOptional({
+    example: true,
+    description: 'Force logout previous active session on conflict',
+  })
   @IsOptional()
   @IsBoolean()
   forceLogoutPrevious?: boolean;
 }
-

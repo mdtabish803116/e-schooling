@@ -8,5 +8,7 @@ export interface PermissionMetadata {
   action: ActionEnum | string;
 }
 
-export const Permission = (resource: ResourceEnum | string, action: ActionEnum | string) =>
-  SetMetadata(PERMISSION_KEY, { resource, action } as PermissionMetadata);
+export const Permission = (
+  resource: ResourceEnum | string,
+  action: ActionEnum | string,
+) => SetMetadata(PERMISSION_KEY, { resource, action });

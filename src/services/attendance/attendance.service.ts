@@ -1,7 +1,15 @@
-import { ForbiddenException, Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+  OnModuleInit,
+} from '@nestjs/common';
 import { DataSource, In } from 'typeorm';
 import { AuthContext } from '../../interfaces/auth-context.interface';
-import { LockAttendanceDto, UnlockAttendanceDto } from '../../interfaces/request/attendance/lock-attendance.dto';
+import {
+  LockAttendanceDto,
+  UnlockAttendanceDto,
+} from '../../interfaces/request/attendance/lock-attendance.dto';
 import { TakeAttendanceDto } from '../../interfaces/request/attendance/take-attendance.dto';
 import { UpdateAttendanceDto } from '../../interfaces/request/attendance/update-attendance.dto';
 import { Class } from '../../models/entities/academic/class.entity';
@@ -89,17 +97,31 @@ export class AttendanceService implements OnModuleInit {
     }
   }
 
-  private async assertAccessToSchool(caller: AuthContext, schoolId: string): Promise<void> {
-    if (caller.roles?.includes('PLATFORM_OWNER') || caller.roles?.includes('SUPER_ADMIN')) {
+  private async assertAccessToSchool(
+    caller: AuthContext,
+    schoolId: string,
+  ): Promise<void> {
+    if (
+      caller.roles?.includes('PLATFORM_OWNER') ||
+      caller.roles?.includes('SUPER_ADMIN')
+    ) {
       return;
     }
 
-    if (caller.actorType === 'school_owner' || caller.roles?.includes('SCHOOL_OWNER') || caller.roles?.includes('owner')) {
-      const isMember = await this.dataSource.getRepository(SchoolOwnerMember).exist({
-        where: { schoolOwnerId: caller.id, schoolId, isDeleted: false },
-      });
+    if (
+      caller.actorType === 'school_owner' ||
+      caller.roles?.includes('SCHOOL_OWNER') ||
+      caller.roles?.includes('owner')
+    ) {
+      const isMember = await this.dataSource
+        .getRepository(SchoolOwnerMember)
+        .exist({
+          where: { schoolOwnerId: caller.id, schoolId, isDeleted: false },
+        });
       if (!isMember) {
-        throw new ForbiddenException('Forbidden: You do not own or manage this school.');
+        throw new ForbiddenException(
+          'Forbidden: You do not own or manage this school.',
+        );
       }
       return;
     }
@@ -108,27 +130,39 @@ export class AttendanceService implements OnModuleInit {
       return;
     }
 
-    throw new ForbiddenException('Forbidden: You do not have access to this school domain.');
+    throw new ForbiddenException(
+      'Forbidden: You do not have access to this school domain.',
+    );
   }
 
   async getAttendanceSession(
     caller: AuthContext,
     schoolId: string,
-    query: { classId: string; sectionId: string; date: string; sessionSlot?: number; academicSessionId?: string },
+    query: {
+      classId: string;
+      sectionId: string;
+      date: string;
+      sessionSlot?: number;
+      academicSessionId?: string;
+    },
   ) {
     await this.assertAccessToSchool(caller, schoolId);
 
-    const session = await this.dataSource.getRepository(AttendanceSession).findOne({
-      where: {
-        schoolId,
-        classId: query.classId,
-        sectionId: query.sectionId,
-        date: query.date,
-        sessionSlot: query.sessionSlot || 1,
-        isDeleted: false,
-        ...(query.academicSessionId ? { academicSessionId: query.academicSessionId } : {}),
-      },
-    });
+    const session = await this.dataSource
+      .getRepository(AttendanceSession)
+      .findOne({
+        where: {
+          schoolId,
+          classId: query.classId,
+          sectionId: query.sectionId,
+          date: query.date,
+          sessionSlot: query.sessionSlot || 1,
+          isDeleted: false,
+          ...(query.academicSessionId
+            ? { academicSessionId: query.academicSessionId }
+            : {}),
+        },
+      });
 
     if (!session) {
       return null;
@@ -152,7 +186,11 @@ export class AttendanceService implements OnModuleInit {
     };
   }
 
-  async takeAttendance(caller: AuthContext, schoolId: string, dto: TakeAttendanceDto) {
+  async takeAttendance(
+    caller: AuthContext,
+    schoolId: string,
+    dto: TakeAttendanceDto,
+  ) {
     await this.assertAccessToSchool(caller, schoolId);
     await this.assertDateNotLocked(schoolId, dto.date);
 
@@ -190,7 +228,11 @@ export class AttendanceService implements OnModuleInit {
 
     for (const item of dto.records) {
       let rec = await recordRepo.findOne({
-        where: { sessionId: session.id, studentEnrollmentId: item.studentEnrollmentId, isDeleted: false },
+        where: {
+          sessionId: session.id,
+          studentEnrollmentId: item.studentEnrollmentId,
+          isDeleted: false,
+        },
       });
 
       if (!rec) {
@@ -225,12 +267,16 @@ export class AttendanceService implements OnModuleInit {
   ) {
     await this.assertAccessToSchool(caller, schoolId);
 
-    const session = await this.dataSource.getRepository(AttendanceSession).findOne({
-      where: { id: sessionId, schoolId, isDeleted: false },
-    });
+    const session = await this.dataSource
+      .getRepository(AttendanceSession)
+      .findOne({
+        where: { id: sessionId, schoolId, isDeleted: false },
+      });
 
     if (!session) {
-      throw new NotFoundException(`Attendance session with ID ${sessionId} not found.`);
+      throw new NotFoundException(
+        `Attendance session with ID ${sessionId} not found.`,
+      );
     }
 
     await this.assertDateNotLocked(schoolId, session.date);
@@ -263,13 +309,20 @@ export class AttendanceService implements OnModuleInit {
   async getAttendanceStudents(
     caller: AuthContext,
     schoolId: string,
-    filter: { classId?: string; sectionId?: string; academicSessionId?: string; date?: string; page?: number; limit?: number },
+    filter: {
+      classId?: string;
+      sectionId?: string;
+      academicSessionId?: string;
+      date?: string;
+      page?: number;
+      limit?: number;
+    },
   ) {
     await this.assertAccessToSchool(caller, schoolId);
 
-    const page  = Math.max(1, Number(filter.page)  || 1);
+    const page = Math.max(1, Number(filter.page) || 1);
     const limit = Math.min(100, Math.max(1, Number(filter.limit) || 20));
-    const skip  = (page - 1) * limit;
+    const skip = (page - 1) * limit;
 
     const qb = this.dataSource
       .getRepository(Student)
@@ -284,13 +337,19 @@ export class AttendanceService implements OnModuleInit {
       .andWhere('student.is_active = true');
 
     if (filter.classId) {
-      qb.andWhere('enrollment.class_id = :classId', { classId: String(filter.classId) });
+      qb.andWhere('enrollment.class_id = :classId', {
+        classId: String(filter.classId),
+      });
     }
     if (filter.sectionId) {
-      qb.andWhere('enrollment.section_id = :sectionId', { sectionId: String(filter.sectionId) });
+      qb.andWhere('enrollment.section_id = :sectionId', {
+        sectionId: String(filter.sectionId),
+      });
     }
     if (filter.academicSessionId) {
-      qb.andWhere('enrollment.academic_session_id = :academicSessionId', { academicSessionId: String(filter.academicSessionId) });
+      qb.andWhere('enrollment.academic_session_id = :academicSessionId', {
+        academicSessionId: String(filter.academicSessionId),
+      });
     }
 
     qb.select([
@@ -309,12 +368,19 @@ export class AttendanceService implements OnModuleInit {
 
     const countQb = qb.clone();
     const [rawStudents, total] = await Promise.all([
-      qb.orderBy('student.first_name', 'ASC').offset(skip).limit(limit).getRawMany(),
+      qb
+        .orderBy('student.first_name', 'ASC')
+        .offset(skip)
+        .limit(limit)
+        .getRawMany(),
       countQb.getCount(),
     ]);
 
     // If date filter is provided, lookup saved session records for this date
-    let savedRecordsMap = new Map<string, { attendanceMark: string; remarks?: string }>();
+    const savedRecordsMap = new Map<
+      string,
+      { attendanceMark: string; remarks?: string }
+    >();
     if (filter.date) {
       const targetDate = this.parseDateFlexible(filter.date);
       const sessionQb = this.dataSource
@@ -325,19 +391,28 @@ export class AttendanceService implements OnModuleInit {
         .andWhere('session.is_delete = false');
 
       if (filter.classId) {
-        sessionQb.andWhere('session.classId = :classId', { classId: String(filter.classId) });
+        sessionQb.andWhere('session.classId = :classId', {
+          classId: String(filter.classId),
+        });
       }
       if (filter.sectionId) {
-        sessionQb.andWhere('session.sectionId = :sectionId', { sectionId: String(filter.sectionId) });
+        sessionQb.andWhere('session.sectionId = :sectionId', {
+          sectionId: String(filter.sectionId),
+        });
       }
 
       const session = await sessionQb.getOne();
       if (session) {
-        const records = await this.dataSource.getRepository(AttendanceRecord).find({
-          where: { sessionId: session.id, isDeleted: false },
-        });
+        const records = await this.dataSource
+          .getRepository(AttendanceRecord)
+          .find({
+            where: { sessionId: session.id, isDeleted: false },
+          });
         for (const r of records) {
-          const markObj = { attendanceMark: String(r.attendanceMark).toUpperCase(), remarks: r.remarks || '' };
+          const markObj = {
+            attendanceMark: String(r.attendanceMark).toUpperCase(),
+            remarks: r.remarks || '',
+          };
           savedRecordsMap.set(String(r.studentEnrollmentId), markObj);
         }
       }
@@ -350,19 +425,24 @@ export class AttendanceService implements OnModuleInit {
       const studentId = String(s.studentId || s.id);
       const studentEnrollmentId = String(s.studentEnrollmentId || s.id);
 
-      const savedMark = savedRecordsMap.get(studentEnrollmentId) || savedRecordsMap.get(studentId);
+      const savedMark =
+        savedRecordsMap.get(studentEnrollmentId) ||
+        savedRecordsMap.get(studentId);
       const finalStatus = savedMark ? savedMark.attendanceMark : 'PRESENT';
 
       return {
         id: studentId,
         studentId: studentId,
         studentEnrollmentId,
-        rollNumber: s.rollNumber ? String(s.rollNumber) : String(skip + index + 1),
+        rollNumber: s.rollNumber
+          ? String(s.rollNumber)
+          : String(skip + index + 1),
         firstName: fn || 'Student',
         lastName: ln,
         name: fullName,
         fullName: fullName,
-        admissionNumber: s.admissionNumber || s.studentCode || `ADM-${studentId}`,
+        admissionNumber:
+          s.admissionNumber || s.studentCode || `ADM-${studentId}`,
         studentCode: s.studentCode || '',
         profilePicUrl: s.profilePicUrl || null,
         avatar: s.profilePicUrl || null,
@@ -386,7 +466,12 @@ export class AttendanceService implements OnModuleInit {
     };
   }
 
-  async getAttendanceDashboard(caller: AuthContext, schoolId: string, date?: string, academicSessionId?: string) {
+  async getAttendanceDashboard(
+    caller: AuthContext,
+    schoolId: string,
+    date?: string,
+    academicSessionId?: string,
+  ) {
     await this.assertAccessToSchool(caller, schoolId);
 
     const targetDate = this.parseDateFlexible(date);
@@ -404,37 +489,59 @@ export class AttendanceService implements OnModuleInit {
       .andWhere('student.is_active = true');
 
     if (academicSessionId) {
-      studentQb.andWhere('enrollment.academic_session_id = :academicSessionId', { academicSessionId: String(academicSessionId) });
+      studentQb.andWhere(
+        'enrollment.academic_session_id = :academicSessionId',
+        { academicSessionId: String(academicSessionId) },
+      );
     }
 
     const studentCount = await studentQb.getCount();
 
-    const sessionsToday = await this.dataSource.getRepository(AttendanceSession).find({
-      where: {
-        schoolId: String(schoolId),
-        date: targetDate,
-        isDeleted: false,
-        ...(academicSessionId ? { academicSessionId: String(academicSessionId) } : {}),
-      },
-    });
+    const sessionsToday = await this.dataSource
+      .getRepository(AttendanceSession)
+      .find({
+        where: {
+          schoolId: String(schoolId),
+          date: targetDate,
+          isDeleted: false,
+          ...(academicSessionId
+            ? { academicSessionId: String(academicSessionId) }
+            : {}),
+        },
+      });
 
-    const markedSectionIds = new Set(sessionsToday.map((s) => String(s.sectionId)));
+    const markedSectionIds = new Set(
+      sessionsToday.map((s) => String(s.sectionId)),
+    );
 
     const sessionIds = sessionsToday.map((s) => s.id);
     let recordsToday: AttendanceRecord[] = [];
     if (sessionIds.length > 0) {
-      recordsToday = await this.dataSource.getRepository(AttendanceRecord).find({
-        where: { sessionId: In(sessionIds), isDeleted: false },
-      });
+      recordsToday = await this.dataSource
+        .getRepository(AttendanceRecord)
+        .find({
+          where: { sessionId: In(sessionIds), isDeleted: false },
+        });
     }
 
-    const presentCount = recordsToday.filter((r) => String(r.attendanceMark).toLowerCase() === 'present').length;
-    const absentCount = recordsToday.filter((r) => String(r.attendanceMark).toLowerCase() === 'absent').length;
-    const lateCount = recordsToday.filter((r) => String(r.attendanceMark).toLowerCase() === 'late').length;
-    const leaveCount = recordsToday.filter((r) => String(r.attendanceMark).toLowerCase() === 'leave' || String(r.attendanceMark).toLowerCase() === 'half_day').length;
+    const presentCount = recordsToday.filter(
+      (r) => String(r.attendanceMark).toLowerCase() === 'present',
+    ).length;
+    const absentCount = recordsToday.filter(
+      (r) => String(r.attendanceMark).toLowerCase() === 'absent',
+    ).length;
+    const lateCount = recordsToday.filter(
+      (r) => String(r.attendanceMark).toLowerCase() === 'late',
+    ).length;
+    const leaveCount = recordsToday.filter(
+      (r) =>
+        String(r.attendanceMark).toLowerCase() === 'leave' ||
+        String(r.attendanceMark).toLowerCase() === 'half_day',
+    ).length;
 
     const totalMarked = recordsToday.length || 0;
-    const rate = totalMarked > 0 ? Math.round((presentCount / totalMarked) * 100) : 100;
+    const rate =
+      totalMarked > 0 ? Math.round((presentCount / totalMarked) * 100) : 100;
 
     // Pending Sections Calculation
     const sections = await this.dataSource.getRepository(Section).find({
@@ -442,16 +549,20 @@ export class AttendanceService implements OnModuleInit {
       relations: ['class'],
     });
 
-    const teacherAssignments = await this.dataSource.getRepository(TeacherSectionAssignment).find({
-      where: { schoolId: String(schoolId), isDeleted: false, isActive: true },
-      relations: ['teacher'],
-    });
+    const teacherAssignments = await this.dataSource
+      .getRepository(TeacherSectionAssignment)
+      .find({
+        where: { schoolId: String(schoolId), isDeleted: false, isActive: true },
+        relations: ['teacher'],
+      });
 
     const pendingSections = sections
       .filter((sec) => !markedSectionIds.has(String(sec.id)))
       .map((sec) => {
         const assignment = teacherAssignments.find(
-          (ta) => String(ta.sectionId) === String(sec.id) || String(ta.classId) === String(sec.classId),
+          (ta) =>
+            String(ta.sectionId) === String(sec.id) ||
+            String(ta.classId) === String(sec.classId),
         );
 
         const teacherName = assignment?.teacher?.name || 'Unassigned Teacher';
@@ -462,7 +573,9 @@ export class AttendanceService implements OnModuleInit {
           sectionName: sec.name || 'A',
           classId: String(sec.classId || ''),
           className: sec.class?.name || `Class ${sec.classId}`,
-          classTeacherId: assignment?.teacherId ? String(assignment.teacherId) : null,
+          classTeacherId: assignment?.teacherId
+            ? String(assignment.teacherId)
+            : null,
           classTeacherName: teacherName,
           classTeacherPhone: teacherPhone,
           status: 'PENDING',
@@ -493,7 +606,12 @@ export class AttendanceService implements OnModuleInit {
     };
   }
 
-  async getDefaultersReport(caller: AuthContext, schoolId: string, threshold: number = 75, academicSessionId?: string) {
+  async getDefaultersReport(
+    caller: AuthContext,
+    schoolId: string,
+    threshold: number = 75,
+    academicSessionId?: string,
+  ) {
     await this.assertAccessToSchool(caller, schoolId);
 
     const qb = this.dataSource
@@ -511,7 +629,9 @@ export class AttendanceService implements OnModuleInit {
       .andWhere('student.is_active = true');
 
     if (academicSessionId) {
-      qb.andWhere('enrollment.academic_session_id = :academicSessionId', { academicSessionId: String(academicSessionId) });
+      qb.andWhere('enrollment.academic_session_id = :academicSessionId', {
+        academicSessionId: String(academicSessionId),
+      });
     }
 
     qb.select([
@@ -527,13 +647,17 @@ export class AttendanceService implements OnModuleInit {
     const rawStudents = await qb.getRawMany();
     if (!rawStudents.length) return [];
 
-    const sessions = await this.dataSource.getRepository(AttendanceSession).find({
-      where: {
-        schoolId: String(schoolId),
-        isDeleted: false,
-        ...(academicSessionId ? { academicSessionId: String(academicSessionId) } : {}),
-      },
-    });
+    const sessions = await this.dataSource
+      .getRepository(AttendanceSession)
+      .find({
+        where: {
+          schoolId: String(schoolId),
+          isDeleted: false,
+          ...(academicSessionId
+            ? { academicSessionId: String(academicSessionId) }
+            : {}),
+        },
+      });
 
     const sessionIds = sessions.map((s) => s.id);
     let allRecords: AttendanceRecord[] = [];
@@ -551,7 +675,9 @@ export class AttendanceService implements OnModuleInit {
         const enrollmentId = String(s.studentEnrollmentId || s.id);
 
         const studentRecords = allRecords.filter(
-          (r) => String(r.studentEnrollmentId) === enrollmentId || String(r.studentEnrollmentId) === studentId,
+          (r) =>
+            String(r.studentEnrollmentId) === enrollmentId ||
+            String(r.studentEnrollmentId) === studentId,
         );
 
         const totalClasses = studentRecords.length || totalSessions;
@@ -559,7 +685,10 @@ export class AttendanceService implements OnModuleInit {
           (r) => String(r.attendanceMark).toLowerCase() === 'present',
         ).length;
 
-        const percentage = totalClasses > 0 ? Math.round((attendedClasses / totalClasses) * 100) : 100;
+        const percentage =
+          totalClasses > 0
+            ? Math.round((attendedClasses / totalClasses) * 100)
+            : 100;
 
         const fn = s.firstName || '';
         const ln = s.lastName || '';
@@ -581,7 +710,11 @@ export class AttendanceService implements OnModuleInit {
     return defaulters;
   }
 
-  async lockAttendance(caller: AuthContext, schoolId: string, dto: LockAttendanceDto) {
+  async lockAttendance(
+    caller: AuthContext,
+    schoolId: string,
+    dto: LockAttendanceDto,
+  ) {
     await this.assertAccessToSchool(caller, schoolId);
     const lockRepo = this.dataSource.getRepository(AttendanceLock);
 
@@ -609,7 +742,11 @@ export class AttendanceService implements OnModuleInit {
     };
   }
 
-  async unlockAttendance(caller: AuthContext, schoolId: string, dto: UnlockAttendanceDto) {
+  async unlockAttendance(
+    caller: AuthContext,
+    schoolId: string,
+    dto: UnlockAttendanceDto,
+  ) {
     await this.assertAccessToSchool(caller, schoolId);
     const lockRepo = this.dataSource.getRepository(AttendanceLock);
 
@@ -628,7 +765,11 @@ export class AttendanceService implements OnModuleInit {
     };
   }
 
-  async getAttendanceLocks(caller: AuthContext, schoolId: string, _academicSessionId?: string) {
+  async getAttendanceLocks(
+    caller: AuthContext,
+    schoolId: string,
+    _academicSessionId?: string,
+  ) {
     await this.assertAccessToSchool(caller, schoolId);
     return this.dataSource.getRepository(AttendanceLock).find({
       where: {
@@ -642,7 +783,12 @@ export class AttendanceService implements OnModuleInit {
   async getMonthlyReport(
     caller: AuthContext,
     schoolId: string,
-    query: { classId?: string; sectionId?: string; yearMonth?: string; academicSessionId?: string },
+    query: {
+      classId?: string;
+      sectionId?: string;
+      yearMonth?: string;
+      academicSessionId?: string;
+    },
   ) {
     await this.assertAccessToSchool(caller, schoolId);
 
@@ -658,16 +804,25 @@ export class AttendanceService implements OnModuleInit {
       .createQueryBuilder('session')
       .where('session.schoolId = :schoolId', { schoolId: String(schoolId) })
       .andWhere('session.is_delete = false')
-      .andWhere('session.date >= :startDate AND session.date < :endDate', { startDate, endDate });
+      .andWhere('session.date >= :startDate AND session.date < :endDate', {
+        startDate,
+        endDate,
+      });
 
     if (query.classId) {
-      sessionQb.andWhere('session.classId = :classId', { classId: String(query.classId) });
+      sessionQb.andWhere('session.classId = :classId', {
+        classId: String(query.classId),
+      });
     }
     if (query.sectionId) {
-      sessionQb.andWhere('session.sectionId = :sectionId', { sectionId: String(query.sectionId) });
+      sessionQb.andWhere('session.sectionId = :sectionId', {
+        sectionId: String(query.sectionId),
+      });
     }
     if (query.academicSessionId) {
-      sessionQb.andWhere('session.academicSessionId = :academicSessionId', { academicSessionId: String(query.academicSessionId) });
+      sessionQb.andWhere('session.academicSessionId = :academicSessionId', {
+        academicSessionId: String(query.academicSessionId),
+      });
     }
 
     const sessions = await sessionQb.getMany();
@@ -683,13 +838,19 @@ export class AttendanceService implements OnModuleInit {
     if (!records.length) return [];
 
     // Map StudentEnrollments to link studentEnrollmentId with studentId
-    const enrollmentIds = Array.from(new Set(records.map((r) => r.studentEnrollmentId).filter(Boolean)));
+    const enrollmentIds = Array.from(
+      new Set(records.map((r) => r.studentEnrollmentId).filter(Boolean)),
+    );
     let enrollmentMap = new Map<string, string>();
     if (enrollmentIds.length > 0) {
-      const enrollments = await this.dataSource.getRepository(StudentEnrollment).find({
-        where: { id: In(enrollmentIds) },
-      });
-      enrollmentMap = new Map(enrollments.map((e) => [String(e.id), String(e.studentId)]));
+      const enrollments = await this.dataSource
+        .getRepository(StudentEnrollment)
+        .find({
+          where: { id: In(enrollmentIds) },
+        });
+      enrollmentMap = new Map(
+        enrollments.map((e) => [String(e.id), String(e.studentId)]),
+      );
     }
 
     return records.map((r) => {
@@ -706,7 +867,9 @@ export class AttendanceService implements OnModuleInit {
           dateStr = String(rawDate).slice(0, 10);
         }
       }
-      const actualStudentId = enrollmentMap.get(String(r.studentEnrollmentId)) || String(r.studentEnrollmentId);
+      const actualStudentId =
+        enrollmentMap.get(String(r.studentEnrollmentId)) ||
+        String(r.studentEnrollmentId);
 
       return {
         id: String(r.id),
@@ -721,15 +884,21 @@ export class AttendanceService implements OnModuleInit {
     });
   }
 
-  async getStudentHistory(caller: AuthContext, schoolId: string, studentId: string) {
+  async getStudentHistory(
+    caller: AuthContext,
+    schoolId: string,
+    studentId: string,
+  ) {
     await this.assertAccessToSchool(caller, schoolId);
 
-    const enrollments = await this.dataSource.getRepository(StudentEnrollment).find({
-      where: [
-        { studentId: String(studentId), isDeleted: false },
-        { id: String(studentId), isDeleted: false },
-      ],
-    });
+    const enrollments = await this.dataSource
+      .getRepository(StudentEnrollment)
+      .find({
+        where: [
+          { studentId: String(studentId), isDeleted: false },
+          { id: String(studentId), isDeleted: false },
+        ],
+      });
 
     const enrollmentIds = Array.from(
       new Set([...enrollments.map((e) => String(e.id)), String(studentId)]),
@@ -742,10 +911,14 @@ export class AttendanceService implements OnModuleInit {
 
     if (!records.length) return [];
 
-    const sessionIds = Array.from(new Set(records.map((r) => r.sessionId).filter(Boolean)));
-    const sessions = await this.dataSource.getRepository(AttendanceSession).find({
-      where: { id: In(sessionIds) },
-    });
+    const sessionIds = Array.from(
+      new Set(records.map((r) => r.sessionId).filter(Boolean)),
+    );
+    const sessions = await this.dataSource
+      .getRepository(AttendanceSession)
+      .find({
+        where: { id: In(sessionIds) },
+      });
     const sessionMap = new Map(sessions.map((s) => [s.id, s]));
 
     // Collect staff / owner user IDs from records and sessions
@@ -788,8 +961,10 @@ export class AttendanceService implements OnModuleInit {
             st.name ||
             `${st.first_name || ''} ${st.last_name || ''}`.trim();
           if (stName) {
-            if (st.id && !userNamesMap.has(String(st.id))) userNamesMap.set(String(st.id), stName);
-            if (st.user_id && !userNamesMap.has(String(st.user_id))) userNamesMap.set(String(st.user_id), stName);
+            if (st.id && !userNamesMap.has(String(st.id)))
+              userNamesMap.set(String(st.id), stName);
+            if (st.user_id && !userNamesMap.has(String(st.user_id)))
+              userNamesMap.set(String(st.user_id), stName);
           }
         });
       }
@@ -798,9 +973,11 @@ export class AttendanceService implements OnModuleInit {
     // 3. Query Platform Users for remaining missing IDs
     if (creatorUserIds.length > 0) {
       try {
-        const platformUsers = await this.dataSource.getRepository(PlatformUser).find({
-          where: { id: In(creatorUserIds.map((id) => String(id))) },
-        });
+        const platformUsers = await this.dataSource
+          .getRepository(PlatformUser)
+          .find({
+            where: { id: In(creatorUserIds.map((id) => String(id))) },
+          });
         platformUsers.forEach((u) => {
           if (u.name && !userNamesMap.has(String(u.id))) {
             userNamesMap.set(String(u.id), u.name);
@@ -853,7 +1030,8 @@ export class AttendanceService implements OnModuleInit {
         (sessionObj ? sessionObj.takenBy || sessionObj.createdById : null);
 
       const markedBy =
-        (markedById && userNamesMap.get(String(markedById))) || "Faculty Coordinator";
+        (markedById && userNamesMap.get(String(markedById))) ||
+        'Faculty Coordinator';
 
       return {
         id: String(r.id),

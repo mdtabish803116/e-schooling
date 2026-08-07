@@ -69,10 +69,7 @@ export class TimetableController {
 
   @ApiOperation({ summary: 'Assign timetable slot' })
   @Post('timetable-slots')
-  async assignSlot(
-    @Param('schoolId') schoolId: string,
-    @Body() payload: any,
-  ) {
+  async assignSlot(@Param('schoolId') schoolId: string, @Body() payload: any) {
     return this.timetableService.assignSlot(schoolId, payload);
   }
 
@@ -151,10 +148,7 @@ export class TimetableController {
 
   @ApiOperation({ summary: 'Create a calendar event' })
   @Post('timetable/events')
-  async addEvent(
-    @Param('schoolId') schoolId: string,
-    @Body() payload: any,
-  ) {
+  async addEvent(@Param('schoolId') schoolId: string, @Body() payload: any) {
     return this.timetableService.addEvent(schoolId, payload);
   }
 

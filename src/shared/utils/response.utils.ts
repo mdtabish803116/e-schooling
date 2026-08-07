@@ -9,7 +9,11 @@ export interface ApiResponseEnvelope<T = any> {
 }
 
 export class ApiResponse {
-  static success<T>(data: T, message = 'Success', status = 200): ApiResponseEnvelope<T> {
+  static success<T>(
+    data: T,
+    message = 'Success',
+    status = 200,
+  ): ApiResponseEnvelope<T> {
     return {
       success: true,
       error: null,
@@ -19,7 +23,11 @@ export class ApiResponse {
     };
   }
 
-  static error(error: any, message = 'An error occurred', status = 500): ApiResponseEnvelope<null> {
+  static error(
+    error: any,
+    message = 'An error occurred',
+    status = 500,
+  ): ApiResponseEnvelope<null> {
     return {
       success: false,
       error: error || 'INTERNAL_SERVER_ERROR',
