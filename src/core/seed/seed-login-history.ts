@@ -69,14 +69,13 @@ export async function seedLoginHistoryTable(dataSource: DataSource) {
   console.log('✅ Table "user_login_history" & indexes verified.');
 
   // 3. Sample Data Seeding
-  const countRes = await dataSource.query(
+  const countRes = await dataSource.query<{ count: number }[]>(
     `SELECT COUNT(*)::int as count FROM "e_schooling"."user_login_history"`,
   );
   const count = countRes[0]?.count || 0;
 
   if (count === 0) {
     console.log('🌱 Seeding initial login history records...');
-    const now = new Date().toISOString();
 
     await dataSource.query(`
       INSERT INTO "e_schooling"."user_login_history" (
@@ -147,5 +146,5 @@ async function runStandaloneSeed() {
 
 // Run standalone if invoked directly
 if (require.main === module) {
-  runStandaloneSeed();
+  void runStandaloneSeed();
 }
