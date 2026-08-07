@@ -698,6 +698,18 @@ export class PlatformService {
         parentName: null,
         showInSidebar: true,
       },
+      {
+        name: 'Transport',
+        route: '/transport',
+        icon: 'directions_bus',
+        description:
+          'Manage school fleet, routes, drivers, pickup points, and student transport allocations',
+        displayOrder: 18,
+        isMenuGroup: false,
+        featureCode: null,
+        parentName: null,
+        showInSidebar: true,
+      },
 
       {
         name: 'Administration',

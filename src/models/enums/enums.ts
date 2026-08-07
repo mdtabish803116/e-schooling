@@ -43,6 +43,7 @@ export enum ResourceEnum {
   FINANCE_ORDER = 'finance:order',
   FINANCE_INVOICE = 'finance:invoice',
   SUBSCRIPTION = 'subscription',
+  TRANSPORT = 'transport',
 }
 
 export enum ActionEnum {
