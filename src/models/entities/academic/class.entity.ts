@@ -1,47 +1,127 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+  Index,
+} from 'typeorm';
 
 @Entity({ name: 'classes', schema: 'e_schooling' })
 export class Class {
-  @PrimaryGeneratedColumn('increment', { type: 'bigint', comment: 'Primary key' })
+  @PrimaryGeneratedColumn('increment', {
+    type: 'bigint',
+    comment: 'Primary key',
+  })
   id: string;
 
   @Index()
-  @Column({ name: 'school_id', type: 'bigint', nullable: true, comment: 'Reference to School' })
+  @Column({
+    name: 'school_id',
+    type: 'bigint',
+    nullable: true,
+    comment: 'Reference to School',
+  })
   schoolId: string;
 
   @Index()
-  @Column({ name: 'academic_session_id', type: 'bigint', nullable: true, comment: 'Reference to AcademicSession' })
+  @Column({
+    name: 'academic_session_id',
+    type: 'bigint',
+    nullable: true,
+    comment: 'Reference to AcademicSession',
+  })
   academicSessionId: string | null;
 
-  @Column({ name: 'name', type: 'varchar', nullable: true, comment: 'Class name' })
+  @Column({
+    name: 'name',
+    type: 'varchar',
+    nullable: true,
+    comment: 'Class name',
+  })
   name: string;
 
-  @Column({ name: 'class_code', type: 'varchar', nullable: true, comment: 'Class code (unique identifier)' })
+  @Column({
+    name: 'class_code',
+    type: 'varchar',
+    nullable: true,
+    comment: 'Class code (unique identifier)',
+  })
   classCode: string;
 
-  @Column({ name: 'description', type: 'text', nullable: true, comment: 'Optional description of the class' })
+  @Column({
+    name: 'description',
+    type: 'text',
+    nullable: true,
+    comment: 'Optional description of the class',
+  })
   description: string;
 
-  @Column({ name: 'daily_attendance_limit', type: 'integer', nullable: false, default: 1, comment: 'Max attendance sessions per day' })
+  @Column({
+    name: 'daily_attendance_limit',
+    type: 'integer',
+    nullable: false,
+    default: 1,
+    comment: 'Max attendance sessions per day',
+  })
   dailyAttendanceLimit: number;
 
-  @Column({ name: 'is_active', type: 'boolean', nullable: false, default: true, comment: 'Active status toggle' })
+  @Column({
+    name: 'capacity',
+    type: 'integer',
+    nullable: true,
+    default: 40,
+    comment: 'Maximum student capacity in this class',
+  })
+  capacity: number;
+
+  @Column({
+    name: 'is_active',
+    type: 'boolean',
+    nullable: false,
+    default: true,
+    comment: 'Active status toggle',
+  })
   isActive: boolean;
 
   @Index()
-  @Column({ name: 'created_by_id', type: 'bigint', nullable: true, comment: 'Reference to SchoolUser' })
+  @Column({
+    name: 'created_by_id',
+    type: 'bigint',
+    nullable: true,
+    comment: 'Reference to SchoolUser',
+  })
   createdById: string;
 
   @Index()
-  @Column({ name: 'updated_by_id', type: 'bigint', nullable: true, comment: 'Reference to SchoolUser' })
+  @Column({
+    name: 'updated_by_id',
+    type: 'bigint',
+    nullable: true,
+    comment: 'Reference to SchoolUser',
+  })
   updatedById: string;
 
-  @Column({ name: 'is_delete', type: 'boolean', nullable: false, default: false, comment: 'Soft delete marker' })
+  @Column({
+    name: 'is_delete',
+    type: 'boolean',
+    nullable: false,
+    default: false,
+    comment: 'Soft delete marker',
+  })
   isDeleted: boolean;
 
-  @CreateDateColumn({ name: 'created_at', type: 'timestamp', comment: 'Creation timestamp' })
+  @CreateDateColumn({
+    name: 'created_at',
+    type: 'timestamp',
+    comment: 'Creation timestamp',
+  })
   createdAt: Date;
 
-  @UpdateDateColumn({ name: 'updated_at', type: 'timestamp', comment: 'Last update timestamp' })
+  @UpdateDateColumn({
+    name: 'updated_at',
+    type: 'timestamp',
+    comment: 'Last update timestamp',
+  })
   updatedAt: Date;
 }

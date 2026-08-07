@@ -1,6 +1,6 @@
 # E-School Backend (`e-schooling`) AI Context
 
-Last updated: 2026-08-07 (Module Masters & RBAC Permissions Seed, Staff/Homework/Academic Years Support, Migration 1784832800000)
+Last updated: 2026-08-07 (Class Entity Capacity Field, UpdateClassDto/CreateClassDto Capacity & AcademicSession, Migration 1784832900000)
 
 This file is the quick-start handoff for AI agents working in the `e-schooling` backend repository. Read it before modifying or adding API endpoints, NestJS services, TypeORM entities, background workers, or migrations.
 
