@@ -48,6 +48,34 @@ export class StudentCredentialsController {
     };
   }
 
+  @ApiOperation({ summary: 'Get student credentials (school-scoped)' })
+  @Permission(ResourceEnum.STUDENT_CREDENTIALS, ActionEnum.VIEW)
+  @Get('/schools/:schoolId/students/:studentId/credentials')
+  async getSchoolStudentCredential(
+    @Param('schoolId') schoolId: string,
+    @Param('studentId') studentId: string,
+  ) {
+    const student = await this.dataSource.getRepository(Student).findOne({
+      where: [
+        { id: studentId, schoolId },
+        { id: studentId },
+      ],
+    });
+    if (!student || !student.studentCode) {
+      throw new NotFoundException('Credentials not generated or student not found');
+    }
+    return {
+      id: student.id,
+      studentId: student.id,
+      username: student.studentCode,
+      status: student.isActive ? 'ACTIVE' : 'LOCKED',
+      mustChangePassword: false,
+      lastLogin: null,
+      createdAt: student.createdAt,
+      updatedAt: student.updatedAt,
+    };
+  }
+
   @ApiOperation({ summary: 'Generate credentials' })
   @Permission(ResourceEnum.STUDENT_CREDENTIALS, ActionEnum.CREATE)
   @Post('generate')
@@ -82,6 +110,16 @@ export class StudentCredentialsController {
       temporaryPassword: student.dob || '2010-01-01',
       mustChangePassword: true,
     };
+  }
+
+  @ApiOperation({ summary: 'Generate credentials (school-scoped)' })
+  @Permission(ResourceEnum.STUDENT_CREDENTIALS, ActionEnum.CREATE)
+  @Post('/schools/:schoolId/students/:studentId/credentials')
+  async generateSchoolStudentCredential(
+    @Param('schoolId') schoolId: string,
+    @Param('studentId') studentId: string,
+  ) {
+    return this.generateCredential({ studentId });
   }
 
   @ApiOperation({ summary: 'Reset password' })

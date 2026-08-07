@@ -109,6 +109,17 @@ export class AttendanceController {
     return this.attendanceService.getAttendanceStudents(caller, schoolId, { classId, sectionId, academicSessionId, date, page, limit });
   }
 
+  @ApiOperation({ summary: 'Get student attendance history records' })
+  @Permission(ResourceEnum.ATTENDANCE, ActionEnum.VIEW)
+  @Get('students/:studentId/history')
+  async getStudentHistory(
+    @Param('schoolId') schoolId: string,
+    @Param('studentId') studentId: string,
+    @CurrentUser() caller: AuthContext,
+  ) {
+    return this.attendanceService.getStudentHistory(caller, schoolId, studentId);
+  }
+
   @ApiOperation({ summary: 'Get attendance dashboard analytics summary' })
   @Permission(ResourceEnum.ATTENDANCE, ActionEnum.VIEW)
   @Get('dashboard')

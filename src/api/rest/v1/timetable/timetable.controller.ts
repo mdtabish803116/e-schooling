@@ -113,6 +113,15 @@ export class TimetableController {
     return this.timetableService.getClassTimetable(schoolId, classId);
   }
 
+  @ApiOperation({ summary: 'Get student specific timetable' })
+  @Get('students/:studentId/timetable')
+  async getStudentTimetable(
+    @Param('schoolId') schoolId: string,
+    @Param('studentId') studentId: string,
+  ) {
+    return this.timetableService.getStudentTimetable(schoolId, studentId);
+  }
+
   @ApiOperation({ summary: 'Get timetable conflicts' })
   @Get('timetable/conflicts')
   async getConflicts(@Param('schoolId') schoolId: string) {

@@ -13,6 +13,7 @@ import { AttendanceSession } from '../../models/entities/attendance/attendance-s
 import { SchoolOwnerMember } from '../../models/entities/school/school-owner-member.entity';
 import { StudentEnrollment } from '../../models/entities/student/student-enrollment.entity';
 import { Student } from '../../models/entities/student/student.entity';
+import { PlatformUser } from '../../models/entities/platform/platform-user.entity';
 import { AttendanceStatusEnum } from '../../models/enums/enums';
 
 @Injectable()
@@ -715,6 +716,157 @@ export class AttendanceService implements OnModuleInit {
         date: dateStr,
         attendanceMark: String(r.attendanceMark).toUpperCase(),
         status: String(r.attendanceMark).toUpperCase(),
+        remarks: r.remarks || '',
+      };
+    });
+  }
+
+  async getStudentHistory(caller: AuthContext, schoolId: string, studentId: string) {
+    await this.assertAccessToSchool(caller, schoolId);
+
+    const enrollments = await this.dataSource.getRepository(StudentEnrollment).find({
+      where: [
+        { studentId: String(studentId), isDeleted: false },
+        { id: String(studentId), isDeleted: false },
+      ],
+    });
+
+    const enrollmentIds = Array.from(
+      new Set([...enrollments.map((e) => String(e.id)), String(studentId)]),
+    );
+
+    const records = await this.dataSource.getRepository(AttendanceRecord).find({
+      where: { studentEnrollmentId: In(enrollmentIds), isDeleted: false },
+      order: { createdAt: 'DESC' },
+    });
+
+    if (!records.length) return [];
+
+    const sessionIds = Array.from(new Set(records.map((r) => r.sessionId).filter(Boolean)));
+    const sessions = await this.dataSource.getRepository(AttendanceSession).find({
+      where: { id: In(sessionIds) },
+    });
+    const sessionMap = new Map(sessions.map((s) => [s.id, s]));
+
+    // Collect staff / owner user IDs from records and sessions
+    const creatorUserIds = Array.from(
+      new Set(
+        [
+          ...records.map((r) => r.createdById),
+          ...sessions.map((s) => s.takenBy || s.createdById),
+        ].filter(Boolean),
+      ),
+    );
+
+    const userNamesMap = new Map<string, string>();
+
+    // 1. Query School Owners FIRST to get real Owner Names (e.g., "Md Dilnawaz Alam" instead of "Super Admin")
+    try {
+      const owners = await this.dataSource.query(
+        `SELECT id, full_name, email FROM "e_schooling"."school_owners"`,
+      );
+      if (Array.isArray(owners)) {
+        owners.forEach((o) => {
+          const oName = o.full_name || o.email;
+          if (oName) {
+            userNamesMap.set(String(o.id), oName);
+          }
+        });
+      }
+    } catch {}
+
+    // 2. Query School Staff
+    try {
+      const staffList = await this.dataSource.query(
+        `SELECT id, user_id, name, full_name, first_name, last_name FROM "e_schooling"."school_staff" WHERE school_id = $1`,
+        [schoolId],
+      );
+      if (Array.isArray(staffList)) {
+        staffList.forEach((st) => {
+          const stName =
+            st.full_name ||
+            st.name ||
+            `${st.first_name || ''} ${st.last_name || ''}`.trim();
+          if (stName) {
+            if (st.id && !userNamesMap.has(String(st.id))) userNamesMap.set(String(st.id), stName);
+            if (st.user_id && !userNamesMap.has(String(st.user_id))) userNamesMap.set(String(st.user_id), stName);
+          }
+        });
+      }
+    } catch {}
+
+    // 3. Query Platform Users for remaining missing IDs
+    if (creatorUserIds.length > 0) {
+      try {
+        const platformUsers = await this.dataSource.getRepository(PlatformUser).find({
+          where: { id: In(creatorUserIds.map((id) => String(id))) },
+        });
+        platformUsers.forEach((u) => {
+          if (u.name && !userNamesMap.has(String(u.id))) {
+            userNamesMap.set(String(u.id), u.name);
+          }
+        });
+      } catch {}
+    }
+
+    return records.map((r) => {
+      const sessionObj = sessionMap.get(r.sessionId);
+      const rawDate = sessionObj ? sessionObj.date : null;
+      const createdAtDate = r.createdAt
+        ? new Date(r.createdAt)
+        : sessionObj?.createdAt
+          ? new Date(sessionObj.createdAt)
+          : new Date();
+
+      // Format Date into DD/MM/YYYY
+      const dateToDDMMYYYY = (dObj: Date) => {
+        const day = String(dObj.getDate()).padStart(2, '0');
+        const month = String(dObj.getMonth() + 1).padStart(2, '0');
+        const year = dObj.getFullYear();
+        return `${day}/${month}/${year}`;
+      };
+
+      // Format Time into HH:mm:ss AM/PM
+      const dateToTimeWithSeconds = (dObj: Date) => {
+        return dObj.toLocaleTimeString('en-GB', {
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: true,
+        });
+      };
+
+      let dateObj = createdAtDate;
+      if (rawDate) {
+        const parsed = new Date(rawDate);
+        if (!isNaN(parsed.getTime())) {
+          dateObj = parsed;
+        }
+      }
+
+      const formattedDate = dateToDDMMYYYY(dateObj);
+      const timeWithSeconds = dateToTimeWithSeconds(createdAtDate);
+      const dateTimeFormatted = `${formattedDate}, ${timeWithSeconds}`;
+
+      const markedById =
+        r.createdById ||
+        (sessionObj ? sessionObj.takenBy || sessionObj.createdById : null);
+
+      const markedBy =
+        (markedById && userNamesMap.get(String(markedById))) || "Faculty Coordinator";
+
+      return {
+        id: String(r.id),
+        sessionId: String(r.sessionId),
+        studentEnrollmentId: String(r.studentEnrollmentId),
+        studentId: String(studentId),
+        date: formattedDate, // DD/MM/YYYY
+        rawDate: rawDate ? String(rawDate).slice(0, 10) : formattedDate,
+        time: timeWithSeconds, // HH:mm:ss AM/PM
+        dateTime: dateTimeFormatted, // DD/MM/YYYY, HH:mm:ss AM/PM
+        attendanceMark: String(r.attendanceMark).toUpperCase(),
+        status: String(r.attendanceMark).toUpperCase(),
+        markedBy,
         remarks: r.remarks || '',
       };
     });

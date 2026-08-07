@@ -13,6 +13,8 @@ import { Class } from '../../models/entities/academic/class.entity';
 import { Section } from '../../models/entities/academic/section.entity';
 import { Subject } from '../../models/entities/academic/subject.entity';
 import { SchoolUser } from '../../models/entities/school/school-user.entity';
+import { StudentEnrollment } from '../../models/entities/student/student-enrollment.entity';
+import { Student } from '../../models/entities/student/student.entity';
 
 import {
   TimetableStatusEnum,
@@ -235,11 +237,34 @@ export class TimetableService {
       if (t) teacherName = t.name;
     }
 
+    let periodName = '';
+    let startTime = '';
+    let endTime = '';
+
+    if (slot.period) {
+      periodName = slot.period.name;
+      startTime = slot.period.startTime;
+      endTime = slot.period.endTime;
+    } else if (slot.periodId) {
+      const per = await this.periodRepo.findOne({ where: { id: slot.periodId } });
+      if (per) {
+        periodName = per.name;
+        startTime = per.startTime;
+        endTime = per.endTime;
+      }
+    }
+
+    const timeStr = startTime && endTime ? `${startTime} - ${endTime}` : (periodName || `Period ${slot.periodId}`);
+
     return {
       id: slot.id,
       timetableId: slot.timetableId,
       day: slot.day,
       periodId: slot.periodId,
+      periodName: periodName || `Period ${slot.periodId}`,
+      startTime,
+      endTime,
+      time: timeStr,
       classId: slot.classId,
       className,
       sectionId: slot.sectionId,
@@ -421,6 +446,63 @@ export class TimetableService {
       where: { schoolId, classId, isDeleted: false },
       relations: ['class', 'section', 'subject', 'teacher', 'period'],
     });
+
+    const formatted = await Promise.all(slots.map((s) => this.formatSlot(s)));
+    return formatted;
+  }
+
+  // 11b. Student Specific Timetable
+  async getStudentTimetable(schoolId: string, studentId: string) {
+    let classId: string | null = null;
+    let sectionId: string | null = null;
+
+    try {
+      const enrollment = await this.dataSource.getRepository(StudentEnrollment).findOne({
+        where: [
+          { studentId: String(studentId), schoolId: String(schoolId), isDeleted: false },
+          { id: String(studentId), schoolId: String(schoolId), isDeleted: false },
+        ],
+      });
+
+      if (enrollment) {
+        classId = String(enrollment.classId);
+        sectionId = String(enrollment.sectionId);
+      }
+    } catch {}
+
+    if (!classId) {
+      try {
+        const rows = await this.dataSource.query(
+          `SELECT class_id, section_id FROM "e_schooling"."student_enrollments" WHERE (student_id = $1 OR id = $1) AND school_id = $2 AND is_delete = false LIMIT 1`,
+          [studentId, schoolId],
+        );
+        if (rows && rows.length > 0) {
+          classId = String(rows[0].class_id);
+          sectionId = String(rows[0].section_id);
+        }
+      } catch {}
+    }
+
+    if (!classId) {
+      classId = String(studentId);
+    }
+
+    const whereClause: any = { schoolId, classId, isDeleted: false };
+    if (sectionId) {
+      whereClause.sectionId = sectionId;
+    }
+
+    let slots = await this.slotRepo.find({
+      where: whereClause,
+      relations: ['class', 'section', 'subject', 'teacher', 'period'],
+    });
+
+    if (!slots.length && sectionId) {
+      slots = await this.slotRepo.find({
+        where: { schoolId, classId, isDeleted: false },
+        relations: ['class', 'section', 'subject', 'teacher', 'period'],
+      });
+    }
 
     const formatted = await Promise.all(slots.map((s) => this.formatSlot(s)));
     return formatted;

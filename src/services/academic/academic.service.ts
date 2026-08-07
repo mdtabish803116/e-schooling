@@ -3,6 +3,7 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  OnModuleInit,
 } from '@nestjs/common';
 import { DataSource, In, IsNull, Repository } from 'typeorm';
 import type { AuthContext } from '../../interfaces/auth-context.interface';
@@ -37,7 +38,7 @@ import { SectionTransferHistory } from '../../models/entities/student/section-tr
 import { StudentEnrollment } from '../../models/entities/student/student-enrollment.entity';
 
 @Injectable()
-export class AcademicService {
+export class AcademicService implements OnModuleInit {
   private classRepo: Repository<Class>;
   private sectionRepo: Repository<Section>;
   private subjectRepo: Repository<Subject>;
@@ -56,6 +57,27 @@ export class AcademicService {
     );
     this.sessionRepo = this.dataSource.getRepository(AcademicSession);
     this.roomRepo = this.dataSource.getRepository(Room);
+  }
+
+  async onModuleInit() {
+    try {
+      const tables = [
+        'classes',
+        'sections',
+        'class_section_subjects',
+        'subjects',
+        'teacher_section_assignments',
+        'rooms',
+        'student_subjects',
+      ];
+      for (const table of tables) {
+        await this.dataSource.query(
+          `ALTER TABLE "e_schooling"."${table}" ADD COLUMN IF NOT EXISTS "academic_session_id" bigint;`,
+        );
+      }
+    } catch (err) {
+      console.warn('Auto-column creation for academic_session_id skipped:', err);
+    }
   }
 
   private async checkModulePermission(
