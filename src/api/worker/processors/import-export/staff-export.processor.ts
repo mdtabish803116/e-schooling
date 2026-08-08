@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Job } from 'bullmq';
+import { WorkerJobContext } from '../../worker-job.interface';
 import { DataSource } from 'typeorm';
 import { SchoolUser } from '../../../../models/entities/school/school-user.entity';
 
@@ -9,11 +9,9 @@ export class StaffExportProcessor {
 
   constructor(private readonly dataSource: DataSource) {}
 
-  async process(job: Job): Promise<unknown> {
-    const { schoolId } = job.data;
-    this.logger.log(
-      `[StaffExportProcessor] Processing staff export job ${job.id} for school: ${schoolId}`,
-    );
+  async process(job: WorkerJobContext): Promise<unknown> {
+    const { schoolId } = job.data || {};
+    this.logger.log(`[StaffExportProcessor] Processing staff export job ${job.id} for school: ${schoolId}`);
 
     await job.updateProgress(20);
 

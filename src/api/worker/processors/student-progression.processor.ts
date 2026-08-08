@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Job } from 'bullmq';
+import { WorkerJobContext } from '../worker-job.interface';
 import { StudentAdmissionsService } from '../../../services/student/student-admissions.service';
 import { BulkProgressionDto } from '../../../interfaces/request/student/bulk-progression.dto';
 import { AuthContext } from '../../../interfaces/auth-context.interface';
@@ -10,13 +10,13 @@ export class StudentProgressionProcessor {
 
   constructor(private readonly admissionsService: StudentAdmissionsService) {}
 
-  async process(job: Job): Promise<unknown> {
+  async process(job: WorkerJobContext): Promise<unknown> {
     const { name, data, id } = job;
     this.logger.log(
       `[StudentProgressionProcessor] Processing job ${id} (${name})`,
     );
 
-    if (name === 'bulk_progression_job') {
+    if (name === 'bulk_progression_job' || job.data?.dto) {
       const { schoolId, caller, dto } = data as {
         schoolId: string;
         caller: AuthContext;
@@ -29,11 +29,7 @@ export class StudentProgressionProcessor {
 
       await job.updateProgress(10);
 
-      const result = await this.admissionsService.bulkProgressStudents(
-        caller,
-        schoolId,
-        dto,
-      );
+      const result = await this.admissionsService.bulkProgressStudents(caller, schoolId, dto);
 
       await job.updateProgress(100);
 

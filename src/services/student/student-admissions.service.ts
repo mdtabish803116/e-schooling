@@ -26,12 +26,8 @@ import { Student } from '../../models/entities/student/student.entity';
 import { AdmissionEnquiry } from '../../models/entities/student/admission-enquiry.entity';
 import { AdmissionApplication } from '../../models/entities/student/admission-application.entity';
 import { SchoolSubscription } from '../../models/entities/subscription/school-subscription.entity';
-import {
-  ActionTypeEnum,
-  EnrollmentStatusEnum,
-  EnrollmentTypeEnum,
-  OverrideTypeEnum,
-} from '../../models/enums/enums';
+import { ActionTypeEnum, EnrollmentStatusEnum, EnrollmentTypeEnum, OverrideTypeEnum } from '../../models/enums/enums';
+import { processInBatches } from '../../shared/utils/batch-processor.util';
 
 @Injectable()
 export class StudentAdmissionsService {
@@ -79,12 +75,13 @@ export class StudentAdmissionsService {
     const school = await this.assertOwnership(caller.id, schoolId);
 
     if (!dto.academicSessionId) {
-      const activeSession = await this.dataSource
-        .getRepository(AcademicSession)
-        .findOne({
-          where: { schoolId, isCurrent: true, isDeleted: false },
-        });
-      dto.academicSessionId = activeSession?.id || '1';
+      const activeSession = await this.dataSource.getRepository(AcademicSession).findOne({
+        where: { schoolId, isCurrent: true, isDeleted: false },
+      });
+      if (!activeSession) {
+        throw new NotFoundException('No active academic session found in the database. Please create a session first.');
+      }
+      dto.academicSessionId = activeSession.id;
     }
 
     // Check subscription quota
@@ -164,7 +161,7 @@ export class StudentAdmissionsService {
         school.internalSchoolCode,
       );
       const salt = await bcrypt.genSalt(10);
-      const passwordHash = await bcrypt.hash(dto.dob || '2010-01-01', salt);
+      const passwordHash = await bcrypt.hash(dto.dob, salt);
 
       const student = new Student();
       student.schoolId = schoolId;
@@ -709,7 +706,7 @@ export class StudentAdmissionsService {
   }
 
   /* ────────────────────────────────────────────────────
-     BULK PROGRESS STUDENTS
+     BULK PROGRESS STUDENTS (Batch Transactional)
   ──────────────────────────────────────────────────── */
   async bulkProgressStudents(
     caller: AuthContext,
@@ -741,20 +738,9 @@ export class StudentAdmissionsService {
         });
       }
       if (!activeSession) {
-        // Create a default session if none exists
-        const newSession = sessionRepo.create({
-          schoolId,
-          name: '2025-2026',
-          startDate: '2025-04-01',
-          endDate: '2026-03-31',
-          isCurrent: true,
-          isActive: true,
-        });
-        const savedSession = await sessionRepo.save(newSession);
-        resolvedSessionId = savedSession.id;
-      } else {
-        resolvedSessionId = activeSession.id;
+        throw new NotFoundException('No active academic session found in the database. Please create a session first.');
       }
+      resolvedSessionId = activeSession.id;
     } else {
       const targetSession = await this.dataSource
         .getRepository(AcademicSession)
@@ -783,80 +769,67 @@ export class StudentAdmissionsService {
       oldEnrollmentState = EnrollmentStatusEnum.TRANSFERRED;
     } else throw new BadRequestException('Invalid action type');
 
-    const queryRunner = this.dataSource.createQueryRunner();
-    await queryRunner.connect();
-    await queryRunner.startTransaction();
+    const processedStudentIds: string[] = [];
 
-    try {
-      const enrollmentRepo =
-        queryRunner.manager.getRepository(StudentEnrollment);
-      const logRepo = queryRunner.manager.getRepository(PromotionLog);
-      const processedStudentIds: string[] = [];
+    // Process student movements in chunked transactions (Batch size = 200 students)
+    await processInBatches<string>({
+      items: dto.studentIds || [],
+      batchSize: 200,
+      dataSource: this.dataSource,
+      processBatch: async (studentChunk, queryRunner) => {
+        const enrollmentRepo = queryRunner.manager.getRepository(StudentEnrollment);
+        const logRepo = queryRunner.manager.getRepository(PromotionLog);
 
-      for (const studentId of dto.studentIds) {
-        const currentEnrollment = await enrollmentRepo.findOne({
-          where: { studentId, schoolId, isCurrent: true, isDeleted: false },
-        });
-        let previousEnrollmentId: string | undefined;
+        for (const studentId of studentChunk) {
+          const currentEnrollment = await enrollmentRepo.findOne({ where: { studentId, schoolId, isCurrent: true, isDeleted: false } });
+          let previousEnrollmentId: string | undefined;
 
-        if (currentEnrollment) {
-          previousEnrollmentId = currentEnrollment.id;
-          currentEnrollment.isCurrent = false;
-          currentEnrollment.enrollmentState = oldEnrollmentState;
-          currentEnrollment.endDate = new Date().toISOString().split('T')[0];
-          currentEnrollment.updatedById = caller.id;
-          await enrollmentRepo.save(currentEnrollment);
+          if (currentEnrollment) {
+            previousEnrollmentId = currentEnrollment.id;
+            currentEnrollment.isCurrent = false;
+            currentEnrollment.enrollmentState = oldEnrollmentState;
+            currentEnrollment.endDate = new Date().toISOString().split('T')[0];
+            currentEnrollment.updatedById = caller.id;
+            await enrollmentRepo.save(currentEnrollment);
+          }
+
+          const newEnrollment = new StudentEnrollment();
+          newEnrollment.schoolId = schoolId;
+          newEnrollment.studentId = studentId;
+          newEnrollment.academicSessionId = resolvedSessionId;
+          newEnrollment.classId = dto.targetClassId;
+          newEnrollment.sectionId = dto.targetSectionId;
+          newEnrollment.enrollmentType = enrollmentType;
+          newEnrollment.enrollmentState = EnrollmentStatusEnum.ACTIVE;
+          newEnrollment.isCurrent = true;
+          if (previousEnrollmentId) newEnrollment.previousEnrollmentId = previousEnrollmentId;
+          newEnrollment.createdById = caller.id;
+          newEnrollment.startDate = new Date().toISOString().split('T')[0];
+          const savedNewEnrollment = await enrollmentRepo.save(newEnrollment);
+
+          const log = new PromotionLog();
+          log.schoolId = schoolId;
+          log.studentId = studentId;
+          if (previousEnrollmentId) log.fromEnrollmentId = previousEnrollmentId;
+          log.toEnrollmentId = savedNewEnrollment.id;
+          if (currentEnrollment?.classId) log.fromClassId = currentEnrollment.classId;
+          if (currentEnrollment?.sectionId) log.fromSectionId = currentEnrollment.sectionId;
+          log.toClassId = dto.targetClassId;
+          log.toSectionId = dto.targetSectionId;
+          log.actionType = dto.actionType;
+          log.remarks = dto.remarks || `Bulk progression of type: ${dto.actionType}`;
+          log.performedBy = caller.id;
+          log.performedAt = new Date();
+          log.isActive = true;
+          log.isDeleted = false;
+          await logRepo.save(log);
+
+          processedStudentIds.push(studentId);
         }
+      },
+    });
 
-        const newEnrollment = new StudentEnrollment();
-        newEnrollment.schoolId = schoolId;
-        newEnrollment.studentId = studentId;
-        newEnrollment.academicSessionId = resolvedSessionId;
-        newEnrollment.classId = dto.targetClassId;
-        newEnrollment.sectionId = dto.targetSectionId;
-        newEnrollment.enrollmentType = enrollmentType;
-        newEnrollment.enrollmentState = EnrollmentStatusEnum.ACTIVE;
-        newEnrollment.isCurrent = true;
-        if (previousEnrollmentId)
-          newEnrollment.previousEnrollmentId = previousEnrollmentId;
-        newEnrollment.createdById = caller.id;
-        newEnrollment.startDate = new Date().toISOString().split('T')[0];
-        const savedNewEnrollment = await enrollmentRepo.save(newEnrollment);
-
-        const log = new PromotionLog();
-        log.schoolId = schoolId;
-        log.studentId = studentId;
-        if (previousEnrollmentId) log.fromEnrollmentId = previousEnrollmentId;
-        log.toEnrollmentId = savedNewEnrollment.id;
-        if (currentEnrollment?.classId)
-          log.fromClassId = currentEnrollment.classId;
-        if (currentEnrollment?.sectionId)
-          log.fromSectionId = currentEnrollment.sectionId;
-        log.toClassId = dto.targetClassId;
-        log.toSectionId = dto.targetSectionId;
-        log.actionType = dto.actionType;
-        log.remarks =
-          dto.remarks || `Bulk progression of type: ${dto.actionType}`;
-        log.performedBy = caller.id;
-        log.performedAt = new Date();
-        log.isActive = true;
-        log.isDeleted = false;
-        await logRepo.save(log);
-
-        processedStudentIds.push(studentId);
-      }
-
-      await queryRunner.commitTransaction();
-      return {
-        message: `Successfully processed ${processedStudentIds.length} student(s) for ${dto.actionType}.`,
-        processedStudentIds,
-      };
-    } catch (error) {
-      await queryRunner.rollbackTransaction();
-      throw error;
-    } finally {
-      await queryRunner.release();
-    }
+    return { message: `Successfully processed ${processedStudentIds.length} student(s) for ${dto.actionType} in batch transactions.`, processedStudentIds };
   }
 
   /* ────────────────────────────────────────────────────

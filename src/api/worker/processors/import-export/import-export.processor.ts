@@ -1,5 +1,5 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
-import { Job } from 'bullmq';
+import { WorkerJobContext } from '../../worker-job.interface';
 import { StudentImportProcessor } from './student-import.processor';
 import { StudentExportProcessor } from './student-export.processor';
 import { StaffExportProcessor } from './staff-export.processor';
@@ -16,15 +16,13 @@ export class ImportExportProcessor {
     private readonly classExportProcessor: ClassExportProcessor,
   ) {}
 
-  async process(job: Job): Promise<unknown> {
+  async process(job: WorkerJobContext): Promise<unknown> {
     const { name, data, id } = job;
     this.logger.log(
       `[ImportExportProcessor] Routing job ${id} (${name}) on queue '${job.queueName}'`,
     );
 
-    const entityName = (data.entityName || data.entityType || '')
-      .toLowerCase()
-      .trim();
+    const entityName = (data?.entityName || data?.entityType || '').toLowerCase().trim();
 
     // 1. STUDENT IMPORT
     if (

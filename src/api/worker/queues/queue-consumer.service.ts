@@ -1,16 +1,11 @@
-import {
-  Injectable,
-  Logger,
-  OnModuleInit,
-  OnModuleDestroy,
-} from '@nestjs/common';
-import { Worker, Job } from 'bullmq';
+import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { Config } from '../../../config/index';
-import { RedisConnectionService } from '../redis/redis-connection.service';
+import { PgPubSubService, PgJobNotification } from '../pg-pubsub/pg-pubsub.service';
 import { QueueNames } from './queue.constants';
 import { BackGroundJob } from '../../../models/entities/background-job/background_jobs.entity';
 import { JobStatusEnum, JobTypeEnum } from '../../../models/enums/enums';
+import { WorkerJobContext } from '../worker-job.interface';
 import { NotificationProcessor } from '../processors/notification.processor';
 import { ImportExportProcessor } from '../processors/import-export/import-export.processor';
 import { CleanupProcessor } from '../processors/cleanup.processor';
@@ -21,11 +16,12 @@ import { QueueProducerService } from './queue-producer.service';
 @Injectable()
 export class QueueConsumerService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(QueueConsumerService.name);
-  private readonly workersList: Worker[] = [];
+  private pollingIntervalHandle: NodeJS.Timeout | null = null;
+  private isProcessingLoopActive = false;
 
   constructor(
     private readonly dataSource: DataSource,
-    private readonly redisConnectionService: RedisConnectionService,
+    private readonly pgPubSubService: PgPubSubService,
     private readonly notificationProcessor: NotificationProcessor,
     private readonly importExportProcessor: ImportExportProcessor,
     private readonly cleanupProcessor: CleanupProcessor,
@@ -38,40 +34,24 @@ export class QueueConsumerService implements OnModuleInit, OnModuleDestroy {
     const serverMode = Config.getSecret('SERVER_MODE', String) || 'rest';
 
     if (serverMode !== 'worker') {
-      this.logger.log(
-        '[QueueConsumerService] Running in API Mode. Skipping background worker boots.',
-      );
+      this.logger.log('[QueueConsumerService] Running in API Mode. Skipping background worker subscriber.');
       return;
     }
 
-    this.logger.log(
-      '[QueueConsumerService] Booting in worker mode... Initializing BullMQ queues and workers.',
-    );
+    this.logger.log('[QueueConsumerService] Booting in Worker Mode. Initializing PostgreSQL Pub/Sub & Outbox Consumer.');
 
-    // 1. Initialize Notification Queue Worker
-    this.createWorker(QueueNames.NOTIFICATIONS, async (job) => {
-      return this.notificationProcessor.process(job);
+    // 1. Subscribe to real-time LISTEN/NOTIFY signals from PostgreSQL
+    this.pgPubSubService.subscribe((_notification: PgJobNotification) => {
+      // Trigger instant processing pass
+      void this.pollNextJobAndProcess();
     });
 
-    // 2. Initialize Import/Export Queue Worker
-    this.createWorker(QueueNames.IMPORTS_EXPORTS, async (job) => {
-      return this.importExportProcessor.process(job);
-    });
+    // 2. Start a safety fallback ticker (every 5 seconds) to pick up missed or delayed PENDING tasks
+    this.pollingIntervalHandle = setInterval(() => {
+      void this.pollNextJobAndProcess();
+    }, 5000);
 
-    // 3. Initialize Maintenance/Cleanup Queue Worker
-    this.createWorker(QueueNames.CLEANUP, async (job) => {
-      if (job.name === JobTypeEnum.PAYMENT_RECONCILIATION) {
-        return this.paymentReconciliationProcessor.process(job);
-      }
-      return this.cleanupProcessor.process(job);
-    });
-
-    // 4. Initialize Student Progression Queue Worker
-    this.createWorker(QueueNames.STUDENT_PROGRESSION, async (job) => {
-      return this.studentProgressionProcessor.process(job);
-    });
-
-    // 5. Register the Repeatable Payment Reconciliation Cron Task: Runs every 2 hours
+    // 3. Register the Repeatable Payment Reconciliation Cron Task to execute every 2 hours
     try {
       this.logger.log(
         '[QueueConsumerService] Scheduling payment reconciliation task to execute every 2 hours...',
@@ -80,121 +60,144 @@ export class QueueConsumerService implements OnModuleInit, OnModuleDestroy {
         queueName: QueueNames.CLEANUP,
         jobType: JobTypeEnum.PAYMENT_RECONCILIATION,
         payload: { source: 'scheduler' },
-        cronExpression: '0 */2 * * *', // Run every 2 hours
+        cronExpression: '0 */2 * * *',
       });
-    } catch (err: unknown) {
-      const errorObj = err as Error;
-      this.logger.error(
-        `[QueueConsumerService] Failed to schedule payment reconciliation task: ${errorObj.message}`,
-      );
+    } catch (err: any) {
+      this.logger.error(`[QueueConsumerService] Failed to schedule payment reconciliation task: ${err.message}`);
+    }
+
+    // Trigger initial poll
+    void this.pollNextJobAndProcess();
+  }
+
+  /**
+   * Fetches the next available PENDING/RETRYING job using FOR UPDATE SKIP LOCKED for multi-worker safety
+   */
+  private async pollNextJobAndProcess(): Promise<void> {
+    if (this.isProcessingLoopActive) return;
+    this.isProcessingLoopActive = true;
+
+    try {
+      const queryRunner = this.dataSource.createQueryRunner();
+      await queryRunner.connect();
+      await queryRunner.startTransaction();
+
+      let targetJob: BackGroundJob | null = null;
+      try {
+        const rawJobs = await queryRunner.query(`
+          SELECT * FROM "e_schooling"."background_jobs"
+          WHERE status IN ('pending', 'retrying')
+            AND (scheduled_at IS NULL OR scheduled_at <= NOW())
+          ORDER BY priority DESC, created_at ASC
+          LIMIT 1
+          FOR UPDATE SKIP LOCKED
+        `);
+
+        if (rawJobs && rawJobs.length > 0) {
+          const rawJob = rawJobs[0];
+          targetJob = await queryRunner.manager.findOne(BackGroundJob, { where: { id: String(rawJob.id) } });
+
+          if (targetJob) {
+            targetJob.status = JobStatusEnum.ACTIVE;
+            targetJob.processedAt = new Date();
+            targetJob.attempts = (targetJob.attempts || 0) + 1;
+            await queryRunner.manager.save(BackGroundJob, targetJob);
+          }
+        }
+
+        await queryRunner.commitTransaction();
+      } catch (err: any) {
+        await queryRunner.rollbackTransaction();
+        this.logger.error(`Error locking background job in outbox poll: ${err.message}`);
+      } finally {
+        await queryRunner.release();
+      }
+
+      if (targetJob) {
+        await this.executeJob(targetJob);
+      }
+    } catch (err: any) {
+      this.logger.error(`[QueueConsumerService] Poll loop error: ${err.message}`);
+    } finally {
+      this.isProcessingLoopActive = false;
     }
   }
 
   /**
-   * Universal helper to instantiate a BullMQ worker with database status listeners hooked in
+   * Dispatches locked job to processor routine and persists execution results/progress
    */
-  private createWorker(
-    queueName: string,
-    processCallback: (job: Job) => Promise<unknown>,
-  ): void {
-    const connection = this.redisConnectionService.getConnection();
+  private async executeJob(job: BackGroundJob): Promise<void> {
+    this.logger.log(`[Worker] Starting execution for Job ${job.jobId} (Queue: ${job.queueName}, Type: ${job.jobType})`);
 
-    const worker = new Worker(queueName, processCallback, {
-      connection,
-      concurrency: 5, // Concurrent tasks per queue
-    });
+    const dbRepo = this.dataSource.getRepository(BackGroundJob);
 
-    // Event Hook: Active / Processing Started
-    worker.on('active', async (job) => {
-      const jobId = job.id;
-      this.logger.log(
-        `[Queue: ${queueName}] Job ${jobId} status transitioned to ACTIVE`,
-      );
+    const jobContext: WorkerJobContext = {
+      id: job.jobId,
+      name: job.jobType,
+      queueName: job.queueName,
+      data: job.payload || {},
+      attemptsMade: job.attempts,
+      maxAttempts: job.maxAttempts || 3,
+      updateProgress: async (progress: number) => {
+        try {
+          await dbRepo.update({ id: job.id }, { progress });
+        } catch (err: any) {
+          this.logger.error(`Failed to update progress for job ${job.jobId}: ${err.message}`);
+        }
+      },
+    };
 
-      await this.updateJobInDB(jobId!, {
-        status: JobStatusEnum.ACTIVE,
-        processedAt: new Date(),
-        attempts: job.attemptsMade,
-      });
-    });
-
-    // Event Hook: Progress Metric Updated
-    worker.on('progress', async (job, progress: number | object) => {
-      const jobId = job.id;
-      const progressValue = typeof progress === 'number' ? progress : 0;
-      this.logger.debug(
-        `[Queue: ${queueName}] Job ${jobId} updated progress: ${progressValue}%`,
-      );
-
-      await this.updateJobInDB(jobId!, {
-        progress: progressValue,
-      });
-    });
-
-    // Event Hook: Completed Successfully
-    worker.on('completed', async (job, result) => {
-      const jobId = job.id;
-      this.logger.log(
-        `[Queue: ${queueName}] Job ${jobId} COMPLETED successfully!`,
-      );
-
-      await this.updateJobInDB(jobId!, {
-        status: JobStatusEnum.COMPLETED,
-        progress: 100,
-        completedAt: new Date(),
-        response:
-          typeof result === 'object'
-            ? (result as Record<string, unknown>)
-            : { result },
-      });
-    });
-
-    // Event Hook: Failed
-    worker.on('failed', async (job, err) => {
-      const jobId = job?.id || 'unknown';
-      this.logger.error(
-        `[Queue: ${queueName}] Job ${jobId} FAILED: ${err.message}`,
-        err.stack,
-      );
-
-      if (job) {
-        const isRetrying = job.attemptsMade < (job.opts.attempts || 3);
-        await this.updateJobInDB(jobId, {
-          status: isRetrying ? JobStatusEnum.RETRYING : JobStatusEnum.FAILED,
-          failedAt: new Date(),
-          error: {
-            message: err.message,
-            stack: err.stack,
-            attemptsMade: job.attemptsMade,
-          },
-        });
-      }
-    });
-
-    this.workersList.push(worker);
-  }
-
-  private async updateJobInDB(
-    jobId: string,
-    data: Partial<BackGroundJob>,
-  ): Promise<void> {
     try {
-      const dbJobRepo = this.dataSource.getRepository(BackGroundJob);
-      const job = await dbJobRepo.findOne({ where: { jobId } });
-      if (job) {
-        Object.assign(job, data);
-        await dbJobRepo.save(job);
+      let result: any = null;
+
+      if (job.queueName === QueueNames.NOTIFICATIONS) {
+        result = await this.notificationProcessor.process(jobContext);
+      } else if (job.queueName === QueueNames.IMPORTS_EXPORTS) {
+        result = await this.importExportProcessor.process(jobContext);
+      } else if (job.queueName === QueueNames.CLEANUP) {
+        if (job.jobType === JobTypeEnum.PAYMENT_RECONCILIATION) {
+          result = await this.paymentReconciliationProcessor.process(jobContext);
+        } else {
+          result = await this.cleanupProcessor.process(jobContext);
+        }
+      } else if (job.queueName === QueueNames.STUDENT_PROGRESSION) {
+        result = await this.studentProgressionProcessor.process(jobContext);
+      } else {
+        throw new Error(`Unregistered worker queue: ${job.queueName}`);
       }
-    } catch (err: unknown) {
-      const errorObj = err as Error;
-      this.logger.error(
-        `Failed to update DB audit ledger for JobId ${jobId}: ${errorObj.message}`,
-      );
+
+      // Mark Job as COMPLETED
+      job.status = JobStatusEnum.COMPLETED;
+      job.progress = 100;
+      job.completedAt = new Date();
+      job.response = typeof result === 'object' && result !== null ? result : { result };
+      await dbRepo.save(job);
+      this.logger.log(`[Worker] Job ${job.jobId} COMPLETED successfully!`);
+    } catch (err: any) {
+      this.logger.error(`[Worker] Job ${job.jobId} FAILED: ${err.message}`, err.stack);
+
+      const attemptsMade = job.attempts;
+      const maxAttempts = job.maxAttempts || 3;
+      const isRetrying = attemptsMade < maxAttempts;
+
+      job.status = isRetrying ? JobStatusEnum.RETRYING : JobStatusEnum.FAILED;
+      job.failedAt = new Date();
+      job.error = { message: err.message, stack: err.stack, attemptsMade };
+
+      if (isRetrying) {
+        // Schedule next retry with exponential backoff delay (5s * attempts)
+        const delayMs = 5000 * attemptsMade;
+        job.scheduledAt = new Date(Date.now() + delayMs);
+      }
+
+      await dbRepo.save(job);
     }
   }
 
   async onModuleDestroy() {
-    this.logger.log('Shutting down background workers list...');
-    await Promise.all(this.workersList.map((worker) => worker.close()));
+    this.logger.log('[QueueConsumerService] Stopping worker polling ticker...');
+    if (this.pollingIntervalHandle) {
+      clearInterval(this.pollingIntervalHandle);
+    }
   }
 }
