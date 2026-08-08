@@ -6,9 +6,10 @@ import { AcademicService } from '../../../../services/academic/academic.service'
 import { HolidayService } from '../../../../services/academic/holiday.service';
 import { EntitlementService } from '../../../../services/entitlement/entitlement.service';
 import { RBACModule } from '../school-roles/rbac.module';
+import { QueueModule } from '../../../worker/queues/queue.module';
 
 @Module({
-  imports: [RBACModule],
+  imports: [RBACModule, QueueModule],
   controllers: [AcademicController, AcademicYearsController, HolidayController],
   providers: [AcademicService, HolidayService, EntitlementService],
 })

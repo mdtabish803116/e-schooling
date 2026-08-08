@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { JobTypeEnum } from '../../../models/enums/enums';
 import { WorkerJobContext } from '../worker-job.interface';
 import { DataSource } from 'typeorm';
 
@@ -9,15 +10,16 @@ export class NotificationProcessor {
   constructor(private readonly dataSource: DataSource) {}
 
   async process(job: WorkerJobContext): Promise<unknown> {
-    const { name, data, id } = job;
-    this.logger.log(`[NotificationProcessor] Processing job ${id} (${name})`);
+    const { jobType, data, id } = job;
+    this.logger.log(`[NotificationProcessor] Processing job ${id} (${jobType})`);
 
     const { schoolId, phone, email, message } = data || {};
 
     await job.updateProgress(10);
     await new Promise((resolve) => setTimeout(resolve, 200));
 
-    if (name === 'send_whatsapp_job' || data?.type === 'whatsapp') {
+    // 1. WhatsApp Notification
+    if (jobType === JobTypeEnum.SEND_WHATSAPP) {
       this.logger.log(`[WhatsApp Reminders] School ${schoolId} sending message to ${phone}: "${message}"`);
 
       await job.updateProgress(50);
@@ -28,7 +30,8 @@ export class NotificationProcessor {
       return { success: true, channel: 'WhatsApp', recipient: phone, sentAt: new Date() };
     }
 
-    if (name === 'send_email_job' || data?.type === 'email') {
+    // 2. Email Notification
+    if (jobType === JobTypeEnum.SEND_EMAIL) {
       this.logger.log(`[Email System] School ${schoolId} sending email to ${email}: "${message}"`);
 
       await job.updateProgress(60);

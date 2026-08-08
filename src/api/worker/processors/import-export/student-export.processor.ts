@@ -5,15 +5,20 @@ import { Student } from '../../../../models/entities/student/student.entity';
 import { StudentEnrollment } from '../../../../models/entities/student/student-enrollment.entity';
 import { Class } from '../../../../models/entities/academic/class.entity';
 import { Section } from '../../../../models/entities/academic/section.entity';
+import { StorageService } from '../../../../shared/storage/storage.service';
+import { JobTypeEnum } from '../../../../models/enums/enums';
 
 @Injectable()
 export class StudentExportProcessor {
   private readonly logger = new Logger(StudentExportProcessor.name);
 
-  constructor(private readonly dataSource: DataSource) {}
+  constructor(
+    private readonly dataSource: DataSource,
+    private readonly storageService: StorageService,
+  ) {}
 
   async process(job: WorkerJobContext): Promise<unknown> {
-    const { schoolId, classId, sectionId, search } = job.data || {};
+    const { schoolId, classId, sectionId, search, academicSessionId } = job.data || {};
     this.logger.log(`[StudentExportProcessor] Processing student export job ${job.id} for school: ${schoolId}`);
 
     await job.updateProgress(10);
@@ -26,28 +31,34 @@ export class StudentExportProcessor {
       .where('student.schoolId = :schoolId', { schoolId })
       .andWhere('student.isDeleted = :isDeleted', { isDeleted: false });
 
-    if (classId || sectionId) {
+    if (academicSessionId || classId || sectionId) {
       queryBuilder.innerJoin(
         StudentEnrollment,
         'enrollment',
         'enrollment.studentId = student.id AND enrollment.isCurrent = :isCurrent AND enrollment.isDeleted = :enrollmentDeleted',
         { isCurrent: true, enrollmentDeleted: false },
       );
-      if (classId)
+      
+      if (academicSessionId) {
+        queryBuilder.andWhere('enrollment.academicSessionId = :academicSessionId', { academicSessionId });
+      }
+      
+      if (classId) {
         queryBuilder.andWhere('enrollment.classId = :classId', { classId });
-      if (sectionId)
-        queryBuilder.andWhere('enrollment.sectionId = :sectionId', {
-          sectionId,
-        });
+      }
+      
+      if (sectionId) {
+        queryBuilder.andWhere('enrollment.sectionId = :sectionId', { sectionId });
+      }
     }
 
-    if (search) {
-      const searchTerm = `%${search}%`;
-      queryBuilder.andWhere(
-        '(LOWER(student.firstName) LIKE LOWER(:searchTerm) OR LOWER(student.lastName) LIKE LOWER(:searchTerm) OR LOWER(student.admissionNumber) LIKE LOWER(:searchTerm) OR LOWER(student.studentCode) LIKE LOWER(:searchTerm))',
-        { searchTerm },
-      );
-    }
+      if (search) {
+        const searchTerm = `%${search}%`;
+        queryBuilder.andWhere(
+          '(LOWER(student.firstName) LIKE LOWER(:searchTerm) OR LOWER(student.lastName) LIKE LOWER(:searchTerm) OR LOWER(student.admissionNumber) LIKE LOWER(:searchTerm) OR LOWER(student.studentCode) LIKE LOWER(:searchTerm))',
+          { searchTerm },
+        );
+      }
 
     await job.updateProgress(40);
     const students = await queryBuilder
@@ -124,14 +135,31 @@ export class StudentExportProcessor {
     });
 
     const csvContent = [headers.join(','), ...rows].join('\n');
+    await job.updateProgress(90);
+
+    const filename = `students-export-school-${schoolId}-${Date.now()}.csv`;
+    const file = {
+      buffer: Buffer.from(csvContent, 'utf-8'),
+      originalname: filename,
+      mimetype: 'text/csv',
+    } as Express.Multer.File;
+
+    let fileUrl = '';
+    try {
+      fileUrl = await this.storageService.uploadFile(file);
+    } catch (error) {
+      this.logger.error(`Cloudinary upload failed: ${error.message}`);
+      throw new Error(`Failed to upload export to cloud storage: ${error.message}`);
+    }
+
     await job.updateProgress(100);
 
     return {
       success: true,
-      jobType: 'student_export',
+      jobType: JobTypeEnum.STUDENT_EXPORT,
       totalExported: students.length,
-      csvContent,
-      filename: `students-export-school-${schoolId}-${Date.now()}.csv`,
+      fileUrl,
+      filename,
       message: `Exported ${students.length} student records successfully.`,
     };
   }

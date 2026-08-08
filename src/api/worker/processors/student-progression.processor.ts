@@ -1,8 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { WorkerJobContext } from '../worker-job.interface';
 import { StudentAdmissionsService } from '../../../services/student/student-admissions.service';
 import { BulkProgressionDto } from '../../../interfaces/request/student/bulk-progression.dto';
 import { AuthContext } from '../../../interfaces/auth-context.interface';
+import { JobTypeEnum } from '../../../models/enums/enums';
 
 @Injectable()
 export class StudentProgressionProcessor {
@@ -11,12 +12,19 @@ export class StudentProgressionProcessor {
   constructor(private readonly admissionsService: StudentAdmissionsService) {}
 
   async process(job: WorkerJobContext): Promise<unknown> {
-    const { name, data, id } = job;
+    const { jobType, data, id } = job;
     this.logger.log(
-      `[StudentProgressionProcessor] Processing job ${id} (${name})`,
+      `[StudentProgressionProcessor] Processing job ${id} (${jobType})`,
     );
 
-    if (name === 'bulk_progression_job' || job.data?.dto) {
+    // 1. Bulk Student Promotion Processing
+    if (
+      jobType === JobTypeEnum.PROMOTION ||
+      jobType === JobTypeEnum.DEMOTION ||
+      jobType === JobTypeEnum.SECTION_TRANSFER ||
+      jobType === 'bulk_progression_job' ||
+      job.data?.dto
+    ) {
       const { schoolId, caller, dto } = data as {
         schoolId: string;
         caller: AuthContext;
@@ -39,8 +47,8 @@ export class StudentProgressionProcessor {
       };
     }
 
-    throw new Error(
-      `Unsupported job action: ${name} inside student_progression queue`,
+    throw new BadRequestException(
+      `Unsupported job action: ${jobType} inside student_progression queue`,
     );
   }
 }

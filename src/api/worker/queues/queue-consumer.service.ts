@@ -8,7 +8,6 @@ import { JobStatusEnum, JobTypeEnum } from '../../../models/enums/enums';
 import { WorkerJobContext } from '../worker-job.interface';
 import { NotificationProcessor } from '../processors/notification.processor';
 import { ImportExportProcessor } from '../processors/import-export/import-export.processor';
-import { CleanupProcessor } from '../processors/cleanup.processor';
 import { PaymentReconciliationProcessor } from '../processors/payment-reconciliation.processor';
 import { StudentProgressionProcessor } from '../processors/student-progression.processor';
 import { QueueProducerService } from './queue-producer.service';
@@ -24,7 +23,6 @@ export class QueueConsumerService implements OnModuleInit, OnModuleDestroy {
     private readonly pgPubSubService: PgPubSubService,
     private readonly notificationProcessor: NotificationProcessor,
     private readonly importExportProcessor: ImportExportProcessor,
-    private readonly cleanupProcessor: CleanupProcessor,
     private readonly paymentReconciliationProcessor: PaymentReconciliationProcessor,
     private readonly studentProgressionProcessor: StudentProgressionProcessor,
     private readonly queueProducerService: QueueProducerService,
@@ -56,8 +54,9 @@ export class QueueConsumerService implements OnModuleInit, OnModuleDestroy {
       this.logger.log(
         '[QueueConsumerService] Scheduling payment reconciliation task to execute every 2 hours...',
       );
+
       await this.queueProducerService.addJob({
-        queueName: QueueNames.CLEANUP,
+        queueName: QueueNames.RECONCILIATION,
         jobType: JobTypeEnum.PAYMENT_RECONCILIATION,
         payload: { source: 'scheduler' },
         cronExpression: '0 */2 * * *',
@@ -133,7 +132,7 @@ export class QueueConsumerService implements OnModuleInit, OnModuleDestroy {
 
     const jobContext: WorkerJobContext = {
       id: job.jobId,
-      name: job.jobType,
+      jobType: job.jobType,
       queueName: job.queueName,
       data: job.payload || {},
       attemptsMade: job.attempts,
@@ -152,14 +151,10 @@ export class QueueConsumerService implements OnModuleInit, OnModuleDestroy {
 
       if (job.queueName === QueueNames.NOTIFICATIONS) {
         result = await this.notificationProcessor.process(jobContext);
-      } else if (job.queueName === QueueNames.IMPORTS_EXPORTS) {
+      } else if (job.queueName === QueueNames.IMPORT || job.queueName === QueueNames.EXPORT) {
         result = await this.importExportProcessor.process(jobContext);
-      } else if (job.queueName === QueueNames.CLEANUP) {
-        if (job.jobType === JobTypeEnum.PAYMENT_RECONCILIATION) {
+      } else if (job.queueName === QueueNames.RECONCILIATION) {
           result = await this.paymentReconciliationProcessor.process(jobContext);
-        } else {
-          result = await this.cleanupProcessor.process(jobContext);
-        }
       } else if (job.queueName === QueueNames.STUDENT_PROGRESSION) {
         result = await this.studentProgressionProcessor.process(jobContext);
       } else {

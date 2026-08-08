@@ -25,9 +25,10 @@ import { PermissionGuard } from '../../../../shared/guards/permission.guard';
 import { Permission } from '../../../../shared/decorators/permission.decorator';
 import { Feature } from '../../../../shared/decorators/feature.decorator';
 import {
-  ResourceEnum,
   ActionEnum,
   JobTypeEnum,
+  ResourceEnum,
+  TimetableEventTypeEnum,
   ActionTypeEnum,
 } from '../../../../models/enums/enums';
 import { CurrentUser } from '../../../../shared/decorators/current-user.decorator';
@@ -269,7 +270,7 @@ export class StudentAdmissionsController {
     @Body() body: { rows: any[] },
   ) {
     const job = await this.queueProducerService.addJob({
-      queueName: QueueNames.IMPORTS_EXPORTS,
+      queueName: QueueNames.IMPORT,
       jobType: JobTypeEnum.STUDENT_IMPORT,
       payload: {
         schoolId,
@@ -297,18 +298,23 @@ export class StudentAdmissionsController {
   async exportStudentsCsv(
     @CurrentUser() caller: AuthContext,
     @Param('schoolId') schoolId: string,
+    @CurrentAcademicSession() sessionFromHeader: string | null,
     @Query('classId') classId?: string,
     @Query('sectionId') sectionId?: string,
+    @Query('academicSessionId') querySessionId?: string,
     @Query('search') search?: string,
   ) {
+    const academicSessionId = querySessionId || sessionFromHeader || undefined;
     const job = await this.queueProducerService.addJob({
-      queueName: QueueNames.IMPORTS_EXPORTS,
-      jobType: JobTypeEnum.EXPORT_EXCEL,
+      queueName: QueueNames.EXPORT,
+      jobType: JobTypeEnum.STUDENT_EXPORT,
       payload: {
+        entityName: ResourceEnum.STUDENTS,
         schoolId,
         caller,
         classId,
         sectionId,
+        academicSessionId,
         search,
       },
       tenantId: schoolId,

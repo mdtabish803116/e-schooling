@@ -8,7 +8,7 @@ import { School } from '../../../../models/entities/school/school.entity';
 import { Class } from '../../../../models/entities/academic/class.entity';
 import { Section } from '../../../../models/entities/academic/section.entity';
 import { AcademicSession } from '../../../../models/entities/academic/academic-session.entity';
-import { EnrollmentStatusEnum, EnrollmentTypeEnum } from '../../../../models/enums/enums';
+import { EnrollmentStatusEnum, EnrollmentTypeEnum, JobTypeEnum } from '../../../../models/enums/enums';
 import { processInBatches } from '../../../../shared/utils/batch-processor.util';
 
 @Injectable()
@@ -160,7 +160,7 @@ export class StudentImportProcessor {
 
     return {
       success: true,
-      jobType: 'student_import',
+      jobType: JobTypeEnum.STUDENT_IMPORT,
       totalRows,
       successCount,
       failedCount,

@@ -15,9 +15,9 @@ export class PaymentReconciliationProcessor {
   ) {}
 
   async process(job: WorkerJobContext): Promise<unknown> {
-    const { name, id } = job;
+    const { jobType, id } = job;
     this.logger.log(
-      `[PaymentReconciliationProcessor] Processing job ${id} (${name})`,
+      `[PaymentReconciliationProcessor] Processing job ${id} (${jobType})`,
     );
 
     const fifteenDaysAgo = new Date();
