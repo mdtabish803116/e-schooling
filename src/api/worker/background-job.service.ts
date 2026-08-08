@@ -1,10 +1,9 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { QueueProducerService } from './queues/queue-producer.service';
+import { PgPubSubService } from './pg-pubsub/pg-pubsub.service';
 import { BackGroundJob } from '../../models/entities/background-job/background_jobs.entity';
 import { JobTypeEnum, JobStatusEnum } from '../../models/enums/enums';
-import { Queue } from 'bullmq';
-import { RedisConnectionService } from './redis/redis-connection.service';
 
 @Injectable()
 export class BackgroundJobService {
@@ -13,8 +12,8 @@ export class BackgroundJobService {
   constructor(
     private readonly dataSource: DataSource,
     private readonly queueProducerService: QueueProducerService,
-    private readonly redisConnectionService: RedisConnectionService,
-  ) { }
+    private readonly pgPubSubService: PgPubSubService,
+  ) {}
 
   /**
    * Adds an immediate execution job
@@ -77,31 +76,22 @@ export class BackgroundJobService {
   }
 
   /**
-   * Cancels a pending or waiting job from the BullMQ queue
+   * Cancels a pending or active job from the PostgreSQL outbox
    */
   async cancelJob(jobId: string): Promise<void> {
     const dbJobRepo = this.dataSource.getRepository(BackGroundJob);
     const job = await dbJobRepo.findOne({ where: { jobId } });
     if (!job) throw new NotFoundException(`Job ${jobId} not found.`);
 
-    // Access raw queue to remove the job
-    const connection = this.redisConnectionService.getConnection();
-    const queue = new Queue(job.queueName, { connection });
-
-    const bullJob = await queue.getJob(jobId);
-    if (bullJob) {
-      await bullJob.remove();
-      this.logger.log(`Removed Job ${jobId} from Redis queue: ${job.queueName}`);
-    }
-
     job.status = JobStatusEnum.CANCELLED;
     job.failedAt = new Date();
     job.error = { message: 'Job cancelled by user request' };
     await dbJobRepo.save(job);
+    this.logger.log(`Cancelled Job ${jobId} in PostgreSQL Outbox ledger.`);
   }
 
   /**
-   * Retries a failed job by republishing it
+   * Retries a failed job by resetting status to PENDING and emitting NOTIFY signal
    */
   async retryJob(jobId: string): Promise<BackGroundJob> {
     const dbJobRepo = this.dataSource.getRepository(BackGroundJob);
@@ -114,23 +104,21 @@ export class BackgroundJobService {
 
     this.logger.log(`Re-queueing Job ${jobId} (Type: ${job.jobType}) on queue ${job.queueName}`);
 
-    // Update job to pending again and retry
+    // Update job to PENDING again and retry
     job.status = JobStatusEnum.PENDING;
     job.attempts = 0;
     job.progress = 0;
     job.error = null;
     job.response = null;
-    await dbJobRepo.save(job);
+    job.scheduledAt = new Date();
+    const updatedJob = await dbJobRepo.save(job);
 
-    const connection = this.redisConnectionService.getConnection();
-    const queue = new Queue(job.queueName, { connection });
-
-    await queue.add(job.jobType, job.payload, {
-      jobId: job.jobId,
-      attempts: job.maxAttempts,
-      backoff: { type: 'exponential', delay: 5000 },
+    await this.pgPubSubService.notifyJobCreated({
+      jobId: updatedJob.jobId,
+      queueName: updatedJob.queueName,
+      jobType: updatedJob.jobType,
     });
 
-    return job;
+    return updatedJob;
   }
 }

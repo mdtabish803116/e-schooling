@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { createOrmConfig } from '../../core/database/postgres/create-typeorm';
 import { QueueModule } from './queues/queue.module';
 import { QueueConsumerService } from './queues/queue-consumer.service';
+import { PgPubSubService } from './pg-pubsub/pg-pubsub.service';
 import { NotificationProcessor } from './processors/notification.processor';
 import { ImportExportProcessor } from './processors/import-export/import-export.processor';
 import { StudentImportProcessor } from './processors/import-export/student-import.processor';
@@ -28,6 +29,7 @@ import { ImportExportModule } from '../rest/v1/import-export/import-export.modul
     ImportExportModule,
   ],
   providers: [
+    PgPubSubService,
     QueueConsumerService,
     NotificationProcessor,
     ImportExportProcessor,
@@ -40,8 +42,6 @@ import { ImportExportModule } from '../rest/v1/import-export/import-export.modul
     StudentProgressionProcessor,
     BackgroundJobService,
   ],
-  exports: [BackgroundJobService],
+  exports: [BackgroundJobService, PgPubSubService],
 })
 export class WorkerModule {}
-
-
