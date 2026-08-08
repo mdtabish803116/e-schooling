@@ -16,7 +16,9 @@ export class StaffExportProcessor {
 
   async process(job: WorkerJobContext): Promise<unknown> {
     const { schoolId } = job.data || {};
-    this.logger.log(`[StaffExportProcessor] Processing staff export job ${job.id} for school: ${schoolId}`);
+    this.logger.log(
+      `[StaffExportProcessor] Processing staff export job ${job.id} for school: ${schoolId}`,
+    );
 
     await job.updateProgress(20);
 
@@ -55,7 +57,9 @@ export class StaffExportProcessor {
       fileUrl = await this.storageService.uploadFile(file);
     } catch (error) {
       this.logger.error(`Cloudinary upload failed: ${error.message}`);
-      throw new Error(`Failed to upload export to cloud storage: ${error.message}`);
+      throw new Error(
+        `Failed to upload export to cloud storage: ${error.message}`,
+      );
     }
 
     await job.updateProgress(100);

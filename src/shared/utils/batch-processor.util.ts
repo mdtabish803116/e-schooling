@@ -4,7 +4,11 @@ export interface BatchProcessorOptions<T> {
   items: T[];
   batchSize?: number;
   dataSource: DataSource;
-  onProgress?: (processedCount: number, totalCount: number, percentage: number) => Promise<void>;
+  onProgress?: (
+    processedCount: number,
+    totalCount: number,
+    percentage: number,
+  ) => Promise<void>;
   processBatch: (chunk: T[], queryRunner: QueryRunner) => Promise<void>;
 }
 
@@ -12,11 +16,19 @@ export interface BatchProcessorOptions<T> {
  * Utility for running chunked batch processing inside PostgreSQL transactions.
  * Enforces per-batch "All-or-Nothing" atomicity with optional idempotency/UPSERT handling.
  */
-export async function processInBatches<T>(options: BatchProcessorOptions<T>): Promise<{
+export async function processInBatches<T>(
+  options: BatchProcessorOptions<T>,
+): Promise<{
   totalProcessed: number;
   batchCount: number;
 }> {
-  const { items, batchSize = 250, dataSource, onProgress, processBatch } = options;
+  const {
+    items,
+    batchSize = 250,
+    dataSource,
+    onProgress,
+    processBatch,
+  } = options;
   const total = items.length;
   let processedCount = 0;
   let batchCount = 0;

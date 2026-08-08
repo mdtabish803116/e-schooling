@@ -11,7 +11,9 @@ export class NotificationProcessor {
 
   async process(job: WorkerJobContext): Promise<unknown> {
     const { jobType, data, id } = job;
-    this.logger.log(`[NotificationProcessor] Processing job ${id} (${jobType})`);
+    this.logger.log(
+      `[NotificationProcessor] Processing job ${id} (${jobType})`,
+    );
 
     const { schoolId, phone, email, message } = data || {};
 
@@ -20,30 +22,46 @@ export class NotificationProcessor {
 
     // 1. WhatsApp Notification
     if (jobType === JobTypeEnum.SEND_WHATSAPP) {
-      this.logger.log(`[WhatsApp Reminders] School ${schoolId} sending message to ${phone}: "${message}"`);
+      this.logger.log(
+        `[WhatsApp Reminders] School ${schoolId} sending message to ${phone}: "${message}"`,
+      );
 
       await job.updateProgress(50);
       await new Promise((resolve) => setTimeout(resolve, 300));
 
       await job.updateProgress(100);
 
-      return { success: true, channel: 'WhatsApp', recipient: phone, sentAt: new Date() };
+      return {
+        success: true,
+        channel: 'WhatsApp',
+        recipient: phone,
+        sentAt: new Date(),
+      };
     }
 
     // 2. Email Notification
     if (jobType === JobTypeEnum.SEND_EMAIL) {
-      this.logger.log(`[Email System] School ${schoolId} sending email to ${email}: "${message}"`);
+      this.logger.log(
+        `[Email System] School ${schoolId} sending email to ${email}: "${message}"`,
+      );
 
       await job.updateProgress(60);
       await new Promise((resolve) => setTimeout(resolve, 300));
 
       await job.updateProgress(100);
 
-      return { success: true, channel: 'Email', recipient: email, sentAt: new Date() };
+      return {
+        success: true,
+        channel: 'Email',
+        recipient: email,
+        sentAt: new Date(),
+      };
     }
 
     // Default fallback notification dispatcher
-    this.logger.log(`[Notification System] School ${schoolId} dispatched notification payload: ${JSON.stringify(data)}`);
+    this.logger.log(
+      `[Notification System] School ${schoolId} dispatched notification payload: ${JSON.stringify(data)}`,
+    );
     await job.updateProgress(100);
     return { success: true, payload: data, sentAt: new Date() };
   }

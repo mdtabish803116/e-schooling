@@ -47,7 +47,10 @@ export class PaymentReconciliationProcessor {
 
     for (const order of pendingOrders) {
       processedCount++;
-      const currentProgress = Math.min(10 + Math.floor((processedCount / (pendingOrders.length || 1)) * 80), 90);
+      const currentProgress = Math.min(
+        10 + Math.floor((processedCount / (pendingOrders.length || 1)) * 80),
+        90,
+      );
       await job.updateProgress(currentProgress);
 
       if (!order.razorpayOrderId) {

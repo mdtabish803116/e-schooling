@@ -18,8 +18,11 @@ export class StudentExportProcessor {
   ) {}
 
   async process(job: WorkerJobContext): Promise<unknown> {
-    const { schoolId, classId, sectionId, search, academicSessionId } = job.data || {};
-    this.logger.log(`[StudentExportProcessor] Processing student export job ${job.id} for school: ${schoolId}`);
+    const { schoolId, classId, sectionId, search, academicSessionId } =
+      job.data || {};
+    this.logger.log(
+      `[StudentExportProcessor] Processing student export job ${job.id} for school: ${schoolId}`,
+    );
 
     await job.updateProgress(10);
 
@@ -38,27 +41,32 @@ export class StudentExportProcessor {
         'enrollment.studentId = student.id AND enrollment.isCurrent = :isCurrent AND enrollment.isDeleted = :enrollmentDeleted',
         { isCurrent: true, enrollmentDeleted: false },
       );
-      
+
       if (academicSessionId) {
-        queryBuilder.andWhere('enrollment.academicSessionId = :academicSessionId', { academicSessionId });
+        queryBuilder.andWhere(
+          'enrollment.academicSessionId = :academicSessionId',
+          { academicSessionId },
+        );
       }
-      
+
       if (classId) {
         queryBuilder.andWhere('enrollment.classId = :classId', { classId });
       }
-      
+
       if (sectionId) {
-        queryBuilder.andWhere('enrollment.sectionId = :sectionId', { sectionId });
+        queryBuilder.andWhere('enrollment.sectionId = :sectionId', {
+          sectionId,
+        });
       }
     }
 
-      if (search) {
-        const searchTerm = `%${search}%`;
-        queryBuilder.andWhere(
-          '(LOWER(student.firstName) LIKE LOWER(:searchTerm) OR LOWER(student.lastName) LIKE LOWER(:searchTerm) OR LOWER(student.admissionNumber) LIKE LOWER(:searchTerm) OR LOWER(student.studentCode) LIKE LOWER(:searchTerm))',
-          { searchTerm },
-        );
-      }
+    if (search) {
+      const searchTerm = `%${search}%`;
+      queryBuilder.andWhere(
+        '(LOWER(student.firstName) LIKE LOWER(:searchTerm) OR LOWER(student.lastName) LIKE LOWER(:searchTerm) OR LOWER(student.admissionNumber) LIKE LOWER(:searchTerm) OR LOWER(student.studentCode) LIKE LOWER(:searchTerm))',
+        { searchTerm },
+      );
+    }
 
     await job.updateProgress(40);
     const students = await queryBuilder
@@ -149,7 +157,9 @@ export class StudentExportProcessor {
       fileUrl = await this.storageService.uploadFile(file);
     } catch (error) {
       this.logger.error(`Cloudinary upload failed: ${error.message}`);
-      throw new Error(`Failed to upload export to cloud storage: ${error.message}`);
+      throw new Error(
+        `Failed to upload export to cloud storage: ${error.message}`,
+      );
     }
 
     await job.updateProgress(100);

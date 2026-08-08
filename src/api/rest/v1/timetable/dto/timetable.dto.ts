@@ -1,6 +1,9 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { IsString, IsOptional, IsEnum, IsNumber } from 'class-validator';
-import { PeriodTypeEnum, TimetableEventTypeEnum } from '../../../../../models/enums/enums';
+import {
+  PeriodTypeEnum,
+  TimetableEventTypeEnum,
+} from '../../../../../models/enums/enums';
 
 export class CreatePeriodDto {
   @ApiPropertyOptional()

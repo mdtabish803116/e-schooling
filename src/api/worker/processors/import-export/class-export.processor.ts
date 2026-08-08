@@ -16,7 +16,7 @@ export class ClassExportProcessor {
 
   async process(job: WorkerJobContext): Promise<unknown> {
     const { schoolId, academicSessionId } = job.data || {};
-    
+
     this.logger.log(
       `[ClassExportProcessor] Processing class export job ${job.id} for school: ${schoolId}, session: ${academicSessionId}`,
     );
@@ -24,7 +24,7 @@ export class ClassExportProcessor {
     await job.updateProgress(20);
 
     const classRepo = this.dataSource.getRepository(Class);
-    
+
     const whereCondition: any = { schoolId, isDeleted: false };
     if (academicSessionId) {
       whereCondition.academicSessionId = academicSessionId;
@@ -48,13 +48,13 @@ export class ClassExportProcessor {
       'Students',
       'Status',
     ];
-    
+
     const rows = classes.map((c) => {
       // Mocking aggregated fields since they are not directly mapped in the Class entity
-      const sectionCount = 0; 
+      const sectionCount = 0;
       const studentsCount = 0;
       const teacherName = 'Unassigned';
-      
+
       return [
         `"${c.name || ''}"`,
         `"${c.classCode || ''}"`,
@@ -81,7 +81,9 @@ export class ClassExportProcessor {
       fileUrl = await this.storageService.uploadFile(file);
     } catch (error) {
       this.logger.error(`Cloudinary upload failed: ${error.message}`);
-      throw new Error(`Failed to upload export to cloud storage: ${error.message}`);
+      throw new Error(
+        `Failed to upload export to cloud storage: ${error.message}`,
+      );
     }
 
     await job.updateProgress(100);

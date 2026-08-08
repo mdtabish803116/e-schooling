@@ -37,7 +37,11 @@ export class StudentProgressionProcessor {
 
       await job.updateProgress(10);
 
-      const result = await this.admissionsService.bulkProgressStudents(caller, schoolId, dto);
+      const result = await this.admissionsService.bulkProgressStudents(
+        caller,
+        schoolId,
+        dto,
+      );
 
       await job.updateProgress(100);
 

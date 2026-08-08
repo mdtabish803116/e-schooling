@@ -11,7 +11,12 @@ import {
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../../../shared/guards/jwt-auth.guard';
 import { TimetableService } from '../../../../services/timetable/timetable.service';
-import { CreatePeriodDto, AssignSlotDto, SubstituteTeacherDto, TimetableEventDto } from './dto/timetable.dto';
+import {
+  CreatePeriodDto,
+  AssignSlotDto,
+  SubstituteTeacherDto,
+  TimetableEventDto,
+} from './dto/timetable.dto';
 
 @ApiTags('Timetable Management')
 @ApiBearerAuth('JWT-auth')
@@ -76,7 +81,10 @@ export class TimetableController {
 
   @ApiOperation({ summary: 'Assign timetable slot' })
   @Post('timetable-slots')
-  async assignSlot(@Param('schoolId') schoolId: string, @Body() payload: AssignSlotDto) {
+  async assignSlot(
+    @Param('schoolId') schoolId: string,
+    @Body() payload: AssignSlotDto,
+  ) {
     return this.timetableService.assignSlot(schoolId, payload);
   }
 
@@ -155,7 +163,10 @@ export class TimetableController {
 
   @ApiOperation({ summary: 'Create a calendar event' })
   @Post('timetable/events')
-  async addEvent(@Param('schoolId') schoolId: string, @Body() payload: TimetableEventDto) {
+  async addEvent(
+    @Param('schoolId') schoolId: string,
+    @Body() payload: TimetableEventDto,
+  ) {
     return this.timetableService.addEvent(schoolId, payload);
   }
 

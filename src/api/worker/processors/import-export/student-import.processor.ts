@@ -8,7 +8,11 @@ import { School } from '../../../../models/entities/school/school.entity';
 import { Class } from '../../../../models/entities/academic/class.entity';
 import { Section } from '../../../../models/entities/academic/section.entity';
 import { AcademicSession } from '../../../../models/entities/academic/academic-session.entity';
-import { EnrollmentStatusEnum, EnrollmentTypeEnum, JobTypeEnum } from '../../../../models/enums/enums';
+import {
+  EnrollmentStatusEnum,
+  EnrollmentTypeEnum,
+  JobTypeEnum,
+} from '../../../../models/enums/enums';
 import { processInBatches } from '../../../../shared/utils/batch-processor.util';
 
 @Injectable()
@@ -19,7 +23,9 @@ export class StudentImportProcessor {
 
   async process(job: WorkerJobContext): Promise<unknown> {
     const { schoolId, caller, rows } = job.data || {};
-    this.logger.log(`[StudentImportProcessor] Processing student import job ${job.id} for school: ${schoolId} (${rows?.length || 0} rows)`);
+    this.logger.log(
+      `[StudentImportProcessor] Processing student import job ${job.id} for school: ${schoolId} (${rows?.length || 0} rows)`,
+    );
 
     const school = await this.dataSource
       .getRepository(School)
@@ -37,17 +43,25 @@ export class StudentImportProcessor {
       });
     }
     if (!activeSession) {
-      throw new NotFoundException('No active academic session found in the database. Please create a session first.');
+      throw new NotFoundException(
+        'No active academic session found in the database. Please create a session first.',
+      );
     }
 
     const classRepo = this.dataSource.getRepository(Class);
     const sectionRepo = this.dataSource.getRepository(Section);
 
-    const defaultClass = await classRepo.findOne({ where: { schoolId, isDeleted: false } });
-    if (!defaultClass) throw new NotFoundException('No default class found for school');
+    const defaultClass = await classRepo.findOne({
+      where: { schoolId, isDeleted: false },
+    });
+    if (!defaultClass)
+      throw new NotFoundException('No default class found for school');
 
-    const defaultSection = await sectionRepo.findOne({ where: { classId: defaultClass.id, isDeleted: false } });
-    if (!defaultSection) throw new NotFoundException('No default section found for class');
+    const defaultSection = await sectionRepo.findOne({
+      where: { classId: defaultClass.id, isDeleted: false },
+    });
+    if (!defaultSection)
+      throw new NotFoundException('No default section found for class');
 
     const totalRows = rows?.length || 0;
     let successCount = 0;
@@ -70,28 +84,50 @@ export class StudentImportProcessor {
               throw new Error('firstName and lastName are required');
             }
 
-            let targetClass = row.classId ? await queryRunner.manager.findOne(Class, { where: { id: row.classId, schoolId } }) : null;
+            let targetClass = row.classId
+              ? await queryRunner.manager.findOne(Class, {
+                  where: { id: row.classId, schoolId },
+                })
+              : null;
             if (!targetClass && row.className) {
-              targetClass = await queryRunner.manager.findOne(Class, { where: { name: row.className, schoolId } });
+              targetClass = await queryRunner.manager.findOne(Class, {
+                where: { name: row.className, schoolId },
+              });
             }
             if (!targetClass) targetClass = defaultClass;
 
-            let targetSection = row.sectionId ? await queryRunner.manager.findOne(Section, { where: { id: row.sectionId, classId: targetClass.id } }) : null;
+            let targetSection = row.sectionId
+              ? await queryRunner.manager.findOne(Section, {
+                  where: { id: row.sectionId, classId: targetClass.id },
+                })
+              : null;
             if (!targetSection && row.sectionName) {
-              targetSection = await queryRunner.manager.findOne(Section, { where: { name: row.sectionName, classId: targetClass.id } });
+              targetSection = await queryRunner.manager.findOne(Section, {
+                where: { name: row.sectionName, classId: targetClass.id },
+              });
             }
             if (!targetSection) {
-              targetSection = await queryRunner.manager.findOne(Section, { where: { classId: targetClass.id, isDeleted: false } }) || defaultSection;
+              targetSection =
+                (await queryRunner.manager.findOne(Section, {
+                  where: { classId: targetClass.id, isDeleted: false },
+                })) || defaultSection;
             }
 
-            const admissionNumber = row.admissionNumber || `ADM-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+            const admissionNumber =
+              row.admissionNumber ||
+              `ADM-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 
             // Check if student already exists for Idempotency / UPSERT
-            let student = await queryRunner.manager.findOne(Student, { where: { schoolId, admissionNumber } });
+            let student = await queryRunner.manager.findOne(Student, {
+              where: { schoolId, admissionNumber },
+            });
             if (!student) {
               const studentCode = `STU-${school.internalSchoolCode || 'SCH'}-${Date.now().toString().slice(-4)}-${i + 1}`;
               const salt = await bcrypt.genSalt(10);
-              const passwordHash = await bcrypt.hash(row.dob || '2010-01-01', salt);
+              const passwordHash = await bcrypt.hash(
+                row.dob || '2010-01-01',
+                salt,
+              );
 
               student = queryRunner.manager.create(Student, {
                 schoolId,
@@ -123,9 +159,16 @@ export class StudentImportProcessor {
             }
 
             // Enrollment Upsert
-            let enrollment = await queryRunner.manager.findOne(StudentEnrollment, {
-              where: { schoolId, studentId: student.id, academicSessionId: activeSession.id },
-            });
+            let enrollment = await queryRunner.manager.findOne(
+              StudentEnrollment,
+              {
+                where: {
+                  schoolId,
+                  studentId: student.id,
+                  academicSessionId: activeSession.id,
+                },
+              },
+            );
 
             if (!enrollment) {
               enrollment = queryRunner.manager.create(StudentEnrollment, {
@@ -134,7 +177,9 @@ export class StudentImportProcessor {
                 classId: targetClass.id,
                 sectionId: targetSection.id,
                 academicSessionId: activeSession.id,
-                rollNumber: row.rollNumber ? String(row.rollNumber) : String(i + 1),
+                rollNumber: row.rollNumber
+                  ? String(row.rollNumber)
+                  : String(i + 1),
                 enrollmentState: EnrollmentStatusEnum.ACTIVE,
                 enrollmentType: EnrollmentTypeEnum.ADMISSION,
                 isCurrent: true,
@@ -146,7 +191,8 @@ export class StudentImportProcessor {
             } else {
               enrollment.classId = targetClass.id;
               enrollment.sectionId = targetSection.id;
-              if (row.rollNumber) enrollment.rollNumber = String(row.rollNumber);
+              if (row.rollNumber)
+                enrollment.rollNumber = String(row.rollNumber);
             }
             await queryRunner.manager.save(StudentEnrollment, enrollment);
             successCount++;

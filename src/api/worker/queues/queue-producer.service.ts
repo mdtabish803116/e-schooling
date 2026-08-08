@@ -58,7 +58,9 @@ export class QueueProducerService {
     });
 
     const savedJob = await dbJobRepo.save(globalJob);
-    this.logger.log(`Created PENDING Outbox job ${dbJobId} for queue ${queueName} in PostgreSQL`);
+    this.logger.log(
+      `Created PENDING Outbox job ${dbJobId} for queue ${queueName} in PostgreSQL`,
+    );
 
     // Emit PostgreSQL NOTIFY signal for instant background worker execution
     try {
@@ -68,7 +70,10 @@ export class QueueProducerService {
         jobType,
       });
     } catch (err: any) {
-      this.logger.error(`Failed to publish NOTIFY event for Job ${dbJobId}: ${err.message}`, err.stack);
+      this.logger.error(
+        `Failed to publish NOTIFY event for Job ${dbJobId}: ${err.message}`,
+        err.stack,
+      );
     }
 
     return savedJob;

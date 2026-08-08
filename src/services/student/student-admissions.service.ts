@@ -26,7 +26,12 @@ import { Student } from '../../models/entities/student/student.entity';
 import { AdmissionEnquiry } from '../../models/entities/student/admission-enquiry.entity';
 import { AdmissionApplication } from '../../models/entities/student/admission-application.entity';
 import { SchoolSubscription } from '../../models/entities/subscription/school-subscription.entity';
-import { ActionTypeEnum, EnrollmentStatusEnum, EnrollmentTypeEnum, OverrideTypeEnum } from '../../models/enums/enums';
+import {
+  ActionTypeEnum,
+  EnrollmentStatusEnum,
+  EnrollmentTypeEnum,
+  OverrideTypeEnum,
+} from '../../models/enums/enums';
 import { processInBatches } from '../../shared/utils/batch-processor.util';
 
 @Injectable()
@@ -75,11 +80,15 @@ export class StudentAdmissionsService {
     const school = await this.assertOwnership(caller.id, schoolId);
 
     if (!dto.academicSessionId) {
-      const activeSession = await this.dataSource.getRepository(AcademicSession).findOne({
-        where: { schoolId, isCurrent: true, isDeleted: false },
-      });
+      const activeSession = await this.dataSource
+        .getRepository(AcademicSession)
+        .findOne({
+          where: { schoolId, isCurrent: true, isDeleted: false },
+        });
       if (!activeSession) {
-        throw new NotFoundException('No active academic session found in the database. Please create a session first.');
+        throw new NotFoundException(
+          'No active academic session found in the database. Please create a session first.',
+        );
       }
       dto.academicSessionId = activeSession.id;
     }
@@ -738,7 +747,9 @@ export class StudentAdmissionsService {
         });
       }
       if (!activeSession) {
-        throw new NotFoundException('No active academic session found in the database. Please create a session first.');
+        throw new NotFoundException(
+          'No active academic session found in the database. Please create a session first.',
+        );
       }
       resolvedSessionId = activeSession.id;
     } else {
@@ -777,11 +788,14 @@ export class StudentAdmissionsService {
       batchSize: 200,
       dataSource: this.dataSource,
       processBatch: async (studentChunk, queryRunner) => {
-        const enrollmentRepo = queryRunner.manager.getRepository(StudentEnrollment);
+        const enrollmentRepo =
+          queryRunner.manager.getRepository(StudentEnrollment);
         const logRepo = queryRunner.manager.getRepository(PromotionLog);
 
         for (const studentId of studentChunk) {
-          const currentEnrollment = await enrollmentRepo.findOne({ where: { studentId, schoolId, isCurrent: true, isDeleted: false } });
+          const currentEnrollment = await enrollmentRepo.findOne({
+            where: { studentId, schoolId, isCurrent: true, isDeleted: false },
+          });
           let previousEnrollmentId: string | undefined;
 
           if (currentEnrollment) {
@@ -802,7 +816,8 @@ export class StudentAdmissionsService {
           newEnrollment.enrollmentType = enrollmentType;
           newEnrollment.enrollmentState = EnrollmentStatusEnum.ACTIVE;
           newEnrollment.isCurrent = true;
-          if (previousEnrollmentId) newEnrollment.previousEnrollmentId = previousEnrollmentId;
+          if (previousEnrollmentId)
+            newEnrollment.previousEnrollmentId = previousEnrollmentId;
           newEnrollment.createdById = caller.id;
           newEnrollment.startDate = new Date().toISOString().split('T')[0];
           const savedNewEnrollment = await enrollmentRepo.save(newEnrollment);
@@ -812,12 +827,15 @@ export class StudentAdmissionsService {
           log.studentId = studentId;
           if (previousEnrollmentId) log.fromEnrollmentId = previousEnrollmentId;
           log.toEnrollmentId = savedNewEnrollment.id;
-          if (currentEnrollment?.classId) log.fromClassId = currentEnrollment.classId;
-          if (currentEnrollment?.sectionId) log.fromSectionId = currentEnrollment.sectionId;
+          if (currentEnrollment?.classId)
+            log.fromClassId = currentEnrollment.classId;
+          if (currentEnrollment?.sectionId)
+            log.fromSectionId = currentEnrollment.sectionId;
           log.toClassId = dto.targetClassId;
           log.toSectionId = dto.targetSectionId;
           log.actionType = dto.actionType;
-          log.remarks = dto.remarks || `Bulk progression of type: ${dto.actionType}`;
+          log.remarks =
+            dto.remarks || `Bulk progression of type: ${dto.actionType}`;
           log.performedBy = caller.id;
           log.performedAt = new Date();
           log.isActive = true;
@@ -829,7 +847,10 @@ export class StudentAdmissionsService {
       },
     });
 
-    return { message: `Successfully processed ${processedStudentIds.length} student(s) for ${dto.actionType} in batch transactions.`, processedStudentIds };
+    return {
+      message: `Successfully processed ${processedStudentIds.length} student(s) for ${dto.actionType} in batch transactions.`,
+      processedStudentIds,
+    };
   }
 
   /* ────────────────────────────────────────────────────

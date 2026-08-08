@@ -45,25 +45,26 @@ export class BackgroundJobsController {
     @Query('queueName') queueName?: string,
   ) {
     const jobRepo = this.dataSource.getRepository(BackGroundJob);
-    
-    const query = jobRepo.createQueryBuilder('job')
+
+    const query = jobRepo
+      .createQueryBuilder('job')
       .where('job.tenantId = :schoolId', { schoolId })
       .orderBy('job.createdAt', 'DESC')
       .limit(50);
-      
+
     if (jobType) {
       query.andWhere('job.jobType = :jobType', { jobType });
     }
-    
+
     if (queueName) {
       query.andWhere('job.queueName = :queueName', { queueName });
     }
-    
+
     const jobs = await query.getMany();
-    
+
     return {
       success: true,
-      data: jobs.map(job => ({
+      data: jobs.map((job) => ({
         id: job.id,
         jobId: job.jobId,
         queueName: job.queueName,
@@ -74,7 +75,7 @@ export class BackgroundJobsController {
         response: job.response,
         error: job.error,
         createdAt: job.createdAt,
-      }))
+      })),
     };
   }
 
@@ -88,7 +89,7 @@ export class BackgroundJobsController {
   ) {
     const jobRepo = this.dataSource.getRepository(BackGroundJob);
     const whereClauses: any[] = [{ jobId, tenantId: schoolId }];
-    
+
     // Only query by 'id' (bigint) if the provided jobId is numeric
     if (/^\d+$/.test(jobId)) {
       whereClauses.push({ id: jobId, tenantId: schoolId });
