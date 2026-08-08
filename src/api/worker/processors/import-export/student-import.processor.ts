@@ -30,7 +30,7 @@ export class StudentImportProcessor {
       activeSession = await sessionRepo.findOne({ where: { schoolId, isDeleted: false }, order: { createdAt: 'DESC' } });
     }
     if (!activeSession) {
-      activeSession = await sessionRepo.save(sessionRepo.create({ schoolId, name: '2025-2026', isCurrent: true, isActive: true }));
+      throw new NotFoundException('No active academic session found in the database. Please create a session first.');
     }
 
     const classRepo = this.dataSource.getRepository(Class);
