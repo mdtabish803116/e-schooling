@@ -55,7 +55,10 @@ export class StudentAdmissionsService {
       const activeSession = await this.dataSource.getRepository(AcademicSession).findOne({
         where: { schoolId, isCurrent: true, isDeleted: false },
       });
-      dto.academicSessionId = activeSession?.id || '1';
+      if (!activeSession) {
+        throw new NotFoundException('No active academic session found in the database. Please create a session first.');
+      }
+      dto.academicSessionId = activeSession.id;
     }
 
     // Check subscription quota
@@ -103,7 +106,7 @@ export class StudentAdmissionsService {
     try {
       const studentCode = await this.generateStudentCode(school.internalSchoolCode);
       const salt = await bcrypt.genSalt(10);
-      const passwordHash = await bcrypt.hash(dto.dob || '2010-01-01', salt);
+      const passwordHash = await bcrypt.hash(dto.dob, salt);
 
       const student = new Student();
       student.schoolId = schoolId;
@@ -495,12 +498,9 @@ export class StudentAdmissionsService {
         activeSession = await sessionRepo.findOne({ where: { schoolId, isDeleted: false }, order: { createdAt: 'DESC' } });
       }
       if (!activeSession) {
-        const newSession = sessionRepo.create({ schoolId, name: '2025-2026', startDate: '2025-04-01', endDate: '2026-03-31', isCurrent: true, isActive: true });
-        const savedSession = await sessionRepo.save(newSession);
-        resolvedSessionId = savedSession.id;
-      } else {
-        resolvedSessionId = activeSession.id;
+        throw new NotFoundException('No active academic session found in the database. Please create a session first.');
       }
+      resolvedSessionId = activeSession.id;
     } else {
       const targetSession = await this.dataSource.getRepository(AcademicSession).findOne({ where: { id: resolvedSessionId, schoolId } });
       if (!targetSession) throw new NotFoundException('Target academic session not found');
