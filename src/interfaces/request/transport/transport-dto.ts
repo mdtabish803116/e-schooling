@@ -10,7 +10,10 @@ import {
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class SaveVehicleDto {
-  @ApiProperty({ example: 'Bus #01', description: 'Vehicle number or bus identifier' })
+  @ApiProperty({
+    example: 'Bus #01',
+    description: 'Vehicle number or bus identifier',
+  })
   @IsNotEmpty()
   @IsString()
   vehicleNumber: string;
@@ -20,7 +23,10 @@ export class SaveVehicleDto {
   @IsString()
   registrationNumber: string;
 
-  @ApiProperty({ example: 'Tata Starbus 40-Seater', description: 'Vehicle model' })
+  @ApiProperty({
+    example: 'Tata Starbus 40-Seater',
+    description: 'Vehicle model',
+  })
   @IsNotEmpty()
   @IsString()
   model: string;
@@ -41,17 +47,26 @@ export class SaveVehicleDto {
   @IsString()
   driverName?: string;
 
-  @ApiPropertyOptional({ example: '+919876543210', description: 'Driver Phone' })
+  @ApiPropertyOptional({
+    example: '+919876543210',
+    description: 'Driver Phone',
+  })
   @IsOptional()
   @IsString()
   driverPhone?: string;
 
-  @ApiPropertyOptional({ example: 'Suresh P.', description: 'Helper / Attendant Name' })
+  @ApiPropertyOptional({
+    example: 'Suresh P.',
+    description: 'Helper / Attendant Name',
+  })
   @IsOptional()
   @IsString()
   helperName?: string;
 
-  @ApiPropertyOptional({ example: '+919845099887', description: 'Helper Phone' })
+  @ApiPropertyOptional({
+    example: '+919845099887',
+    description: 'Helper Phone',
+  })
   @IsOptional()
   @IsString()
   helperPhone?: string;
@@ -61,12 +76,18 @@ export class SaveVehicleDto {
   @IsString()
   status?: string;
 
-  @ApiPropertyOptional({ example: '2027-12-31', description: 'Insurance expiration date' })
+  @ApiPropertyOptional({
+    example: '2027-12-31',
+    description: 'Insurance expiration date',
+  })
   @IsOptional()
   @IsString()
   insuranceExpiry?: string;
 
-  @ApiPropertyOptional({ example: '2027-12-31', description: 'Fitness certificate expiration date' })
+  @ApiPropertyOptional({
+    example: '2027-12-31',
+    description: 'Fitness certificate expiration date',
+  })
   @IsOptional()
   @IsString()
   fitnessExpiry?: string;
@@ -83,12 +104,18 @@ export class SaveRouteDto {
   @IsString()
   routeCode: string;
 
-  @ApiProperty({ example: 'Route 1 - North Zone', description: 'Route display name' })
+  @ApiProperty({
+    example: 'Route 1 - North Zone',
+    description: 'Route display name',
+  })
   @IsNotEmpty()
   @IsString()
   routeName: string;
 
-  @ApiProperty({ example: 'Central Bus Stand', description: 'Starting location' })
+  @ApiProperty({
+    example: 'Central Bus Stand',
+    description: 'Starting location',
+  })
   @IsNotEmpty()
   @IsString()
   startLocation: string;
@@ -113,7 +140,10 @@ export class SaveRouteDto {
   @IsString()
   assignedVehicleId?: string;
 
-  @ApiPropertyOptional({ example: 'KA-01-AB-1234', description: 'Assigned Vehicle Number' })
+  @ApiPropertyOptional({
+    example: 'KA-01-AB-1234',
+    description: 'Assigned Vehicle Number',
+  })
   @IsOptional()
   @IsString()
   assignedVehicleNumber?: string;
@@ -125,7 +155,10 @@ export class SaveRouteDto {
 }
 
 export class SaveStopDto {
-  @ApiProperty({ example: 'Market Circle', description: 'Pickup point / stop name' })
+  @ApiProperty({
+    example: 'Market Circle',
+    description: 'Pickup point / stop name',
+  })
   @IsNotEmpty()
   @IsString()
   name: string;
@@ -146,7 +179,10 @@ export class SaveStopDto {
   @Min(1)
   sequenceOrder?: number;
 
-  @ApiPropertyOptional({ example: 2000, description: 'Monthly transport fee for this stop' })
+  @ApiPropertyOptional({
+    example: 2000,
+    description: 'Monthly transport fee for this stop',
+  })
   @IsOptional()
   @IsNumber()
   monthlyFee?: number;
@@ -163,12 +199,18 @@ export class SaveDriverDto {
   @IsString()
   phone: string;
 
-  @ApiProperty({ example: 'DL-1420110012345', description: 'Driving license number' })
+  @ApiProperty({
+    example: 'DL-1420110012345',
+    description: 'Driving license number',
+  })
   @IsNotEmpty()
   @IsString()
   licenseNumber: string;
 
-  @ApiProperty({ example: '2028-12-31', description: 'Driving license expiry date' })
+  @ApiProperty({
+    example: '2028-12-31',
+    description: 'Driving license expiry date',
+  })
   @IsNotEmpty()
   @IsString()
   licenseExpiry: string;
@@ -178,7 +220,10 @@ export class SaveDriverDto {
   @IsString()
   address?: string;
 
-  @ApiPropertyOptional({ example: '+919845098765', description: 'Emergency contact' })
+  @ApiPropertyOptional({
+    example: '+919845098765',
+    description: 'Emergency contact',
+  })
   @IsOptional()
   @IsString()
   emergencyContact?: string;
@@ -235,7 +280,10 @@ export class AllocateStudentDto {
   @IsNumber()
   monthlyFee?: number;
 
-  @ApiPropertyOptional({ example: 'Alice Johnson', description: 'Student Name' })
+  @ApiPropertyOptional({
+    example: 'Alice Johnson',
+    description: 'Student Name',
+  })
   @IsOptional()
   @IsString()
   studentName?: string;
@@ -255,7 +303,10 @@ export class AllocateStudentDto {
   @IsString()
   sectionName?: string;
 
-  @ApiPropertyOptional({ example: 'Karan Singh', description: 'Student Name alias' })
+  @ApiPropertyOptional({
+    example: 'Karan Singh',
+    description: 'Student Name alias',
+  })
   @IsOptional()
   @IsString()
   name?: string;

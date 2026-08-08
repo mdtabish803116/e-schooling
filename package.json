@@ -30,7 +30,7 @@
     "seed:attendance": "npx ts-node -r tsconfig-paths/register ./src/core/seed/seed-attendance-and-timetables.ts",
     "seed:transport": "npx ts-node -r tsconfig-paths/register ./src/core/seed/seed-transport.ts",
     "seed:admissions": "npx ts-node -r tsconfig-paths/register ./src/core/seed/seed-admissions.ts",
-    "seed:all": "npm run seed:platform-modules && npm run seed:students && npm run seed:fees && npm run seed:attendance && npm run seed:transport && npm run seed:admissions"
+    "seed:all": "npm run seed:platform-modules && npm run seed:students && npm run seed:fees && npm run seed:attendance && npm run seed:transport && npm run seed:admissions && npm run seed:login-history"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",

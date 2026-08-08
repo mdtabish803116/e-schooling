@@ -10,7 +10,10 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../../../shared/guards/jwt-auth.guard';
-import { TimetableService } from '../../../../services/timetable/timetable.service';
+import {
+  TimetableService,
+  CreatePeriodPayload,
+} from '../../../../services/timetable/timetable.service';
 
 @ApiTags('Timetable Management')
 @ApiBearerAuth('JWT-auth')
@@ -62,9 +65,15 @@ export class TimetableController {
   @Post('periods')
   async createPeriod(
     @Param('schoolId') schoolId: string,
-    @Body() payload: any,
+    @Body() payload: CreatePeriodPayload,
   ) {
     return this.timetableService.createPeriod(schoolId, payload);
+  }
+
+  @ApiOperation({ summary: 'Get all timetable slots' })
+  @Get('timetable-slots')
+  async getTimetableSlots(@Param('schoolId') schoolId: string) {
+    return this.timetableService.getTimetableSlots(schoolId);
   }
 
   @ApiOperation({ summary: 'Assign timetable slot' })

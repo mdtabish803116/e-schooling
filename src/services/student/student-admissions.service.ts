@@ -962,10 +962,15 @@ export class StudentAdmissionsService {
     return repo.save(enquiry);
   }
 
-  async updateEnquiryStatus(schoolId: string, id: string, enquiryStatus: string) {
+  async updateEnquiryStatus(
+    schoolId: string,
+    id: string,
+    enquiryStatus: string,
+  ) {
     const repo = this.dataSource.getRepository(AdmissionEnquiry);
     const enquiry = await repo.findOne({ where: { id, schoolId } });
-    if (!enquiry) throw new NotFoundException('Admission Enquiry record not found');
+    if (!enquiry)
+      throw new NotFoundException('Admission Enquiry record not found');
 
     enquiry.enquiryStatus = enquiryStatus;
     if (enquiryStatus === 'CONVERTED') {
@@ -982,10 +987,16 @@ export class StudentAdmissionsService {
     });
   }
 
-  async updateApplicationStage(schoolId: string, id: string, stage: string, remarks?: string) {
+  async updateApplicationStage(
+    schoolId: string,
+    id: string,
+    stage: string,
+    remarks?: string,
+  ) {
     const repo = this.dataSource.getRepository(AdmissionApplication);
     const application = await repo.findOne({ where: { id, schoolId } });
-    if (!application) throw new NotFoundException('Admission Application record not found');
+    if (!application)
+      throw new NotFoundException('Admission Application record not found');
 
     application.stage = stage;
     if (remarks) application.approvalRemarks = remarks;

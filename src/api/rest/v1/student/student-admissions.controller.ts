@@ -339,10 +339,7 @@ export class StudentAdmissionsController {
   @Post('admissions/enquiries')
   @Permission(ResourceEnum.STUDENTS, ActionEnum.CREATE)
   @Feature('STUDENT_MANAGEMENT')
-  async createEnquiry(
-    @Param('schoolId') schoolId: string,
-    @Body() dto: any,
-  ) {
+  async createEnquiry(@Param('schoolId') schoolId: string, @Body() dto: any) {
     return this.admissionsService.createEnquiry(schoolId, dto);
   }
 

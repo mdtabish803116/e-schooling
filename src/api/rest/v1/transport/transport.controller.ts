@@ -159,7 +159,9 @@ export class TransportController {
 
   // Allocations
   @Get('allocations')
-  @ApiOperation({ summary: 'Get all student transport allocations for a school' })
+  @ApiOperation({
+    summary: 'Get all student transport allocations for a school',
+  })
   @Permission(ResourceEnum.TRANSPORT, ActionEnum.VIEW)
   async getAllocations(@Param('schoolId') schoolId: string) {
     return this.transportService.getAllocations(schoolId);
@@ -187,7 +189,9 @@ export class TransportController {
 
   // Vehicle Assignments
   @Get('assignments')
-  @ApiOperation({ summary: 'Get all vehicle-driver assignment history logs for a school' })
+  @ApiOperation({
+    summary: 'Get all vehicle-driver assignment history logs for a school',
+  })
   @Permission(ResourceEnum.TRANSPORT, ActionEnum.VIEW)
   async getVehicleAssignments(@Param('schoolId') schoolId: string) {
     return this.transportService.getVehicleAssignments(schoolId);
@@ -239,4 +243,3 @@ export class TransportController {
     return this.transportService.updateSettings(schoolId, payload);
   }
 }
-

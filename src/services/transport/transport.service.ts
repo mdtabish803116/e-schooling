@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 import { Vehicle } from '../../models/entities/transport/vehicle.entity';
@@ -46,17 +50,30 @@ export class TransportService {
     }
   }
 
-  async saveVehicle(schoolId: string, payload: any, id?: string): Promise<Vehicle> {
+  async saveVehicle(
+    schoolId: string,
+    payload: any,
+    id?: string,
+  ): Promise<Vehicle> {
     if (payload.vehicleNumber) {
       const dup = await this.vehicleRepository.findOne({
-        where: { schoolId, vehicleNumber: payload.vehicleNumber, isDeleted: false },
+        where: {
+          schoolId,
+          vehicleNumber: payload.vehicleNumber,
+          isDeleted: false,
+        },
       });
       if (dup && dup.id !== id) {
-        throw new BadRequestException(`Vehicle number '${payload.vehicleNumber}' already exists in fleet.`);
+        throw new BadRequestException(
+          `Vehicle number '${payload.vehicleNumber}' already exists in fleet.`,
+        );
       }
     }
 
-    const driverId = payload.driverId && String(payload.driverId).trim() !== '' ? payload.driverId : null;
+    const driverId =
+      payload.driverId && String(payload.driverId).trim() !== ''
+        ? payload.driverId
+        : null;
     let driverName = payload.driverName || null;
     let driverPhone = payload.driverPhone || null;
 
@@ -78,7 +95,9 @@ export class TransportService {
     };
 
     if (id) {
-      const existing = await this.vehicleRepository.findOne({ where: { id, schoolId } });
+      const existing = await this.vehicleRepository.findOne({
+        where: { id, schoolId },
+      });
       if (!existing) throw new NotFoundException('Vehicle not found');
       Object.assign(existing, cleanPayload);
       return this.vehicleRepository.save(existing);
@@ -94,7 +113,9 @@ export class TransportService {
   }
 
   async deleteVehicle(schoolId: string, id: string): Promise<boolean> {
-    const vehicle = await this.vehicleRepository.findOne({ where: { id, schoolId } });
+    const vehicle = await this.vehicleRepository.findOne({
+      where: { id, schoolId },
+    });
     if (!vehicle) throw new NotFoundException('Vehicle not found');
     vehicle.isDeleted = true;
     await this.vehicleRepository.save(vehicle);
@@ -127,18 +148,25 @@ export class TransportService {
     }
   }
 
-  async saveRoute(schoolId: string, payload: any, id?: string): Promise<TransportRoute> {
+  async saveRoute(
+    schoolId: string,
+    payload: any,
+    id?: string,
+  ): Promise<TransportRoute> {
     if (payload.routeName) {
       const dup = await this.routeRepository.findOne({
         where: { schoolId, routeName: payload.routeName, isDeleted: false },
       });
       if (dup && dup.id !== id) {
-        throw new BadRequestException(`Route name '${payload.routeName}' already exists.`);
+        throw new BadRequestException(
+          `Route name '${payload.routeName}' already exists.`,
+        );
       }
     }
 
     const assignedVehicleId =
-      payload.assignedVehicleId && String(payload.assignedVehicleId).trim() !== ''
+      payload.assignedVehicleId &&
+      String(payload.assignedVehicleId).trim() !== ''
         ? payload.assignedVehicleId
         : null;
     let assignedVehicleNumber = payload.assignedVehicleNumber || null;
@@ -159,7 +187,9 @@ export class TransportService {
     };
 
     if (id) {
-      const existing = await this.routeRepository.findOne({ where: { id, schoolId } });
+      const existing = await this.routeRepository.findOne({
+        where: { id, schoolId },
+      });
       if (!existing) throw new NotFoundException('Route not found');
       Object.assign(existing, cleanPayload);
       return this.routeRepository.save(existing);
@@ -182,7 +212,9 @@ export class TransportService {
         where: { routeId, name: stop.name },
       });
       if (dup) {
-        throw new BadRequestException(`Pickup stop '${stop.name}' already exists on this route.`);
+        throw new BadRequestException(
+          `Pickup stop '${stop.name}' already exists on this route.`,
+        );
       }
     }
 
@@ -198,7 +230,9 @@ export class TransportService {
   }
 
   async deleteRoute(schoolId: string, id: string): Promise<boolean> {
-    const route = await this.routeRepository.findOne({ where: { id, schoolId } });
+    const route = await this.routeRepository.findOne({
+      where: { id, schoolId },
+    });
     if (!route) throw new NotFoundException('Route not found');
     route.isDeleted = true;
     await this.routeRepository.save(route);
@@ -217,18 +251,25 @@ export class TransportService {
     }
   }
 
-  async saveDriver(schoolId: string, payload: any, id?: string): Promise<Driver> {
+  async saveDriver(
+    schoolId: string,
+    payload: any,
+    id?: string,
+  ): Promise<Driver> {
     if (payload.phone) {
       const dup = await this.driverRepository.findOne({
         where: { schoolId, phone: payload.phone, isDeleted: false },
       });
       if (dup && dup.id !== id) {
-        throw new BadRequestException(`Driver with phone number '${payload.phone}' already exists.`);
+        throw new BadRequestException(
+          `Driver with phone number '${payload.phone}' already exists.`,
+        );
       }
     }
 
     const assignedVehicleId =
-      payload.assignedVehicleId && String(payload.assignedVehicleId).trim() !== ''
+      payload.assignedVehicleId &&
+      String(payload.assignedVehicleId).trim() !== ''
         ? payload.assignedVehicleId
         : null;
 
@@ -238,7 +279,9 @@ export class TransportService {
     };
 
     if (id) {
-      const existing = await this.driverRepository.findOne({ where: { id, schoolId } });
+      const existing = await this.driverRepository.findOne({
+        where: { id, schoolId },
+      });
       if (!existing) throw new NotFoundException('Driver not found');
       Object.assign(existing, cleanPayload);
       return this.driverRepository.save(existing);
@@ -252,7 +295,9 @@ export class TransportService {
   }
 
   async deleteDriver(schoolId: string, id: string): Promise<boolean> {
-    const driver = await this.driverRepository.findOne({ where: { id, schoolId } });
+    const driver = await this.driverRepository.findOne({
+      where: { id, schoolId },
+    });
     if (!driver) throw new NotFoundException('Driver not found');
     driver.isDeleted = true;
     await this.driverRepository.save(driver);
@@ -275,8 +320,12 @@ export class TransportService {
     schoolId: string,
     payload: { vehicleId: string; driverId: string; notes?: string },
   ): Promise<VehicleAssignment> {
-    const vehicle = await this.vehicleRepository.findOne({ where: { id: payload.vehicleId, schoolId } });
-    const driver = await this.driverRepository.findOne({ where: { id: payload.driverId, schoolId } });
+    const vehicle = await this.vehicleRepository.findOne({
+      where: { id: payload.vehicleId, schoolId },
+    });
+    const driver = await this.driverRepository.findOne({
+      where: { id: payload.driverId, schoolId },
+    });
 
     if (!vehicle) throw new NotFoundException('Vehicle not found.');
     if (!driver) throw new NotFoundException('Driver not found.');
@@ -309,12 +358,22 @@ export class TransportService {
     return this.assignmentRepository.save(assignment);
   }
 
-  async releaseVehicleAssignment(schoolId: string, assignmentId: string): Promise<VehicleAssignment> {
-    const assignment = await this.assignmentRepository.findOne({ where: { id: assignmentId, schoolId } });
-    if (!assignment) throw new NotFoundException('Assignment history record not found.');
+  async releaseVehicleAssignment(
+    schoolId: string,
+    assignmentId: string,
+  ): Promise<VehicleAssignment> {
+    const assignment = await this.assignmentRepository.findOne({
+      where: { id: assignmentId, schoolId },
+    });
+    if (!assignment)
+      throw new NotFoundException('Assignment history record not found.');
 
-    const vehicle = await this.vehicleRepository.findOne({ where: { id: assignment.vehicleId, schoolId } });
-    const driver = await this.driverRepository.findOne({ where: { id: assignment.driverId, schoolId } });
+    const vehicle = await this.vehicleRepository.findOne({
+      where: { id: assignment.vehicleId, schoolId },
+    });
+    const driver = await this.driverRepository.findOne({
+      where: { id: assignment.driverId, schoolId },
+    });
 
     if (vehicle) {
       vehicle.driverId = '';
@@ -335,7 +394,9 @@ export class TransportService {
   }
 
   // Allocations
-  async getAllocations(schoolId: string): Promise<StudentTransportAllocation[]> {
+  async getAllocations(
+    schoolId: string,
+  ): Promise<StudentTransportAllocation[]> {
     try {
       return await this.allocationRepository.find({
         where: { schoolId },
@@ -346,17 +407,29 @@ export class TransportService {
     }
   }
 
-  async allocateStudent(schoolId: string, payload: any): Promise<StudentTransportAllocation> {
-    const route = await this.routeRepository.findOne({ where: { id: payload.routeId, schoolId } });
-    const stop = await this.stopRepository.findOne({ where: { id: payload.pickupPointId } });
+  async allocateStudent(
+    schoolId: string,
+    payload: any,
+  ): Promise<StudentTransportAllocation> {
+    const route = await this.routeRepository.findOne({
+      where: { id: payload.routeId, schoolId },
+    });
+    const stop = await this.stopRepository.findOne({
+      where: { id: payload.pickupPointId },
+    });
     const vehicle = route?.assignedVehicleId
-      ? await this.vehicleRepository.findOne({ where: { id: route.assignedVehicleId, schoolId } })
+      ? await this.vehicleRepository.findOne({
+          where: { id: route.assignedVehicleId, schoolId },
+        })
       : null;
     const driver = vehicle?.driverId
-      ? await this.driverRepository.findOne({ where: { id: vehicle.driverId, schoolId } })
+      ? await this.driverRepository.findOne({
+          where: { id: vehicle.driverId, schoolId },
+        })
       : null;
 
-    const studentName = payload.name || payload.studentName || `Student #${payload.studentId}`;
+    const studentName =
+      payload.name || payload.studentName || `Student #${payload.studentId}`;
     const className = payload.className || payload.classId || 'Class 10';
     const sectionName = payload.sectionName || payload.sectionId || 'Sec A';
     const todayStr = new Date().toISOString().split('T')[0];
@@ -364,7 +437,11 @@ export class TransportService {
     // Archive previous active allocations in DB for this student
     if (payload.studentId) {
       const existingActive = await this.allocationRepository.find({
-        where: { schoolId, studentId: String(payload.studentId), status: 'ACTIVE' },
+        where: {
+          schoolId,
+          studentId: String(payload.studentId),
+          status: 'ACTIVE',
+        },
       });
       for (const oldAlc of existingActive) {
         oldAlc.status = 'CANCELLED';
@@ -406,7 +483,9 @@ export class TransportService {
   }
 
   async removeAllocation(schoolId: string, id: string): Promise<boolean> {
-    let alc = await this.allocationRepository.findOne({ where: { id, schoolId } });
+    let alc = await this.allocationRepository.findOne({
+      where: { id, schoolId },
+    });
     if (!alc) {
       alc = await this.allocationRepository.findOne({ where: { id } });
     }
@@ -447,7 +526,10 @@ export class TransportService {
     const allocations = await this.getAllocations(schoolId);
 
     const activeAllocations = allocations.filter((a) => a.status === 'ACTIVE');
-    const totalCapacity = vehicles.reduce((sum, v) => sum + (v.capacity || 0), 0);
+    const totalCapacity = vehicles.reduce(
+      (sum, v) => sum + (v.capacity || 0),
+      0,
+    );
     const occupiedSeats = activeAllocations.length;
     const monthlyRevenue = activeAllocations.reduce(
       (sum, a) => sum + (Number(a.monthlyFee) || 0),
@@ -469,7 +551,9 @@ export class TransportService {
 
   // Transport Settings (DB Driven)
   async getSettings(schoolId: string): Promise<TransportSettings> {
-    let settings = await this.settingsRepository.findOne({ where: { schoolId } });
+    let settings = await this.settingsRepository.findOne({
+      where: { schoolId },
+    });
     if (!settings) {
       const defaultSettings = this.settingsRepository.create({
         schoolId,
@@ -499,8 +583,13 @@ export class TransportService {
     return settings;
   }
 
-  async updateSettings(schoolId: string, payload: Partial<TransportSettings>): Promise<TransportSettings> {
-    let settings = await this.settingsRepository.findOne({ where: { schoolId } });
+  async updateSettings(
+    schoolId: string,
+    payload: Partial<TransportSettings>,
+  ): Promise<TransportSettings> {
+    let settings = await this.settingsRepository.findOne({
+      where: { schoolId },
+    });
     if (!settings) {
       settings = this.settingsRepository.create({ schoolId, ...payload });
     } else {

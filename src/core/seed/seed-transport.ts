@@ -76,7 +76,9 @@ export async function seedTransportData(
 
   const createdDrivers: Driver[] = [];
   for (const d of driverList) {
-    let existing = await driverRepo.findOne({ where: { schoolId, phone: d.phone, isDeleted: false } });
+    let existing = await driverRepo.findOne({
+      where: { schoolId, phone: d.phone, isDeleted: false },
+    });
     if (!existing) {
       existing = driverRepo.create({ ...d, schoolId });
       existing = await driverRepo.save(existing);
@@ -151,9 +153,27 @@ export async function seedTransportData(
       baseMonthlyFee: 2200,
       status: 'ACTIVE' as const,
       stops: [
-        { name: 'Green Park Cross', pickupTime: '07:15 AM', dropTime: '03:45 PM', sequenceOrder: 1, monthlyFee: 2000 },
-        { name: 'Metro Station Gate 2', pickupTime: '07:30 AM', dropTime: '03:30 PM', sequenceOrder: 2, monthlyFee: 2200 },
-        { name: 'Royal Apartments Gate', pickupTime: '07:45 AM', dropTime: '03:15 PM', sequenceOrder: 3, monthlyFee: 2500 },
+        {
+          name: 'Green Park Cross',
+          pickupTime: '07:15 AM',
+          dropTime: '03:45 PM',
+          sequenceOrder: 1,
+          monthlyFee: 2000,
+        },
+        {
+          name: 'Metro Station Gate 2',
+          pickupTime: '07:30 AM',
+          dropTime: '03:30 PM',
+          sequenceOrder: 2,
+          monthlyFee: 2200,
+        },
+        {
+          name: 'Royal Apartments Gate',
+          pickupTime: '07:45 AM',
+          dropTime: '03:15 PM',
+          sequenceOrder: 3,
+          monthlyFee: 2500,
+        },
       ],
     },
     {
@@ -167,8 +187,20 @@ export async function seedTransportData(
       baseMonthlyFee: 2500,
       status: 'ACTIVE' as const,
       stops: [
-        { name: 'Sunrise Colony Circle', pickupTime: '07:05 AM', dropTime: '03:55 PM', sequenceOrder: 1, monthlyFee: 2300 },
-        { name: 'Outer Ring Junction', pickupTime: '07:25 AM', dropTime: '03:35 PM', sequenceOrder: 2, monthlyFee: 2500 },
+        {
+          name: 'Sunrise Colony Circle',
+          pickupTime: '07:05 AM',
+          dropTime: '03:55 PM',
+          sequenceOrder: 1,
+          monthlyFee: 2300,
+        },
+        {
+          name: 'Outer Ring Junction',
+          pickupTime: '07:25 AM',
+          dropTime: '03:35 PM',
+          sequenceOrder: 2,
+          monthlyFee: 2500,
+        },
       ],
     },
   ];

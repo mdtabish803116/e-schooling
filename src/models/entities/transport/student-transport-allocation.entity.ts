@@ -36,7 +36,7 @@ export class StudentTransportAllocation {
     name: 'student_name',
     type: 'varchar',
     length: 100,
-    nullable: false,
+    nullable: true,
   })
   studentName: string;
 
@@ -52,7 +52,7 @@ export class StudentTransportAllocation {
     name: 'class_name',
     type: 'varchar',
     length: 50,
-    nullable: false,
+    nullable: true,
   })
   className: string;
 
@@ -60,7 +60,7 @@ export class StudentTransportAllocation {
     name: 'section_name',
     type: 'varchar',
     length: 50,
-    nullable: false,
+    nullable: true,
   })
   sectionName: string;
 
@@ -76,7 +76,7 @@ export class StudentTransportAllocation {
     name: 'route_name',
     type: 'varchar',
     length: 150,
-    nullable: false,
+    nullable: true,
   })
   routeName: string;
 
@@ -92,7 +92,7 @@ export class StudentTransportAllocation {
     name: 'pickup_point_name',
     type: 'varchar',
     length: 150,
-    nullable: false,
+    nullable: true,
   })
   pickupPointName: string;
 
@@ -100,7 +100,7 @@ export class StudentTransportAllocation {
     name: 'pickup_time',
     type: 'varchar',
     length: 50,
-    nullable: false,
+    nullable: true,
   })
   pickupTime: string;
 
@@ -116,7 +116,7 @@ export class StudentTransportAllocation {
     name: 'vehicle_number',
     type: 'varchar',
     length: 50,
-    nullable: false,
+    nullable: true,
   })
   vehicleNumber: string;
 
@@ -167,7 +167,7 @@ export class StudentTransportAllocation {
     name: 'start_date',
     type: 'varchar',
     length: 30,
-    nullable: false,
+    nullable: true,
   })
   startDate: string;
 

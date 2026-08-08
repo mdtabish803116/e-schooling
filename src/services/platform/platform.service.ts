@@ -575,6 +575,18 @@ export class PlatformService {
       },
 
       {
+        name: 'Admissions',
+        route: '/admissions',
+        icon: 'how_to_reg',
+        description:
+          'Manage student admission enquiries, leads, pipeline stages, and application processing',
+        displayOrder: 6.8,
+        isMenuGroup: false,
+        featureCode: 'STUDENT_MANAGEMENT',
+        parentName: null,
+        showInSidebar: true,
+      },
+      {
         name: 'Students',
         route: '/students',
         icon: 'people',
@@ -1072,6 +1084,16 @@ export class PlatformService {
       { modCode: 'TASKS', opCode: 'CREATE' },
       { modCode: 'TASKS', opCode: 'UPDATE' },
       { modCode: 'TASKS', opCode: 'DELETE' },
+
+      { modCode: 'TRANSPORT', opCode: 'VIEW' },
+      { modCode: 'TRANSPORT', opCode: 'CREATE' },
+      { modCode: 'TRANSPORT', opCode: 'UPDATE' },
+      { modCode: 'TRANSPORT', opCode: 'DELETE' },
+
+      { modCode: 'ADMISSIONS', opCode: 'VIEW' },
+      { modCode: 'ADMISSIONS', opCode: 'CREATE' },
+      { modCode: 'ADMISSIONS', opCode: 'UPDATE' },
+      { modCode: 'ADMISSIONS', opCode: 'DELETE' },
 
       { modCode: 'SCHOOL_ROLES', opCode: 'VIEW' },
       { modCode: 'SCHOOL_ROLES', opCode: 'CREATE' },

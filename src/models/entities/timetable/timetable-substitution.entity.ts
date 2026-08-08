@@ -70,7 +70,7 @@ export class TimetableSubstitution {
     nullable: true,
     comment: 'Reference to Period',
   })
-  periodId: string;
+  periodId: string | null;
 
   @Column({
     name: 'is_active',
@@ -97,7 +97,7 @@ export class TimetableSubstitution {
     nullable: true,
     comment: 'Reference to Creator',
   })
-  createdById: string;
+  createdById: string | null;
 
   @Index()
   @Column({
@@ -106,7 +106,7 @@ export class TimetableSubstitution {
     nullable: true,
     comment: 'Reference to Updater',
   })
-  updatedById: string;
+  updatedById: string | null;
 
   @CreateDateColumn({
     name: 'created_at',
