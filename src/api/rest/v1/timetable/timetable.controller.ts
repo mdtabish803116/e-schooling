@@ -11,6 +11,12 @@ import {
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../../../shared/guards/jwt-auth.guard';
 import { TimetableService } from '../../../../services/timetable/timetable.service';
+import {
+  CreatePeriodDto,
+  AssignSlotDto,
+  SubstituteTeacherDto,
+  TimetableEventDto,
+} from './dto/timetable.dto';
 
 @ApiTags('Timetable Management')
 @ApiBearerAuth('JWT-auth')
@@ -62,16 +68,22 @@ export class TimetableController {
   @Post('periods')
   async createPeriod(
     @Param('schoolId') schoolId: string,
-    @Body() payload: any,
+    @Body() payload: CreatePeriodDto,
   ) {
     return this.timetableService.createPeriod(schoolId, payload);
+  }
+
+  @ApiOperation({ summary: 'Get all timetable slots' })
+  @Get('timetable-slots')
+  async getTimetableSlots(@Param('schoolId') schoolId: string) {
+    return this.timetableService.getTimetableSlots(schoolId);
   }
 
   @ApiOperation({ summary: 'Assign timetable slot' })
   @Post('timetable-slots')
   async assignSlot(
     @Param('schoolId') schoolId: string,
-    @Body() payload: any,
+    @Body() payload: AssignSlotDto,
   ) {
     return this.timetableService.assignSlot(schoolId, payload);
   }
@@ -81,7 +93,7 @@ export class TimetableController {
   async updateSlot(
     @Param('schoolId') schoolId: string,
     @Param('id') id: string,
-    @Body() payload: any,
+    @Body() payload: AssignSlotDto,
   ) {
     return this.timetableService.updateSlot(schoolId, id, payload);
   }
@@ -113,6 +125,15 @@ export class TimetableController {
     return this.timetableService.getClassTimetable(schoolId, classId);
   }
 
+  @ApiOperation({ summary: 'Get student specific timetable' })
+  @Get('students/:studentId/timetable')
+  async getStudentTimetable(
+    @Param('schoolId') schoolId: string,
+    @Param('studentId') studentId: string,
+  ) {
+    return this.timetableService.getStudentTimetable(schoolId, studentId);
+  }
+
   @ApiOperation({ summary: 'Get timetable conflicts' })
   @Get('timetable/conflicts')
   async getConflicts(@Param('schoolId') schoolId: string) {
@@ -129,7 +150,7 @@ export class TimetableController {
   @Post('substitute-teachers')
   async assignSubstituteTeacher(
     @Param('schoolId') schoolId: string,
-    @Body() payload: any,
+    @Body() payload: SubstituteTeacherDto,
   ) {
     return this.timetableService.assignSubstituteTeacher(schoolId, payload);
   }
@@ -144,7 +165,7 @@ export class TimetableController {
   @Post('timetable/events')
   async addEvent(
     @Param('schoolId') schoolId: string,
-    @Body() payload: any,
+    @Body() payload: TimetableEventDto,
   ) {
     return this.timetableService.addEvent(schoolId, payload);
   }
@@ -154,7 +175,7 @@ export class TimetableController {
   async updateEvent(
     @Param('schoolId') schoolId: string,
     @Param('id') id: string,
-    @Body() payload: any,
+    @Body() payload: TimetableEventDto,
   ) {
     return this.timetableService.updateEvent(schoolId, id, payload);
   }

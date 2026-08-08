@@ -1,27 +1,67 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+  Index,
+} from 'typeorm';
 
 @Entity({ name: 'districts', schema: 'e_schooling' })
 export class District {
-  @PrimaryGeneratedColumn('increment', { type: 'bigint', comment: 'Primary key' })
+  @PrimaryGeneratedColumn('increment', {
+    type: 'bigint',
+    comment: 'Primary key',
+  })
   id: string;
 
   @Index()
-  @Column({ name: 'state_id', type: 'bigint', nullable: false, comment: 'Reference to parent State' })
+  @Column({
+    name: 'state_id',
+    type: 'bigint',
+    nullable: false,
+    comment: 'Reference to parent State',
+  })
   stateId: string;
 
   @Index()
-  @Column({ name: 'name', type: 'varchar', nullable: false, comment: 'District name' })
+  @Column({
+    name: 'name',
+    type: 'varchar',
+    nullable: false,
+    comment: 'District name',
+  })
   name: string;
 
-  @Column({ name: 'is_active', type: 'boolean', nullable: false, default: true, comment: 'Active status toggle' })
+  @Column({
+    name: 'is_active',
+    type: 'boolean',
+    nullable: false,
+    default: true,
+    comment: 'Active status toggle',
+  })
   isActive: boolean;
 
-  @Column({ name: 'is_delete', type: 'boolean', nullable: false, default: false, comment: 'Soft delete marker' })
+  @Column({
+    name: 'is_delete',
+    type: 'boolean',
+    nullable: false,
+    default: false,
+    comment: 'Soft delete marker',
+  })
   isDeleted: boolean;
 
-  @CreateDateColumn({ name: 'created_at', type: 'timestamp', comment: 'Creation timestamp' })
+  @CreateDateColumn({
+    name: 'created_at',
+    type: 'timestamp',
+    comment: 'Creation timestamp',
+  })
   createdAt: Date;
 
-  @UpdateDateColumn({ name: 'updated_at', type: 'timestamp', comment: 'Last update timestamp' })
+  @UpdateDateColumn({
+    name: 'updated_at',
+    type: 'timestamp',
+    comment: 'Last update timestamp',
+  })
   updatedAt: Date;
 }

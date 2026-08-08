@@ -1,6 +1,6 @@
 export interface WorkerJobContext<T = Record<string, any>> {
   id: string;
-  name: string;
+  jobType: string;
   queueName: string;
   data: T;
   attemptsMade: number;

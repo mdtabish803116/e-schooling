@@ -1,45 +1,110 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+  Index,
+} from 'typeorm';
 
 @Entity({ name: 'section_transfer_histories', schema: 'e_schooling' })
 export class SectionTransferHistory {
-  @PrimaryGeneratedColumn('increment', { type: 'bigint', comment: 'Primary key' })
+  @PrimaryGeneratedColumn('increment', {
+    type: 'bigint',
+    comment: 'Primary key',
+  })
   id: string;
 
   @Index()
-  @Column({ name: 'school_id', type: 'bigint', nullable: true, comment: 'Reference to School' })
+  @Column({
+    name: 'school_id',
+    type: 'bigint',
+    nullable: true,
+    comment: 'Reference to School',
+  })
   schoolId: string;
 
   @Index()
-  @Column({ name: 'student_enrollment_id', type: 'bigint', nullable: true, comment: 'Reference to StudentEnrollment' })
+  @Column({
+    name: 'student_enrollment_id',
+    type: 'bigint',
+    nullable: true,
+    comment: 'Reference to StudentEnrollment',
+  })
   studentEnrollmentId: string;
 
   @Index()
-  @Column({ name: 'old_section_id', type: 'bigint', nullable: true, comment: 'Reference to old Section' })
+  @Column({
+    name: 'old_section_id',
+    type: 'bigint',
+    nullable: true,
+    comment: 'Reference to old Section',
+  })
   oldSectionId: string;
 
   @Index()
-  @Column({ name: 'new_section_id', type: 'bigint', nullable: true, comment: 'Reference to new Section' })
+  @Column({
+    name: 'new_section_id',
+    type: 'bigint',
+    nullable: true,
+    comment: 'Reference to new Section',
+  })
   newSectionId: string;
 
-  @Column({ name: 'reason', type: 'text', nullable: true, comment: 'Transfer reason' })
+  @Column({
+    name: 'reason',
+    type: 'text',
+    nullable: true,
+    comment: 'Transfer reason',
+  })
   reason: string;
 
   @Index()
-  @Column({ name: 'changed_by', type: 'bigint', nullable: true, comment: 'Reference to SchoolUser' })
+  @Column({
+    name: 'changed_by',
+    type: 'bigint',
+    nullable: true,
+    comment: 'Reference to SchoolUser',
+  })
   changedBy: string;
 
-  @Column({ name: 'changed_at', type: 'timestamp', nullable: true, comment: 'Change timestamp' })
+  @Column({
+    name: 'changed_at',
+    type: 'timestamp',
+    nullable: true,
+    comment: 'Change timestamp',
+  })
   changedAt: Date;
 
-  @CreateDateColumn({ name: 'created_at', type: 'timestamp', comment: 'Creation timestamp' })
+  @CreateDateColumn({
+    name: 'created_at',
+    type: 'timestamp',
+    comment: 'Creation timestamp',
+  })
   createdAt: Date;
 
-  @UpdateDateColumn({ name: 'updated_at', type: 'timestamp', comment: 'Last update timestamp' })
+  @UpdateDateColumn({
+    name: 'updated_at',
+    type: 'timestamp',
+    comment: 'Last update timestamp',
+  })
   updatedAt: Date;
 
-  @Column({ name: 'is_active', type: 'boolean', nullable: false, default: true, comment: 'Active status toggle' })
+  @Column({
+    name: 'is_active',
+    type: 'boolean',
+    nullable: false,
+    default: true,
+    comment: 'Active status toggle',
+  })
   isActive: boolean;
 
-  @Column({ name: 'is_delete', type: 'boolean', nullable: false, default: false, comment: 'Soft delete marker' })
+  @Column({
+    name: 'is_delete',
+    type: 'boolean',
+    nullable: false,
+    default: false,
+    comment: 'Soft delete marker',
+  })
   isDeleted: boolean;
 }

@@ -14,7 +14,9 @@ import { PlatformModule } from './v1/platform/platform.module';
 import { AttendanceModule } from './v1/attendance/attendance.module';
 import { TimetableModule } from './v1/timetable/timetable.module';
 import { DocumentModule } from './v1/document/document.module';
-import { ImportExportModule } from './v1/import-export/import-export.module';
+import { FeesModule } from './v1/fees/fees.module';
+import { TransportModule } from './v1/transport/transport.module';
+import { BackgroundJobsModule } from './v1/background-jobs/background-jobs.module';
 
 @Module({
   imports: [
@@ -33,7 +35,9 @@ import { ImportExportModule } from './v1/import-export/import-export.module';
     AttendanceModule,
     TimetableModule,
     DocumentModule,
-    ImportExportModule,
+    FeesModule,
+    TransportModule,
+    BackgroundJobsModule,
   ],
   controllers: [],
   providers: [],

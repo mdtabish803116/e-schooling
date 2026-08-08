@@ -3,15 +3,16 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  OnModuleInit,
 } from '@nestjs/common';
-import { DataSource, In, IsNull, Repository } from 'typeorm';
+import { DataSource, FindOptionsWhere, In, IsNull, Repository } from 'typeorm';
 import type { AuthContext } from '../../interfaces/auth-context.interface';
 import { AllocateRoomDto } from '../../interfaces/request/academic/allocate-room.dto';
+import { CopyAcademicSessionDataDto } from '../../interfaces/request/academic/copy-academic-session-data.dto';
 import { CreateAcademicSessionDto } from '../../interfaces/request/academic/create-academic-session.dto';
 import { CreateClassDto } from '../../interfaces/request/academic/create-class.dto';
 import { CreateRoomDto } from '../../interfaces/request/academic/create-room.dto';
 import { CreateSectionDto } from '../../interfaces/request/academic/create-section.dto';
-import { CopyAcademicSessionDataDto } from '../../interfaces/request/academic/copy-academic-session-data.dto';
 import { TransferStudentsDto } from '../../interfaces/request/academic/transfer-students.dto';
 import { UpdateAcademicSessionDto } from '../../interfaces/request/academic/update-academic-session.dto';
 import { UpdateClassDto } from '../../interfaces/request/academic/update-class.dto';
@@ -35,9 +36,13 @@ import { SchoolOwner } from '../../models/entities/school/school-owner.entity';
 import { SchoolUser } from '../../models/entities/school/school-user.entity';
 import { SectionTransferHistory } from '../../models/entities/student/section-transfer-history.entity';
 import { StudentEnrollment } from '../../models/entities/student/student-enrollment.entity';
+import {
+  EnrollmentStatusEnum,
+  EnrollmentTypeEnum,
+} from '../../models/enums/enums';
 
 @Injectable()
-export class AcademicService {
+export class AcademicService implements OnModuleInit {
   private classRepo: Repository<Class>;
   private sectionRepo: Repository<Section>;
   private subjectRepo: Repository<Subject>;
@@ -56,6 +61,33 @@ export class AcademicService {
     );
     this.sessionRepo = this.dataSource.getRepository(AcademicSession);
     this.roomRepo = this.dataSource.getRepository(Room);
+  }
+
+  async onModuleInit() {
+    try {
+      const tables = [
+        'classes',
+        'sections',
+        'class_section_subjects',
+        'subjects',
+        'teacher_section_assignments',
+        'rooms',
+        'student_subjects',
+      ];
+      for (const table of tables) {
+        await this.dataSource.query(
+          `ALTER TABLE "e_schooling"."${table}" ADD COLUMN IF NOT EXISTS "academic_session_id" bigint;`,
+        );
+      }
+      await this.dataSource.query(
+        `ALTER TABLE "e_schooling"."classes" ADD COLUMN IF NOT EXISTS "capacity" integer DEFAULT 40;`,
+      );
+    } catch (err) {
+      console.warn(
+        'Auto-column creation for academic_session_id/capacity skipped:',
+        err,
+      );
+    }
   }
 
   private async checkModulePermission(
@@ -207,10 +239,14 @@ export class AcademicService {
     }
     const name = data.name.trim().replace(/[<>]/g, '');
     if (name.length < 2 || name.length > 100) {
-      throw new BadRequestException('Class name must be between 2 and 100 characters long.');
+      throw new BadRequestException(
+        'Class name must be between 2 and 100 characters long.',
+      );
     }
     if (/\s{2,}/.test(data.name)) {
-      throw new BadRequestException('Multiple consecutive spaces are not allowed in class name.');
+      throw new BadRequestException(
+        'Multiple consecutive spaces are not allowed in class name.',
+      );
     }
     data.name = name;
 
@@ -361,7 +397,11 @@ export class AcademicService {
     };
   }
 
-  async getClasses(schoolId: string, caller?: AuthContext, academicSessionId?: string) {
+  async getClasses(
+    schoolId: string,
+    caller?: AuthContext,
+    academicSessionId?: string,
+  ) {
     let classes = await this.classRepo.find({
       where: { schoolId, isDeleted: false },
       order: { createdAt: 'ASC' },
@@ -414,7 +454,7 @@ export class AcademicService {
       .where('section.school_id = :schoolId', { schoolId: String(schoolId) })
       .andWhere('section.is_delete = false')
       .groupBy('section.class_id')
-      .getRawMany();
+      .getRawMany<{ classId: string; count: string }>();
 
     // Query active student enrollments counts grouped by classId
     const studentCountQb = this.dataSource
@@ -428,20 +468,23 @@ export class AcademicService {
       .andWhere('enrollment.is_delete = false');
 
     if (academicSessionId) {
-      studentCountQb.andWhere('enrollment.academic_session_id = :academicSessionId', { academicSessionId: String(academicSessionId) });
+      studentCountQb.andWhere(
+        'enrollment.academic_session_id = :academicSessionId',
+        { academicSessionId: String(academicSessionId) },
+      );
     }
 
     const studentCounts = await studentCountQb
       .groupBy('enrollment.class_id')
-      .getRawMany();
+      .getRawMany<{ classId: string; count: string }>();
 
     const sectionCountMap = new Map<string, number>();
-    sectionCounts.forEach((sc) => {
+    sectionCounts.forEach((sc: { classId: string; count: string }) => {
       sectionCountMap.set(sc.classId, parseInt(sc.count, 10));
     });
 
     const studentCountMap = new Map<string, number>();
-    studentCounts.forEach((sc) => {
+    studentCounts.forEach((sc: { classId: string; count: string }) => {
       studentCountMap.set(sc.classId, parseInt(sc.count, 10));
     });
 
@@ -842,7 +885,7 @@ export class AcademicService {
     }
 
     // Check permissions for nested modules
-    let hasSectionViewAccess = await this.checkModulePermission(
+    const hasSectionViewAccess = await this.checkModulePermission(
       caller,
       schoolId,
       'sections',
@@ -1056,7 +1099,8 @@ export class AcademicService {
       });
 
       // Create new section
-      const targetAcademicSessionId = data.academicSessionId || parentClass.academicSessionId || null;
+      const targetAcademicSessionId =
+        data.academicSessionId || parentClass.academicSessionId || null;
       const section = queryRunner.manager.create(Section, {
         ...data,
         schoolId,
@@ -1171,8 +1215,13 @@ export class AcademicService {
     }
   }
 
-  async getSections(schoolId: string, caller?: AuthContext, classId?: string, academicSessionId?: string) {
-    const where: any = { schoolId, isDeleted: false };
+  async getSections(
+    schoolId: string,
+    caller?: AuthContext,
+    classId?: string,
+    academicSessionId?: string,
+  ) {
+    const where: FindOptionsWhere<Section> = { schoolId, isDeleted: false };
     if (classId) where.classId = classId;
     let sections = await this.sectionRepo.find({ where });
 
@@ -1240,7 +1289,7 @@ export class AcademicService {
       .andWhere('enrollment.is_active = true')
       .andWhere('enrollment.is_delete = false')
       .groupBy('enrollment.section_id')
-      .getRawMany();
+      .getRawMany<{ sectionId: string; count: string }>();
 
     const [assignments, studentCounts] = await Promise.all([
       assignmentsPromise,
@@ -1753,11 +1802,27 @@ export class AcademicService {
     const mapping = this.mappingRepo.create({
       ...data,
       schoolId,
-      academicSessionId: data.academicSessionId || cls.academicSessionId || null,
+      academicSessionId:
+        data.academicSessionId || cls.academicSessionId || null,
       createdById: userId,
       updatedById: userId,
     });
     return await this.mappingRepo.save(mapping);
+  }
+
+  async removeSubjectFromClassSection(
+    schoolId: string,
+    classId: string,
+    sectionId: string,
+    subjectId: string,
+  ) {
+    const mapping = await this.mappingRepo.findOne({
+      where: { schoolId, classId, sectionId, subjectId, isDeleted: false },
+    });
+    if (mapping) {
+      mapping.isDeleted = true;
+      return await this.mappingRepo.save(mapping);
+    }
   }
 
   async getMappings(
@@ -1766,7 +1831,10 @@ export class AcademicService {
     sectionId?: string,
     academicSessionId?: string,
   ) {
-    const where: any = { schoolId, isDeleted: false };
+    const where: FindOptionsWhere<ClassSectionSubject> = {
+      schoolId,
+      isDeleted: false,
+    };
     if (classId) where.classId = classId;
     if (sectionId) where.sectionId = sectionId;
     let mappings = await this.mappingRepo.find({
@@ -2227,7 +2295,11 @@ export class AcademicService {
       if (shouldCopyClasses) {
         const sourceClasses = await queryRunner.manager.find(Class, {
           where: [
-            { schoolId, academicSessionId: fromAcademicSessionId, isDeleted: false },
+            {
+              schoolId,
+              academicSessionId: fromAcademicSessionId,
+              isDeleted: false,
+            },
             { schoolId, academicSessionId: IsNull(), isDeleted: false },
           ],
         });
@@ -2263,11 +2335,16 @@ export class AcademicService {
         }
 
         if (newClassesToCreate.length > 0) {
-          const savedClasses = await queryRunner.manager.save(Class, newClassesToCreate);
+          const savedClasses = await queryRunner.manager.save(
+            Class,
+            newClassesToCreate,
+          );
           summary.copiedClasses = savedClasses.length;
           for (const sourceClass of sourceClasses) {
             if (!classIdMap.has(sourceClass.id)) {
-              const matched = savedClasses.find((sc) => sc.name === sourceClass.name);
+              const matched = savedClasses.find(
+                (sc) => sc.name === sourceClass.name,
+              );
               if (matched) classIdMap.set(sourceClass.id, matched.id);
             }
           }
@@ -2278,7 +2355,11 @@ export class AcademicService {
       if (shouldCopySections) {
         const sourceSections = await queryRunner.manager.find(Section, {
           where: [
-            { schoolId, academicSessionId: fromAcademicSessionId, isDeleted: false },
+            {
+              schoolId,
+              academicSessionId: fromAcademicSessionId,
+              isDeleted: false,
+            },
             { schoolId, academicSessionId: IsNull(), isDeleted: false },
           ],
         });
@@ -2286,7 +2367,8 @@ export class AcademicService {
         const newSectionsToCreate: Section[] = [];
 
         for (const sourceSec of sourceSections) {
-          const targetClassId = classIdMap.get(sourceSec.classId) || sourceSec.classId;
+          const targetClassId =
+            classIdMap.get(sourceSec.classId) || sourceSec.classId;
           const existingTargetSec = await queryRunner.manager.findOne(Section, {
             where: {
               schoolId,
@@ -2317,13 +2399,18 @@ export class AcademicService {
         }
 
         if (newSectionsToCreate.length > 0) {
-          const savedSections = await queryRunner.manager.save(Section, newSectionsToCreate);
+          const savedSections = await queryRunner.manager.save(
+            Section,
+            newSectionsToCreate,
+          );
           summary.copiedSections = savedSections.length;
           for (const sourceSec of sourceSections) {
             if (!sectionIdMap.has(sourceSec.id)) {
-              const targetClassId = classIdMap.get(sourceSec.classId) || sourceSec.classId;
+              const targetClassId =
+                classIdMap.get(sourceSec.classId) || sourceSec.classId;
               const matched = savedSections.find(
-                (ss) => ss.classId === targetClassId && ss.name === sourceSec.name,
+                (ss) =>
+                  ss.classId === targetClassId && ss.name === sourceSec.name,
               );
               if (matched) sectionIdMap.set(sourceSec.id, matched.id);
             }
@@ -2335,7 +2422,11 @@ export class AcademicService {
       if (shouldCopySubjects) {
         const sourceSubjects = await queryRunner.manager.find(Subject, {
           where: [
-            { schoolId, academicSessionId: fromAcademicSessionId, isDeleted: false },
+            {
+              schoolId,
+              academicSessionId: fromAcademicSessionId,
+              isDeleted: false,
+            },
             { schoolId, academicSessionId: IsNull(), isDeleted: false },
           ],
         });
@@ -2368,11 +2459,16 @@ export class AcademicService {
         }
 
         if (newSubjectsToCreate.length > 0) {
-          const savedSubjects = await queryRunner.manager.save(Subject, newSubjectsToCreate);
+          const savedSubjects = await queryRunner.manager.save(
+            Subject,
+            newSubjectsToCreate,
+          );
           summary.copiedSubjects = savedSubjects.length;
           for (const sourceSub of sourceSubjects) {
             if (!subjectIdMap.has(sourceSub.id)) {
-              const matched = savedSubjects.find((ss) => ss.name === sourceSub.name);
+              const matched = savedSubjects.find(
+                (ss) => ss.name === sourceSub.name,
+              );
               if (matched) subjectIdMap.set(sourceSub.id, matched.id);
             }
           }
@@ -2381,30 +2477,45 @@ export class AcademicService {
 
       // 4. Copy Mappings in Bulk
       if (shouldCopyMappings) {
-        const sourceMappings = await queryRunner.manager.find(ClassSectionSubject, {
-          where: [
-            { schoolId, academicSessionId: fromAcademicSessionId, isDeleted: false },
-            { schoolId, academicSessionId: IsNull(), isDeleted: false },
-          ],
-        });
+        const sourceMappings = await queryRunner.manager.find(
+          ClassSectionSubject,
+          {
+            where: [
+              {
+                schoolId,
+                academicSessionId: fromAcademicSessionId,
+                isDeleted: false,
+              },
+              { schoolId, academicSessionId: IsNull(), isDeleted: false },
+            ],
+          },
+        );
 
         const newMappingsToCreate: ClassSectionSubject[] = [];
 
         for (const sourceMapping of sourceMappings) {
-          const targetClassId = classIdMap.get(sourceMapping.classId) || sourceMapping.classId;
-          const targetSectionId = sectionIdMap.get(sourceMapping.sectionId) || sourceMapping.sectionId;
-          const targetSubjectId = subjectIdMap.get(sourceMapping.subjectId) || sourceMapping.subjectId;
+          const targetClassId =
+            classIdMap.get(sourceMapping.classId) || sourceMapping.classId;
+          const targetSectionId =
+            sectionIdMap.get(sourceMapping.sectionId) ||
+            sourceMapping.sectionId;
+          const targetSubjectId =
+            subjectIdMap.get(sourceMapping.subjectId) ||
+            sourceMapping.subjectId;
 
-          const existingMapping = await queryRunner.manager.findOne(ClassSectionSubject, {
-            where: {
-              schoolId,
-              classId: targetClassId,
-              sectionId: targetSectionId,
-              subjectId: targetSubjectId,
-              academicSessionId: toAcademicSessionId,
-              isDeleted: false,
+          const existingMapping = await queryRunner.manager.findOne(
+            ClassSectionSubject,
+            {
+              where: {
+                schoolId,
+                classId: targetClassId,
+                sectionId: targetSectionId,
+                subjectId: targetSubjectId,
+                academicSessionId: toAcademicSessionId,
+                isDeleted: false,
+              },
             },
-          });
+          );
 
           if (!existingMapping) {
             const newMapping = queryRunner.manager.create(ClassSectionSubject, {
@@ -2423,7 +2534,10 @@ export class AcademicService {
         }
 
         if (newMappingsToCreate.length > 0) {
-          const savedMappings = await queryRunner.manager.save(ClassSectionSubject, newMappingsToCreate);
+          const savedMappings = await queryRunner.manager.save(
+            ClassSectionSubject,
+            newMappingsToCreate,
+          );
           summary.copiedMappings = savedMappings.length;
         }
       }
@@ -2432,7 +2546,11 @@ export class AcademicService {
       if (shouldCopyRooms) {
         const sourceRooms = await queryRunner.manager.find(Room, {
           where: [
-            { schoolId, academicSessionId: fromAcademicSessionId, isDeleted: false },
+            {
+              schoolId,
+              academicSessionId: fromAcademicSessionId,
+              isDeleted: false,
+            },
             { schoolId, academicSessionId: IsNull(), isDeleted: false },
           ],
         });
@@ -2472,87 +2590,122 @@ export class AcademicService {
         }
 
         if (newRoomsToCreate.length > 0) {
-          const savedRooms = await queryRunner.manager.save(Room, newRoomsToCreate);
+          const savedRooms = await queryRunner.manager.save(
+            Room,
+            newRoomsToCreate,
+          );
           summary.copiedRooms = savedRooms.length;
         }
       }
 
       // 6. Copy Staff Teacher Section Assignments in Bulk
       if (shouldCopyStaff) {
-        const sourceStaffAssignments = await queryRunner.manager.find(TeacherSectionAssignment, {
-          where: [
-            { schoolId, academicSessionId: fromAcademicSessionId, isDeleted: false, isActive: true },
-            { schoolId, academicSessionId: IsNull(), isDeleted: false, isActive: true },
-          ],
-        });
+        const sourceStaffAssignments = await queryRunner.manager.find(
+          TeacherSectionAssignment,
+          {
+            where: [
+              {
+                schoolId,
+                academicSessionId: fromAcademicSessionId,
+                isDeleted: false,
+                isActive: true,
+              },
+              {
+                schoolId,
+                academicSessionId: IsNull(),
+                isDeleted: false,
+                isActive: true,
+              },
+            ],
+          },
+        );
 
         const newStaffToCreate: TeacherSectionAssignment[] = [];
 
         for (const sourceAssign of sourceStaffAssignments) {
-          const targetClassId = classIdMap.get(sourceAssign.classId) || sourceAssign.classId;
+          const targetClassId =
+            classIdMap.get(sourceAssign.classId) || sourceAssign.classId;
           const targetSectionId = sourceAssign.sectionId
             ? sectionIdMap.get(sourceAssign.sectionId) || sourceAssign.sectionId
             : null;
 
-          const existingAssign = await queryRunner.manager.findOne(TeacherSectionAssignment, {
-            where: {
-              schoolId,
-              teacherId: sourceAssign.teacherId,
-              classId: targetClassId,
-              sectionId: targetSectionId === null ? IsNull() : targetSectionId,
-              academicSessionId: toAcademicSessionId,
-              isDeleted: false,
+          const existingAssign = await queryRunner.manager.findOne(
+            TeacherSectionAssignment,
+            {
+              where: {
+                schoolId,
+                teacherId: sourceAssign.teacherId,
+                classId: targetClassId,
+                sectionId:
+                  targetSectionId === null ? IsNull() : targetSectionId,
+                academicSessionId: toAcademicSessionId,
+                isDeleted: false,
+              },
             },
-          });
+          );
 
           if (!existingAssign) {
-            const newAssign = queryRunner.manager.create(TeacherSectionAssignment, {
-              schoolId,
-              academicSessionId: toAcademicSessionId,
-              teacherId: sourceAssign.teacherId,
-              classId: targetClassId,
-              sectionId: targetSectionId,
-              isClassTeacher: sourceAssign.isClassTeacher,
-              isActive: true,
-              createdById: userId,
-              updatedById: userId,
-            });
+            const newAssign = queryRunner.manager.create(
+              TeacherSectionAssignment,
+              {
+                schoolId,
+                academicSessionId: toAcademicSessionId,
+                teacherId: sourceAssign.teacherId,
+                classId: targetClassId,
+                sectionId: targetSectionId,
+                isClassTeacher: sourceAssign.isClassTeacher,
+                isActive: true,
+                createdById: userId,
+                updatedById: userId,
+              },
+            );
             newStaffToCreate.push(newAssign);
           }
         }
 
         if (newStaffToCreate.length > 0) {
-          const savedStaff = await queryRunner.manager.save(TeacherSectionAssignment, newStaffToCreate);
+          const savedStaff = await queryRunner.manager.save(
+            TeacherSectionAssignment,
+            newStaffToCreate,
+          );
           summary.copiedStaffAssignments = savedStaff.length;
         }
       }
 
       // 7. Copy Student Enrollments in Bulk
       if (shouldCopyStudents) {
-        const sourceEnrollments = await queryRunner.manager.find(StudentEnrollment, {
-          where: {
-            schoolId,
-            academicSessionId: fromAcademicSessionId,
-            isCurrent: true,
-            isDeleted: false,
-            isActive: true,
+        const sourceEnrollments = await queryRunner.manager.find(
+          StudentEnrollment,
+          {
+            where: {
+              schoolId,
+              academicSessionId: fromAcademicSessionId,
+              isCurrent: true,
+              isDeleted: false,
+              isActive: true,
+            },
           },
-        });
+        );
 
         const newEnrollmentsToCreate: StudentEnrollment[] = [];
 
         for (const sourceEnv of sourceEnrollments) {
-          const targetClassId = classIdMap.get(sourceEnv.classId) || sourceEnv.classId;
-          const targetSectionId = sectionIdMap.get(sourceEnv.sectionId) || sourceEnv.sectionId;
+          const targetClassId =
+            classIdMap.get(sourceEnv.classId) || sourceEnv.classId;
+          const targetSectionId =
+            sectionIdMap.get(sourceEnv.sectionId) || sourceEnv.sectionId;
 
-          const existingEnv = await queryRunner.manager.findOne(StudentEnrollment, {
-            where: {
-              schoolId,
-              studentId: sourceEnv.studentId,
-              academicSessionId: toAcademicSessionId,
-              isDeleted: false,
+          const existingEnv = await queryRunner.manager.findOne(
+            StudentEnrollment,
+            {
+              where: {
+                schoolId,
+                studentId: sourceEnv.studentId,
+                academicSessionId: toAcademicSessionId,
+                isDeleted: false,
+              },
             },
-          });
+          );
 
           if (!existingEnv) {
             const newEnv = queryRunner.manager.create(StudentEnrollment, {
@@ -2562,8 +2715,8 @@ export class AcademicService {
               sectionId: targetSectionId,
               academicSessionId: toAcademicSessionId,
               rollNumber: sourceEnv.rollNumber,
-              enrollmentState: 'active' as any,
-              enrollmentType: 'promotion' as any,
+              enrollmentState: EnrollmentStatusEnum.ACTIVE,
+              enrollmentType: EnrollmentTypeEnum.PROMOTION,
               isCurrent: true,
               startDate: new Date().toISOString().split('T')[0],
               isActive: true,
@@ -2577,15 +2730,21 @@ export class AcademicService {
 
         if (newEnrollmentsToCreate.length > 0) {
           const studentIds = newEnrollmentsToCreate.map((e) => e.studentId);
-          await queryRunner.manager.createQueryBuilder()
+          await queryRunner.manager
+            .createQueryBuilder()
             .update(StudentEnrollment)
             .set({ isCurrent: false })
             .where('school_id = :schoolId', { schoolId })
             .andWhere('student_id IN (:...studentIds)', { studentIds })
-            .andWhere('academic_session_id = :fromAcademicSessionId', { fromAcademicSessionId })
+            .andWhere('academic_session_id = :fromAcademicSessionId', {
+              fromAcademicSessionId,
+            })
             .execute();
 
-          const savedEnrollments = await queryRunner.manager.save(StudentEnrollment, newEnrollmentsToCreate);
+          const savedEnrollments = await queryRunner.manager.save(
+            StudentEnrollment,
+            newEnrollmentsToCreate,
+          );
           summary.copiedStudentEnrollments = savedEnrollments.length;
         }
       }
@@ -2603,5 +2762,117 @@ export class AcademicService {
     } finally {
       await queryRunner.release();
     }
+  }
+
+  async getAcademicAuditLogs(schoolId: string, academicSessionId?: string) {
+    const logs: Array<{
+      id: string;
+      actorName: string;
+      actorRole: string;
+      action: string;
+      category: string;
+      details: string;
+      timestamp: string | Date;
+      beforeState: Record<string, unknown> | null;
+      afterState: Record<string, unknown> | null;
+    }> = [];
+
+    // 1. Fetch section transfer history logs
+    const transfers = await this.dataSource
+      .getRepository(SectionTransferHistory)
+      .find({
+        where: { schoolId, isDeleted: false },
+        order: { changedAt: 'DESC' },
+        take: 50,
+      });
+
+    for (const t of transfers) {
+      logs.push({
+        id: `transfer-${t.id}`,
+        actorName: 'System / Administrator',
+        actorRole: 'ADMIN',
+        action: 'SECTION_TRANSFER',
+        category: 'Student',
+        details:
+          t.reason ||
+          `Student section transfer recorded (Old Section ID: ${t.oldSectionId}, New Section ID: ${t.newSectionId})`,
+        timestamp: t.changedAt || t.createdAt || new Date().toISOString(),
+        beforeState: { sectionId: t.oldSectionId },
+        afterState: { sectionId: t.newSectionId },
+      });
+    }
+
+    // 2. Fetch class activity logs from DB
+    const classWhere: Record<string, unknown> = {
+      schoolId,
+      isDeleted: false,
+    };
+    if (academicSessionId) {
+      classWhere.academicSessionId = academicSessionId;
+    }
+    const classes = await this.classRepo.find({
+      where: classWhere,
+      order: { updatedAt: 'DESC' },
+      take: 20,
+    });
+
+    for (const c of classes) {
+      logs.push({
+        id: `class-${c.id}`,
+        actorName: 'Academic Coordinator',
+        actorRole: 'ADMIN',
+        action: 'CLASS_UPDATE',
+        category: 'Class',
+        details: `Class "${c.name}" (${c.classCode || 'Code N/A'}) configured. Capacity: ${c.capacity || 40}, Daily Attendance Limit: ${c.dailyAttendanceLimit || 1}`,
+        timestamp: c.updatedAt || c.createdAt || new Date().toISOString(),
+        beforeState: null,
+        afterState: {
+          name: c.name,
+          capacity: c.capacity,
+          isActive: c.isActive,
+        },
+      });
+    }
+
+    // 3. Fetch section activity logs from DB
+    const sectionWhere: Record<string, unknown> = {
+      schoolId,
+      isDeleted: false,
+    };
+    if (academicSessionId) {
+      sectionWhere.academicSessionId = academicSessionId;
+    }
+    const sections = await this.sectionRepo.find({
+      where: sectionWhere,
+      order: { updatedAt: 'DESC' },
+      take: 20,
+    });
+
+    for (const s of sections) {
+      logs.push({
+        id: `section-${s.id}`,
+        actorName: 'Academic Coordinator',
+        actorRole: 'STAFF',
+        action: 'SECTION_CONFIG',
+        category: 'Section',
+        details: `Section "${s.name}" configured. Capacity: ${s.capacity || 40}, Room: ${s.room || 'Unassigned'}`,
+        timestamp: s.updatedAt || s.createdAt || new Date().toISOString(),
+        beforeState: null,
+        afterState: { name: s.name, capacity: s.capacity, room: s.room },
+      });
+    }
+
+    // Sort logs descending by timestamp
+    logs.sort((a, b) => {
+      const timeA = new Date(a.timestamp).getTime();
+      const timeB = new Date(b.timestamp).getTime();
+      return timeB - timeA;
+    });
+
+    return {
+      logs,
+      data: logs,
+      totalCount: logs.length,
+    };
   }
 }

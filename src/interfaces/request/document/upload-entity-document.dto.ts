@@ -17,12 +17,18 @@ export class UploadEntityDocumentDto {
   @IsNotEmpty()
   entityId: string;
 
-  @ApiProperty({ description: 'File storage URL', example: 'https://storage.example.com/doc.pdf' })
+  @ApiProperty({
+    description: 'File storage URL',
+    example: 'https://storage.example.com/doc.pdf',
+  })
   @IsString()
   @IsNotEmpty()
   fileUrl: string;
 
-  @ApiPropertyOptional({ description: 'Original file name', example: 'aadhaar_ravi.pdf' })
+  @ApiPropertyOptional({
+    description: 'Original file name',
+    example: 'aadhaar_ravi.pdf',
+  })
   @IsString()
   @IsOptional()
   fileName?: string;
@@ -38,7 +44,10 @@ export class UploadEntityDocumentDto {
   @IsOptional()
   mimeType?: string;
 
-  @ApiPropertyOptional({ description: 'Expiration date (YYYY-MM-DD)', example: '2030-12-31' })
+  @ApiPropertyOptional({
+    description: 'Expiration date (YYYY-MM-DD)',
+    example: '2030-12-31',
+  })
   @IsString()
   @IsOptional()
   expiryDate?: string;

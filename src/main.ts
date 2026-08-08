@@ -10,7 +10,10 @@ import { ServerMode } from './config/enums_config';
 import { GlobalHttpExceptionFilter } from './shared/filters/http-exception.filter';
 import { SwaggerMiddleWare } from './middlewares/swagger.middleware';
 
-const createServer = async (): Promise<{ app: INestApplication | INestApplicationContext, mode: string }> => {
+const createServer = async (): Promise<{
+  app: INestApplication | INestApplicationContext;
+  mode: string;
+}> => {
   const mode = Config.getSecret(
     'SERVER_MODE',
     String,
@@ -60,7 +63,10 @@ const createServer = async (): Promise<{ app: INestApplication | INestApplicatio
   }
 };
 
-const startServer = async (serverData: { app: INestApplication | INestApplicationContext, mode: string }): Promise<void> => {
+const startServer = async (serverData: {
+  app: INestApplication | INestApplicationContext;
+  mode: string;
+}): Promise<void> => {
   const { app, mode } = serverData;
 
   if (mode === 'worker') {

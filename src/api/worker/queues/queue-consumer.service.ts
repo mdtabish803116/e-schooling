@@ -1,14 +1,21 @@
-import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleInit,
+  OnModuleDestroy,
+} from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { Config } from '../../../config/index';
-import { PgPubSubService, PgJobNotification } from '../pg-pubsub/pg-pubsub.service';
+import {
+  PgPubSubService,
+  PgJobNotification,
+} from '../pg-pubsub/pg-pubsub.service';
 import { QueueNames } from './queue.constants';
 import { BackGroundJob } from '../../../models/entities/background-job/background_jobs.entity';
 import { JobStatusEnum, JobTypeEnum } from '../../../models/enums/enums';
 import { WorkerJobContext } from '../worker-job.interface';
 import { NotificationProcessor } from '../processors/notification.processor';
 import { ImportExportProcessor } from '../processors/import-export/import-export.processor';
-import { CleanupProcessor } from '../processors/cleanup.processor';
 import { PaymentReconciliationProcessor } from '../processors/payment-reconciliation.processor';
 import { StudentProgressionProcessor } from '../processors/student-progression.processor';
 import { QueueProducerService } from './queue-producer.service';
@@ -24,7 +31,6 @@ export class QueueConsumerService implements OnModuleInit, OnModuleDestroy {
     private readonly pgPubSubService: PgPubSubService,
     private readonly notificationProcessor: NotificationProcessor,
     private readonly importExportProcessor: ImportExportProcessor,
-    private readonly cleanupProcessor: CleanupProcessor,
     private readonly paymentReconciliationProcessor: PaymentReconciliationProcessor,
     private readonly studentProgressionProcessor: StudentProgressionProcessor,
     private readonly queueProducerService: QueueProducerService,
@@ -34,11 +40,15 @@ export class QueueConsumerService implements OnModuleInit, OnModuleDestroy {
     const serverMode = Config.getSecret('SERVER_MODE', String) || 'rest';
 
     if (serverMode !== 'worker') {
-      this.logger.log('[QueueConsumerService] Running in API Mode. Skipping background worker subscriber.');
+      this.logger.log(
+        '[QueueConsumerService] Running in API Mode. Skipping background worker subscriber.',
+      );
       return;
     }
 
-    this.logger.log('[QueueConsumerService] Booting in Worker Mode. Initializing PostgreSQL Pub/Sub & Outbox Consumer.');
+    this.logger.log(
+      '[QueueConsumerService] Booting in Worker Mode. Initializing PostgreSQL Pub/Sub & Outbox Consumer.',
+    );
 
     // 1. Subscribe to real-time LISTEN/NOTIFY signals from PostgreSQL
     this.pgPubSubService.subscribe((_notification: PgJobNotification) => {
@@ -53,15 +63,20 @@ export class QueueConsumerService implements OnModuleInit, OnModuleDestroy {
 
     // 3. Register the Repeatable Payment Reconciliation Cron Task to execute every 2 hours
     try {
-      this.logger.log('[QueueConsumerService] Scheduling payment reconciliation task to execute every 2 hours...');
+      this.logger.log(
+        '[QueueConsumerService] Scheduling payment reconciliation task to execute every 2 hours...',
+      );
+
       await this.queueProducerService.addJob({
-        queueName: QueueNames.CLEANUP,
+        queueName: QueueNames.RECONCILIATION,
         jobType: JobTypeEnum.PAYMENT_RECONCILIATION,
         payload: { source: 'scheduler' },
         cronExpression: '0 */2 * * *',
       });
     } catch (err: any) {
-      this.logger.error(`[QueueConsumerService] Failed to schedule payment reconciliation task: ${err.message}`);
+      this.logger.error(
+        `[QueueConsumerService] Failed to schedule payment reconciliation task: ${err.message}`,
+      );
     }
 
     // Trigger initial poll
@@ -93,7 +108,9 @@ export class QueueConsumerService implements OnModuleInit, OnModuleDestroy {
 
         if (rawJobs && rawJobs.length > 0) {
           const rawJob = rawJobs[0];
-          targetJob = await queryRunner.manager.findOne(BackGroundJob, { where: { id: String(rawJob.id) } });
+          targetJob = await queryRunner.manager.findOne(BackGroundJob, {
+            where: { id: String(rawJob.id) },
+          });
 
           if (targetJob) {
             targetJob.status = JobStatusEnum.ACTIVE;
@@ -106,7 +123,9 @@ export class QueueConsumerService implements OnModuleInit, OnModuleDestroy {
         await queryRunner.commitTransaction();
       } catch (err: any) {
         await queryRunner.rollbackTransaction();
-        this.logger.error(`Error locking background job in outbox poll: ${err.message}`);
+        this.logger.error(
+          `Error locking background job in outbox poll: ${err.message}`,
+        );
       } finally {
         await queryRunner.release();
       }
@@ -115,7 +134,9 @@ export class QueueConsumerService implements OnModuleInit, OnModuleDestroy {
         await this.executeJob(targetJob);
       }
     } catch (err: any) {
-      this.logger.error(`[QueueConsumerService] Poll loop error: ${err.message}`);
+      this.logger.error(
+        `[QueueConsumerService] Poll loop error: ${err.message}`,
+      );
     } finally {
       this.isProcessingLoopActive = false;
     }
@@ -125,13 +146,15 @@ export class QueueConsumerService implements OnModuleInit, OnModuleDestroy {
    * Dispatches locked job to processor routine and persists execution results/progress
    */
   private async executeJob(job: BackGroundJob): Promise<void> {
-    this.logger.log(`[Worker] Starting execution for Job ${job.jobId} (Queue: ${job.queueName}, Type: ${job.jobType})`);
+    this.logger.log(
+      `[Worker] Starting execution for Job ${job.jobId} (Queue: ${job.queueName}, Type: ${job.jobType})`,
+    );
 
     const dbRepo = this.dataSource.getRepository(BackGroundJob);
 
     const jobContext: WorkerJobContext = {
       id: job.jobId,
-      name: job.jobType,
+      jobType: job.jobType,
       queueName: job.queueName,
       data: job.payload || {},
       attemptsMade: job.attempts,
@@ -140,7 +163,9 @@ export class QueueConsumerService implements OnModuleInit, OnModuleDestroy {
         try {
           await dbRepo.update({ id: job.id }, { progress });
         } catch (err: any) {
-          this.logger.error(`Failed to update progress for job ${job.jobId}: ${err.message}`);
+          this.logger.error(
+            `Failed to update progress for job ${job.jobId}: ${err.message}`,
+          );
         }
       },
     };
@@ -150,14 +175,13 @@ export class QueueConsumerService implements OnModuleInit, OnModuleDestroy {
 
       if (job.queueName === QueueNames.NOTIFICATIONS) {
         result = await this.notificationProcessor.process(jobContext);
-      } else if (job.queueName === QueueNames.IMPORTS_EXPORTS) {
+      } else if (
+        job.queueName === QueueNames.IMPORT ||
+        job.queueName === QueueNames.EXPORT
+      ) {
         result = await this.importExportProcessor.process(jobContext);
-      } else if (job.queueName === QueueNames.CLEANUP) {
-        if (job.jobType === JobTypeEnum.PAYMENT_RECONCILIATION) {
-          result = await this.paymentReconciliationProcessor.process(jobContext);
-        } else {
-          result = await this.cleanupProcessor.process(jobContext);
-        }
+      } else if (job.queueName === QueueNames.RECONCILIATION) {
+        result = await this.paymentReconciliationProcessor.process(jobContext);
       } else if (job.queueName === QueueNames.STUDENT_PROGRESSION) {
         result = await this.studentProgressionProcessor.process(jobContext);
       } else {
@@ -168,11 +192,15 @@ export class QueueConsumerService implements OnModuleInit, OnModuleDestroy {
       job.status = JobStatusEnum.COMPLETED;
       job.progress = 100;
       job.completedAt = new Date();
-      job.response = typeof result === 'object' && result !== null ? result : { result };
+      job.response =
+        typeof result === 'object' && result !== null ? result : { result };
       await dbRepo.save(job);
       this.logger.log(`[Worker] Job ${job.jobId} COMPLETED successfully!`);
     } catch (err: any) {
-      this.logger.error(`[Worker] Job ${job.jobId} FAILED: ${err.message}`, err.stack);
+      this.logger.error(
+        `[Worker] Job ${job.jobId} FAILED: ${err.message}`,
+        err.stack,
+      );
 
       const attemptsMade = job.attempts;
       const maxAttempts = job.maxAttempts || 3;

@@ -6,9 +6,15 @@ import { Section } from '../../models/entities/academic/section.entity';
 import { Student } from '../../models/entities/student/student.entity';
 import { StudentEnrollment } from '../../models/entities/student/student-enrollment.entity';
 import { AcademicSession } from '../../models/entities/academic/academic-session.entity';
-import { EnrollmentStatusEnum, EnrollmentTypeEnum } from '../../models/enums/enums';
+import {
+  EnrollmentStatusEnum,
+  EnrollmentTypeEnum,
+} from '../../models/enums/enums';
 
-export async function seedStudentsForSchool(dataSource: DataSource, schoolId: string = '2') {
+export async function seedStudentsForSchool(
+  dataSource: DataSource,
+  schoolId: string = '2',
+) {
   const classRepo = dataSource.getRepository(Class);
   const sectionRepo = dataSource.getRepository(Section);
   const studentRepo = dataSource.getRepository(Student);
@@ -44,7 +50,10 @@ export async function seedStudentsForSchool(dataSource: DataSource, schoolId: st
     'Class 10',
   ];
 
-  const studentNamesByClassSec: Record<string, { first: string; last: string; gender: string }[]> = {
+  const studentNamesByClassSec: Record<
+    string,
+    { first: string; last: string; gender: string }[]
+  > = {
     'Class 1-A': [
       { first: 'Aarav', last: 'Verma', gender: 'male' },
       { first: 'Ishaan', last: 'Sharma', gender: 'male' },
@@ -180,7 +189,12 @@ export async function seedStudentsForSchool(dataSource: DataSource, schoolId: st
       }
 
       const existingEnrollments = await enrollmentRepo.find({
-        where: { schoolId, classId: cls.id, sectionId: sec.id, isDeleted: false },
+        where: {
+          schoolId,
+          classId: cls.id,
+          sectionId: sec.id,
+          isDeleted: false,
+        },
       });
 
       if (existingEnrollments.length >= 3) {
@@ -189,10 +203,26 @@ export async function seedStudentsForSchool(dataSource: DataSource, schoolId: st
 
       const key = `${cName}-${secLetter}`;
       const templateList = studentNamesByClassSec[key] || [
-        { first: `Student_${cName}_${secLetter}_1`, last: 'Kumar', gender: 'male' },
-        { first: `Student_${cName}_${secLetter}_2`, last: 'Sharma', gender: 'female' },
-        { first: `Student_${cName}_${secLetter}_3`, last: 'Singh', gender: 'male' },
-        { first: `Student_${cName}_${secLetter}_4`, last: 'Gupta', gender: 'female' },
+        {
+          first: `Student_${cName}_${secLetter}_1`,
+          last: 'Kumar',
+          gender: 'male',
+        },
+        {
+          first: `Student_${cName}_${secLetter}_2`,
+          last: 'Sharma',
+          gender: 'female',
+        },
+        {
+          first: `Student_${cName}_${secLetter}_3`,
+          last: 'Singh',
+          gender: 'male',
+        },
+        {
+          first: `Student_${cName}_${secLetter}_4`,
+          last: 'Gupta',
+          gender: 'female',
+        },
       ];
 
       for (let rIdx = 0; rIdx < templateList.length; rIdx++) {
@@ -259,12 +289,17 @@ async function runSeed() {
 
   try {
     const targetSchoolId = process.argv[2] || '2';
-    console.log(`🌱 Starting Student Data Seeding for School ID: ${targetSchoolId}...`);
+    console.log(
+      `🌱 Starting Student Data Seeding for School ID: ${targetSchoolId}...`,
+    );
     const result = await seedStudentsForSchool(dataSource, targetSchoolId);
     console.log('🎉 Student seeding completed successfully!');
     console.log(result);
   } catch (error) {
-    console.error('⚠️ Exception occurred during student seeding:', (error as Error).message);
+    console.error(
+      '⚠️ Exception occurred during student seeding:',
+      (error as Error).message,
+    );
   } finally {
     if (dataSource && dataSource.isInitialized) {
       await dataSource.destroy();

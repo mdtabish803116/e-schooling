@@ -1,29 +1,51 @@
-import { IsEmail, IsInt, IsNotEmpty, IsOptional, IsString, Min } from 'class-validator';
+import {
+  IsEmail,
+  IsInt,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  Min,
+} from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 
 export class CreateSchoolDto {
-  @ApiProperty({ example: 'Vidya Jyoti Public School', description: 'Name of the school' })
+  @ApiProperty({
+    example: 'Vidya Jyoti Public School',
+    description: 'Name of the school',
+  })
   @IsNotEmpty()
   @IsString()
   schoolName: string;
 
-  @ApiProperty({ example: 'school@vidyajyoti.com', description: 'Primary contact email' })
+  @ApiProperty({
+    example: 'school@vidyajyoti.com',
+    description: 'Primary contact email',
+  })
   @IsNotEmpty()
   @IsEmail()
   email: string;
 
-  @ApiProperty({ example: '+919876543210', description: 'Primary contact phone number' })
+  @ApiProperty({
+    example: '+919876543210',
+    description: 'Primary contact phone number',
+  })
   @IsNotEmpty()
   @IsString()
   phone: string;
 
-  @ApiPropertyOptional({ example: 'https://example.com/logo.png', description: 'School logo URL' })
+  @ApiPropertyOptional({
+    example: 'https://example.com/logo.png',
+    description: 'School logo URL',
+  })
   @IsOptional()
   @IsString()
   logoUrl?: string;
 
-  @ApiPropertyOptional({ example: 'EXT-CBSE-9988', description: 'External / Board school code if any' })
+  @ApiPropertyOptional({
+    example: 'EXT-CBSE-9988',
+    description: 'External / Board school code if any',
+  })
   @IsOptional()
   @IsString()
   externalSchoolCode?: string;
@@ -35,7 +57,10 @@ export class CreateSchoolDto {
   @Min(0)
   totalClasses?: number;
 
-  @ApiPropertyOptional({ example: 24, description: 'Total sections across all classes' })
+  @ApiPropertyOptional({
+    example: 24,
+    description: 'Total sections across all classes',
+  })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
@@ -61,7 +86,10 @@ export class CreateSchoolDto {
   @IsString()
   addressArea?: string;
 
-  @ApiPropertyOptional({ example: 'Near Metro Station', description: 'Landmark' })
+  @ApiPropertyOptional({
+    example: 'Near Metro Station',
+    description: 'Landmark',
+  })
   @IsOptional()
   @IsString()
   addressLandmark?: string;

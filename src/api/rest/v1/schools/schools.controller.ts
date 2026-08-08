@@ -1,5 +1,19 @@
-import { Controller, Post, Get, Patch, Body, Param, UseGuards, Query } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse } from '@nestjs/swagger';
+import {
+  Controller,
+  Post,
+  Get,
+  Patch,
+  Body,
+  Param,
+  UseGuards,
+  Query,
+} from '@nestjs/common';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiBearerAuth,
+  ApiResponse,
+} from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../../../shared/guards/jwt-auth.guard';
 import { CurrentUser } from '../../../../shared/decorators/current-user.decorator';
 import { SchoolsService } from '../../../../services/schools/schools.service';
@@ -13,11 +27,11 @@ import { SchoolAnalyticsQueryDto } from '../../../../interfaces/request/school/s
 @UseGuards(JwtAuthGuard)
 @Controller('schools')
 export class SchoolsController {
-  constructor(private readonly schoolsService: SchoolsService) { }
+  constructor(private readonly schoolsService: SchoolsService) {}
 
   @ApiOperation({ summary: 'Create a new school (post-login)' })
-  @ApiResponse({ 
-    status: 201, 
+  @ApiResponse({
+    status: 201,
     description: 'School created successfully',
     schema: {
       example: {
@@ -25,9 +39,9 @@ export class SchoolsController {
         schoolName: 'Vidya Jyoti Public School',
         internalSchoolCode: 'SCH-VIDYA-5542',
         email: 'school@vidyajyoti.com',
-        isActive: true
-      }
-    }
+        isActive: true,
+      },
+    },
   })
   @Post()
   async createSchool(
@@ -37,29 +51,46 @@ export class SchoolsController {
     return this.schoolsService.createSchool(caller, dto);
   }
 
-  @ApiOperation({ summary: 'List all schools associated with the logged-in owner account' })
-  @ApiResponse({ 
-    status: 200, 
+  @ApiOperation({
+    summary: 'List all schools associated with the logged-in owner account',
+  })
+  @ApiResponse({
+    status: 200,
     description: 'List of schools retrieved',
     schema: {
       example: [
-        { id: '1', schoolName: 'Vidya Jyoti Public School', internalSchoolCode: 'SCH-VIDYA-5542', isActive: true },
-        { id: '2', schoolName: 'St. Xavier High', internalSchoolCode: 'SCH-XAVIER-1123', isActive: false }
-      ]
-    }
+        {
+          id: '1',
+          schoolName: 'Vidya Jyoti Public School',
+          internalSchoolCode: 'SCH-VIDYA-5542',
+          isActive: true,
+        },
+        {
+          id: '2',
+          schoolName: 'St. Xavier High',
+          internalSchoolCode: 'SCH-XAVIER-1123',
+          isActive: false,
+        },
+      ],
+    },
   })
   @Get()
   async listSchools(@CurrentUser() caller: AuthContext) {
     return this.schoolsService.listSchools(caller);
   }
 
-  @ApiOperation({ summary: 'Get a full snapshot of all schools, plans, and permissions (Owner Dashboard)' })
+  @ApiOperation({
+    summary:
+      'Get a full snapshot of all schools, plans, and permissions (Owner Dashboard)',
+  })
   @Get('context/master')
   async getMasterContext(@CurrentUser() caller: AuthContext) {
     return this.schoolsService.getOwnerMasterContext(caller);
   }
 
-  @ApiOperation({ summary: 'Get global analytics across all owned schools (Owner Dashboard)' })
+  @ApiOperation({
+    summary: 'Get global analytics across all owned schools (Owner Dashboard)',
+  })
   @Get('analytics/global')
   async getGlobalAnalytics(
     @CurrentUser() caller: AuthContext,
@@ -68,28 +99,38 @@ export class SchoolsController {
     return this.schoolsService.getGlobalOwnerAnalytics(caller, query);
   }
 
-  @ApiOperation({ summary: 'Get analytics for a specific school (including student growth/monthly trends)' })
+  @ApiOperation({
+    summary:
+      'Get analytics for a specific school (including student growth/monthly trends)',
+  })
   @Get(':schoolId/analytics')
   async getSingleSchoolAnalytics(
     @Param('schoolId') schoolId: string,
     @CurrentUser() caller: AuthContext,
     @Query() query: SchoolAnalyticsQueryDto,
   ) {
-    return this.schoolsService.getSingleSchoolAnalytics(caller, schoolId, query);
+    return this.schoolsService.getSingleSchoolAnalytics(
+      caller,
+      schoolId,
+      query,
+    );
   }
 
-  @ApiOperation({ summary: 'Get a full snapshot specifically for a single school under the owner context' })
+  @ApiOperation({
+    summary:
+      'Get a full snapshot specifically for a single school under the owner context',
+  })
   @Get(':schoolId/context/master')
   async getSingleSchoolMasterContext(
     @Param('schoolId') schoolId: string,
-    @CurrentUser() caller: AuthContext
+    @CurrentUser() caller: AuthContext,
   ) {
     return this.schoolsService.getSingleSchoolMasterContext(caller, schoolId);
   }
 
   @ApiOperation({ summary: 'Get details of a specific school' })
-  @ApiResponse({ 
-    status: 200, 
+  @ApiResponse({
+    status: 200,
     description: 'School details retrieved',
     schema: {
       example: {
@@ -98,9 +139,9 @@ export class SchoolsController {
         internalSchoolCode: 'SCH-VIDYA-5542',
         addressCity: 'New Delhi',
         totalTeachers: 45,
-        isActive: true
-      }
-    }
+        isActive: true,
+      },
+    },
   })
   @Get(':schoolId')
   async getSchool(
@@ -111,16 +152,16 @@ export class SchoolsController {
   }
 
   @ApiOperation({ summary: 'Update details of a specific school' })
-  @ApiResponse({ 
-    status: 200, 
+  @ApiResponse({
+    status: 200,
     description: 'School updated successfully',
     schema: {
       example: {
         id: '1',
         schoolName: 'Vidya Jyoti Global School',
-        updatedAt: '2024-05-15T10:00:00Z'
-      }
-    }
+        updatedAt: '2024-05-15T10:00:00Z',
+      },
+    },
   })
   @Patch(':schoolId')
   async updateSchool(
@@ -131,4 +172,3 @@ export class SchoolsController {
     return this.schoolsService.updateSchool(caller, schoolId, dto);
   }
 }
-

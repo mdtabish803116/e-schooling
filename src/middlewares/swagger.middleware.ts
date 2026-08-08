@@ -21,7 +21,8 @@ export class SwaggerMiddleWare {
           scheme: 'bearer',
           bearerFormat: 'JWT',
           name: 'JWT',
-          description: 'Enter your JWT Bearer token. Obtain it via /rest/v1/auth/login or /rest/v1/auth/register.',
+          description:
+            'Enter your JWT Bearer token. Obtain it via /rest/v1/auth/login or /rest/v1/auth/register.',
           in: 'header',
         },
         'JWT-auth',
@@ -44,8 +45,16 @@ export class SwaggerMiddleWare {
             const operation = pathItem[method];
             if (operation && operation.parameters) {
               operation.parameters.sort((a, b) => {
-                const paramA = a as { in: string; required?: boolean; name: string };
-                const paramB = b as { in: string; required?: boolean; name: string };
+                const paramA = a as {
+                  in: string;
+                  required?: boolean;
+                  name: string;
+                };
+                const paramB = b as {
+                  in: string;
+                  required?: boolean;
+                  name: string;
+                };
 
                 // Type priority: header=1, path=2, query=3, others=4
                 const typePriority: Record<string, number> = {

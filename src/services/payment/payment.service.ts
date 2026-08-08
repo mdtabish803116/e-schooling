@@ -28,7 +28,9 @@ export class PaymentService {
       const order = await this.razorpay.orders.create(options);
       return order;
     } catch (error) {
-      throw new BadRequestException('Failed to create Razorpay order: ' + error.message);
+      throw new BadRequestException(
+        'Failed to create Razorpay order: ' + error.message,
+      );
     }
   }
 
@@ -40,15 +42,22 @@ export class PaymentService {
       const order = await this.razorpay.orders.fetch(razorpayOrderId);
       return order;
     } catch (error) {
-      throw new BadRequestException('Failed to fetch Razorpay order status: ' + error.message);
+      throw new BadRequestException(
+        'Failed to fetch Razorpay order status: ' + error.message,
+      );
     }
   }
 
   /**
    * Verifies the Razorpay Signature.
    */
-  verifySignature(orderId: string, paymentId: string, signature: string): boolean {
-    const secret = process.env.RAZORPAY_KEY_SECRET || 'dQFWXqe0WXaZyr1NSIpetWzI';
+  verifySignature(
+    orderId: string,
+    paymentId: string,
+    signature: string,
+  ): boolean {
+    const secret =
+      process.env.RAZORPAY_KEY_SECRET || 'dQFWXqe0WXaZyr1NSIpetWzI';
     const body = orderId + '|' + paymentId;
 
     const expectedSignature = crypto

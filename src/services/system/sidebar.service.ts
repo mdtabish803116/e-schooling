@@ -25,20 +25,27 @@ export class SidebarService {
 
     // Verify ownership if caller is owner
     if (isOwner) {
-      const membership = await this.dataSource.getRepository(SchoolOwnerMember).findOne({
-        where: { schoolOwnerId: caller.id, schoolId, isActive: true },
-      });
+      const membership = await this.dataSource
+        .getRepository(SchoolOwnerMember)
+        .findOne({
+          where: { schoolOwnerId: caller.id, schoolId, isActive: true },
+        });
       if (!membership) {
         throw new ForbiddenException('Unauthorized access to this school');
       }
     }
 
     // 1. Fetch all platform features to check entitlements
-    const features = await this.dataSource.getRepository(PlatformFeature).find({ where: { isActive: true } });
+    const features = await this.dataSource
+      .getRepository(PlatformFeature)
+      .find({ where: { isActive: true } });
     const enabledFeatureIds: string[] = [];
 
     for (const feature of features) {
-      const access = await this.entitlementService.evaluateFeatureAccess(schoolId, feature.code);
+      const access = await this.entitlementService.evaluateFeatureAccess(
+        schoolId,
+        feature.code,
+      );
       if (access.isAllowed) {
         enabledFeatureIds.push(feature.id);
       }
@@ -51,18 +58,34 @@ export class SidebarService {
     });
 
     // 3. Filter modules by entitlement and user permissions
-    const viewableModuleCodes = isOwner ? null : await this.rbacService.getViewPermittedModuleCodes(caller.id);
+    const viewableModuleCodes = isOwner
+      ? null
+      : await this.rbacService.getViewPermittedModuleCodes(caller.id);
 
-    console.log('[SIDEBAR DEBUG] userId:', caller.id, 'actorType:', caller.actorType, 'schoolId:', schoolId);
+    console.log(
+      '[SIDEBAR DEBUG] userId:',
+      caller.id,
+      'actorType:',
+      caller.actorType,
+      'schoolId:',
+      schoolId,
+    );
     console.log('[SIDEBAR DEBUG] allModules count:', allModules.length);
     console.log('[SIDEBAR DEBUG] enabledFeatureIds:', enabledFeatureIds);
-    console.log('[SIDEBAR DEBUG] viewableModuleCodes:', viewableModuleCodes ? [...viewableModuleCodes] : 'OWNER(all)');
+    console.log(
+      '[SIDEBAR DEBUG] viewableModuleCodes:',
+      viewableModuleCodes ? [...viewableModuleCodes] : 'OWNER(all)',
+    );
 
     // Modules that are either not linked to a specific feature (global) or linked to an enabled one
-    const allowedModules = allModules.filter(module => {
-      const isFeatureEnabled = !module.platformFeatureId || enabledFeatureIds.includes(module.platformFeatureId);
+    const allowedModules = allModules.filter((module) => {
+      const isFeatureEnabled =
+        !module.platformFeatureId ||
+        enabledFeatureIds.includes(module.platformFeatureId);
       if (!isFeatureEnabled) {
-        console.log(`[SIDEBAR DEBUG] Module "${module.code}" blocked by feature entitlement (featureId: ${module.platformFeatureId})`);
+        console.log(
+          `[SIDEBAR DEBUG] Module "${module.code}" blocked by feature entitlement (featureId: ${module.platformFeatureId})`,
+        );
         return false;
       }
 
@@ -71,22 +94,35 @@ export class SidebarService {
       }
 
       // Check if the user has a VIEW operation permission for this module (via DB, not string key)
-      const hasView = viewableModuleCodes!.has(module.code.toLowerCase()) || module.isMenuGroup;
+      const hasView =
+        viewableModuleCodes!.has(module.code.toLowerCase()) ||
+        module.isMenuGroup;
       if (!hasView) {
-        console.log(`[SIDEBAR DEBUG] Module "${module.code}" blocked — no view permission`);
+        console.log(
+          `[SIDEBAR DEBUG] Module "${module.code}" blocked — no view permission`,
+        );
       }
       return hasView;
     });
 
-    console.log('[SIDEBAR DEBUG] allowedModules count:', allowedModules.length, allowedModules.map(m => m.code));
+    console.log(
+      '[SIDEBAR DEBUG] allowedModules count:',
+      allowedModules.length,
+      allowedModules.map((m) => m.code),
+    );
 
     // 4. Build hierarchy
     return this.buildTree(allowedModules);
   }
 
-  private buildTree(modules: ModuleMaster[], parentId: string | null = null): any[] {
+  private buildTree(
+    modules: ModuleMaster[],
+    parentId: string | null = null,
+  ): any[] {
     const tree: any[] = [];
-    const children = modules.filter(m => (m.parentModuleId === parentId) || (!parentId && !m.parentModuleId));
+    const children = modules.filter(
+      (m) => m.parentModuleId === parentId || (!parentId && !m.parentModuleId),
+    );
 
     for (const child of children) {
       const node: any = {

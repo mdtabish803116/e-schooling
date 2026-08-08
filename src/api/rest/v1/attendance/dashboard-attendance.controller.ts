@@ -19,7 +19,9 @@ import { ResourceEnum, ActionEnum } from '../../../../models/enums/enums';
 export class DashboardAttendanceController {
   constructor(private readonly attendanceService: AttendanceService) {}
 
-  @ApiOperation({ summary: 'Get attendance dashboard analytics summary (Dashboard URL alias)' })
+  @ApiOperation({
+    summary: 'Get attendance dashboard analytics summary (Dashboard URL alias)',
+  })
   @Permission(ResourceEnum.ATTENDANCE, ActionEnum.VIEW)
   @Get('attendance')
   async getAttendanceDashboard(
@@ -30,6 +32,11 @@ export class DashboardAttendanceController {
     @Query('academicSessionId') querySessionId?: string,
   ) {
     const academicSessionId = querySessionId || sessionFromHeader || undefined;
-    return this.attendanceService.getAttendanceDashboard(caller, schoolId, date, academicSessionId);
+    return this.attendanceService.getAttendanceDashboard(
+      caller,
+      schoolId,
+      date,
+      academicSessionId,
+    );
   }
 }

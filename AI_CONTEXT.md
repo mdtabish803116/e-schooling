@@ -1,6 +1,6 @@
 # E-School Backend (`e-schooling`) AI Context
 
-Last updated: 2026-07-29 (NestJS v11 Architecture, Dual-Mode Execution, TypeORM Postgres Migrations, RBAC & Entitlement System)
+Last updated: 2026-08-07 (Class Entity Capacity Field, UpdateClassDto/CreateClassDto Capacity & AcademicSession, Migration 1784832900000)
 
 This file is the quick-start handoff for AI agents working in the `e-schooling` backend repository. Read it before modifying or adding API endpoints, NestJS services, TypeORM entities, background workers, or migrations.
 
@@ -265,4 +265,29 @@ Background asynchronous jobs are processed using **PostgreSQL Native `LISTEN` / 
   - Fields: `sourceSessionId`, `targetSessionId`, `copyClasses`, `copySections`, `copySubjects`, `copyRooms`, `copyTeacherAssignments`, `copyClassSectionSubjects`.
 - **Service Logic**: `AcademicService.copyAcademicSessionData` in `src/services/academic/academic.service.ts`
   - Deep-clones classes, sections, subjects, rooms, class-section-subject mappings, and teacher section assignments from `sourceSessionId` into `targetSessionId` in a single transaction context.
+
+### 3. Module Masters & RBAC Permissions Seeding Migration
+- **Seed Service**: `PlatformService.seedPlatformData()` in `src/services/platform/platform.service.ts` updated with `STAFF`, `HOMEWORK`, `ACADEMIC_YEARS`, and `ANNOUNCEMENTS` modules & operations.
+- **Migration Script**: `src/core/database/postgres/migrations/1784832800000-AddMissingModulesAndPermissionsSeed.ts` automatically inserts and syncs all module masters, operation masters (`VIEW`, `CREATE`, `UPDATE`, `DELETE`, `VIEW_ASSIGNED`), and `module_operation_permissions` mappings in PostgreSQL.
+
+### 4. Transport Module Settings & Fleet Telematics
+- **Entity**: `TransportSettings` (`src/models/entities/transport/transport-settings.entity.ts`) -> Table `transport_settings`.
+- **Endpoints**:
+  - `GET /schools/:schoolId/transport/settings` -> Retrieves fleet rules, speed limit, GPS telematics, parent geofence notifications, and compliance alert lead times.
+  - `PUT /schools/:schoolId/transport/settings` -> Updates transport policies and pricing models.
+- **Seed Script**: `src/core/seed/seed-transport.ts` (run command: `npm run seed:transport`).
+
+### 5. Admission Enquiry & Pipeline Console (Recent Additions)
+- **Entities**:
+  - `AdmissionEnquiry` (`src/models/entities/student/admission-enquiry.entity.ts`) -> Table `admission_enquiries` (Stores lead info, status `NEW`, `CONTACTED`, `SCHEDULED_TEST`, `CONVERTED`, `CLOSED`, lead source, and counselor notes).
+  - `AdmissionApplication` (`src/models/entities/student/admission-application.entity.ts`) -> Table `admission_applications` (Stores applicant verification, stage `ENQUIRY`, `APPLICATION`, `VERIFICATION`, `APPROVAL`, and document checklists).
+- **Controller**: `AdmissionsController` (`src/api/rest/v1/student/admissions.controller.ts`) at `@Controller('schools/:schoolId/admissions')` and matching endpoints in `StudentAdmissionsController`.
+- **Endpoints**:
+  - `GET /schools/:schoolId/admissions/enquiries`: Fetches school-wise enquiries from DB.
+  - `POST /schools/:schoolId/admissions/enquiries`: Records new admission enquiry leads in DB.
+  - `PATCH /schools/:schoolId/admissions/enquiries/:id/status`: Updates lead enquiry status.
+  - `GET /schools/:schoolId/admissions/applications`: Fetches applicant pipeline.
+  - `PATCH /schools/:schoolId/admissions/applications/:id/stage`: Advances applicant workflow stage.
+- **Migration Script**: `src/core/database/postgres/migrations/1784833000000-AddTransportModuleAndPermissionsSeed.ts` contains DDL table definitions for `transport_settings`, `admission_enquiries`, and `admission_applications`.
+
 

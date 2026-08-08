@@ -54,10 +54,14 @@ export class GeoService {
    */
   async createPlace(schoolId: string, dto: CreatePlaceDto) {
     const districtRepo = this.dataSource.getRepository(District);
-    const district = await districtRepo.findOne({ where: { id: dto.districtId } });
+    const district = await districtRepo.findOne({
+      where: { id: dto.districtId },
+    });
 
     if (!district) {
-      throw new NotFoundException('Specified parent district profile not found');
+      throw new NotFoundException(
+        'Specified parent district profile not found',
+      );
     }
 
     const place = new Place();

@@ -5,32 +5,59 @@ import { Student } from '../../../../models/entities/student/student.entity';
 import { StudentEnrollment } from '../../../../models/entities/student/student-enrollment.entity';
 import { Class } from '../../../../models/entities/academic/class.entity';
 import { Section } from '../../../../models/entities/academic/section.entity';
+import { StorageService } from '../../../../shared/storage/storage.service';
+import { JobTypeEnum } from '../../../../models/enums/enums';
 
 @Injectable()
 export class StudentExportProcessor {
   private readonly logger = new Logger(StudentExportProcessor.name);
 
-  constructor(private readonly dataSource: DataSource) {}
+  constructor(
+    private readonly dataSource: DataSource,
+    private readonly storageService: StorageService,
+  ) {}
 
   async process(job: WorkerJobContext): Promise<unknown> {
-    const { schoolId, classId, sectionId, search } = job.data || {};
-    this.logger.log(`[StudentExportProcessor] Processing student export job ${job.id} for school: ${schoolId}`);
+    const { schoolId, classId, sectionId, search, academicSessionId } =
+      job.data || {};
+    this.logger.log(
+      `[StudentExportProcessor] Processing student export job ${job.id} for school: ${schoolId}`,
+    );
 
     await job.updateProgress(10);
 
     const studentRepo = this.dataSource.getRepository(Student);
     const enrollmentRepo = this.dataSource.getRepository(StudentEnrollment);
 
-    const queryBuilder = studentRepo.createQueryBuilder('student')
+    const queryBuilder = studentRepo
+      .createQueryBuilder('student')
       .where('student.schoolId = :schoolId', { schoolId })
       .andWhere('student.isDeleted = :isDeleted', { isDeleted: false });
 
-    if (classId || sectionId) {
-      queryBuilder.innerJoin(StudentEnrollment, 'enrollment',
+    if (academicSessionId || classId || sectionId) {
+      queryBuilder.innerJoin(
+        StudentEnrollment,
+        'enrollment',
         'enrollment.studentId = student.id AND enrollment.isCurrent = :isCurrent AND enrollment.isDeleted = :enrollmentDeleted',
-        { isCurrent: true, enrollmentDeleted: false });
-      if (classId) queryBuilder.andWhere('enrollment.classId = :classId', { classId });
-      if (sectionId) queryBuilder.andWhere('enrollment.sectionId = :sectionId', { sectionId });
+        { isCurrent: true, enrollmentDeleted: false },
+      );
+
+      if (academicSessionId) {
+        queryBuilder.andWhere(
+          'enrollment.academicSessionId = :academicSessionId',
+          { academicSessionId },
+        );
+      }
+
+      if (classId) {
+        queryBuilder.andWhere('enrollment.classId = :classId', { classId });
+      }
+
+      if (sectionId) {
+        queryBuilder.andWhere('enrollment.sectionId = :sectionId', {
+          sectionId,
+        });
+      }
     }
 
     if (search) {
@@ -42,21 +69,60 @@ export class StudentExportProcessor {
     }
 
     await job.updateProgress(40);
-    const students = await queryBuilder.orderBy('student.createdAt', 'DESC').getMany();
+    const students = await queryBuilder
+      .orderBy('student.createdAt', 'DESC')
+      .getMany();
 
     await job.updateProgress(70);
-    const studentIds = students.map(s => s.id);
-    const enrollments = studentIds.length > 0
-      ? await enrollmentRepo.find({ where: { studentId: In(studentIds), schoolId, isCurrent: true, isDeleted: false } })
-      : [];
-    const classes = studentIds.length > 0 ? await this.dataSource.getRepository(Class).find({ where: { schoolId, isDeleted: false } }) : [];
-    const sections = studentIds.length > 0 ? await this.dataSource.getRepository(Section).find({ where: { schoolId, isDeleted: false } }) : [];
+    const studentIds = students.map((s) => s.id);
+    const enrollments =
+      studentIds.length > 0
+        ? await enrollmentRepo.find({
+            where: {
+              studentId: In(studentIds),
+              schoolId,
+              isCurrent: true,
+              isDeleted: false,
+            },
+          })
+        : [];
+    const classes =
+      studentIds.length > 0
+        ? await this.dataSource
+            .getRepository(Class)
+            .find({ where: { schoolId, isDeleted: false } })
+        : [];
+    const sections =
+      studentIds.length > 0
+        ? await this.dataSource
+            .getRepository(Section)
+            .find({ where: { schoolId, isDeleted: false } })
+        : [];
 
-    const headers = ['Admission Number', 'Student Code', 'First Name', 'Last Name', 'Gender', 'DOB', 'Phone', 'Email', 'Class', 'Section', 'Roll Number', 'Father Name', 'Mother Name', 'Status'];
+    const headers = [
+      'Admission Number',
+      'Student Code',
+      'First Name',
+      'Last Name',
+      'Gender',
+      'DOB',
+      'Phone',
+      'Email',
+      'Class',
+      'Section',
+      'Roll Number',
+      'Father Name',
+      'Mother Name',
+      'Status',
+    ];
     const rows = students.map((s) => {
       const e = enrollments.find((env) => env.studentId === s.id);
-      const cls = e ? classes.find((c) => String(c.id) === String(e.classId)) : null;
-      const sec = e ? sections.find((secItem) => String(secItem.id) === String(e.sectionId)) : null;
+      const cls = e
+        ? classes.find((c) => String(c.id) === String(e.classId))
+        : null;
+      const sec = e
+        ? sections.find((secItem) => String(secItem.id) === String(e.sectionId))
+        : null;
 
       return [
         `"${s.admissionNumber || ''}"`,
@@ -77,14 +143,33 @@ export class StudentExportProcessor {
     });
 
     const csvContent = [headers.join(','), ...rows].join('\n');
+    await job.updateProgress(90);
+
+    const filename = `students-export-school-${schoolId}-${Date.now()}.csv`;
+    const file = {
+      buffer: Buffer.from(csvContent, 'utf-8'),
+      originalname: filename,
+      mimetype: 'text/csv',
+    } as Express.Multer.File;
+
+    let fileUrl = '';
+    try {
+      fileUrl = await this.storageService.uploadFile(file);
+    } catch (error) {
+      this.logger.error(`Cloudinary upload failed: ${error.message}`);
+      throw new Error(
+        `Failed to upload export to cloud storage: ${error.message}`,
+      );
+    }
+
     await job.updateProgress(100);
 
     return {
       success: true,
-      jobType: 'student_export',
+      jobType: JobTypeEnum.STUDENT_EXPORT,
       totalExported: students.length,
-      csvContent,
-      filename: `students-export-school-${schoolId}-${Date.now()}.csv`,
+      fileUrl,
+      filename,
       message: `Exported ${students.length} student records successfully.`,
     };
   }

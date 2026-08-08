@@ -113,7 +113,10 @@ export class SchoolUsersController {
     return this.schoolUsersService.getUserProfile(caller, schoolId, userId);
   }
 
-  @ApiOperation({ summary: 'Change current logged in staff user password (requires old password)' })
+  @ApiOperation({
+    summary:
+      'Change current logged in staff user password (requires old password)',
+  })
   @Post('me/change-password')
   async changeMyPassword(
     @Param('schoolId') schoolId: string,

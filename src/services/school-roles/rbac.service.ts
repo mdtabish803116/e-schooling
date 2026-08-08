@@ -10,7 +10,11 @@ import { OperationMaster } from '../../models/entities/rbac/operation-master.ent
 export class RBACService {
   constructor(private dataSource: DataSource) {}
 
-  async hasPermission(userId: string, resource: string, action: string): Promise<boolean> {
+  async hasPermission(
+    userId: string,
+    resource: string,
+    action: string,
+  ): Promise<boolean> {
     const result = await this.dataSource
       .getRepository(SchoolUserRole)
       .createQueryBuilder('ur')
@@ -21,7 +25,9 @@ export class RBACService {
       .where('ur.user_id = :userId', { userId })
       .andWhere('ur.is_active = true')
       .andWhere('ur.is_delete = false')
-      .andWhere('LOWER(m.code) = :resource', { resource: resource.toLowerCase() })
+      .andWhere('LOWER(m.code) = :resource', {
+        resource: resource.toLowerCase(),
+      })
       .andWhere('LOWER(o.code) = :action', { action: action.toLowerCase() })
       .andWhere('rp.is_active = true')
       .andWhere('rp.is_delete = false')
@@ -63,6 +69,6 @@ export class RBACService {
       .andWhere("LOWER(o.code) IN ('view', 'view_assigned')")
       .getRawMany();
 
-    return new Set(rows.map(r => r.moduleCode));
+    return new Set(rows.map((r) => r.moduleCode));
   }
 }

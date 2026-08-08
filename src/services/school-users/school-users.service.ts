@@ -87,13 +87,18 @@ export class SchoolUsersService {
       // Create associated SchoolUserProfile
       const profile = new SchoolUserProfile();
       profile.schoolUserId = savedUser.id;
-      profile.firstName = dto.profile?.firstName || dto.name.split(' ')[0] || '';
-      profile.lastName = dto.profile?.lastName || dto.name.split(' ').slice(1).join(' ') || '';
+      profile.firstName =
+        dto.profile?.firstName || dto.name.split(' ')[0] || '';
+      profile.lastName =
+        dto.profile?.lastName || dto.name.split(' ').slice(1).join(' ') || '';
       profile.email = dto.profile?.email || '';
-      profile.designation = dto.profile?.designation || (dto.userType === UserTypeEnum.ACADEMIC ? 'Teacher' : 'Staff');
+      profile.designation =
+        dto.profile?.designation ||
+        (dto.userType === UserTypeEnum.ACADEMIC ? 'Teacher' : 'Staff');
       profile.departmentName = dto.profile?.departmentName || 'General';
-      profile.joiningDate = dto.profile?.joiningDate || new Date().toISOString().split('T')[0];
-      
+      profile.joiningDate =
+        dto.profile?.joiningDate || new Date().toISOString().split('T')[0];
+
       if (dto.profile) {
         Object.assign(profile, dto.profile);
       }
@@ -148,13 +153,20 @@ export class SchoolUsersService {
       }
 
       const userIds = users.map((u) => u.id);
-      const creatorIds = [...new Set(users.map((u) => u.createdById).filter(Boolean))];
+      const creatorIds = [
+        ...new Set(users.map((u) => u.createdById).filter(Boolean)),
+      ];
 
       // Fetch creator names
-      const creators = creatorIds.length > 0
-        ? await this.dataSource.getRepository(SchoolOwner).find({ where: { id: In(creatorIds) } })
-        : [];
-      const creatorMap = new Map(creators.map((c) => [c.id, c.fullName || 'Administrator']));
+      const creators =
+        creatorIds.length > 0
+          ? await this.dataSource
+              .getRepository(SchoolOwner)
+              .find({ where: { id: In(creatorIds) } })
+          : [];
+      const creatorMap = new Map(
+        creators.map((c) => [c.id, c.fullName || 'Administrator']),
+      );
 
       // Fetch active roles assigned to these users
       const userRoles = await this.dataSource
@@ -220,8 +232,11 @@ export class SchoolUsersService {
           newProfile.schoolUserId = u.id;
           newProfile.firstName = u.name.split(' ')[0] || u.name;
           newProfile.lastName = u.name.split(' ').slice(1).join(' ') || '';
-          newProfile.designation = u.userType === UserTypeEnum.ACADEMIC ? 'Teacher' : 'Staff';
-          const savedProf = await this.dataSource.getRepository(SchoolUserProfile).save(newProfile);
+          newProfile.designation =
+            u.userType === UserTypeEnum.ACADEMIC ? 'Teacher' : 'Staff';
+          const savedProf = await this.dataSource
+            .getRepository(SchoolUserProfile)
+            .save(newProfile);
           profilesMap.set(u.id, savedProf);
         }
       }
@@ -235,7 +250,8 @@ export class SchoolUsersService {
           createdByName: creatorMap.get(u.createdById) || 'Administrator',
           profile: prof,
           roles: userRolesList,
-          roleNames: userRolesList.map((r) => r.name).join(', ') || 'No Role Assigned',
+          roleNames:
+            userRolesList.map((r) => r.name).join(', ') || 'No Role Assigned',
         };
       });
 
@@ -448,8 +464,11 @@ export class SchoolUsersService {
         profile.schoolUserId = userId;
         profile.firstName = user.name.split(' ')[0] || user.name;
         profile.lastName = user.name.split(' ').slice(1).join(' ') || '';
-        profile.designation = user.userType === UserTypeEnum.ACADEMIC ? 'Teacher' : 'Staff';
-        profile = await this.dataSource.getRepository(SchoolUserProfile).save(profile);
+        profile.designation =
+          user.userType === UserTypeEnum.ACADEMIC ? 'Teacher' : 'Staff';
+        profile = await this.dataSource
+          .getRepository(SchoolUserProfile)
+          .save(profile);
       }
 
       // Fetch active roles assigned to this user
@@ -579,10 +598,14 @@ export class SchoolUsersService {
   ) {
     await this.assertAccessToSchool(caller, schoolId);
     if (!body.oldPassword || !body.newPassword) {
-      throw new BadRequestException('Both oldPassword and newPassword are required');
+      throw new BadRequestException(
+        'Both oldPassword and newPassword are required',
+      );
     }
     if (body.newPassword.length < 6) {
-      throw new BadRequestException('New password must be at least 6 characters');
+      throw new BadRequestException(
+        'New password must be at least 6 characters',
+      );
     }
 
     const user = await this.dataSource
@@ -591,7 +614,10 @@ export class SchoolUsersService {
 
     if (!user) throw new NotFoundException('User account not found');
 
-    const matches = await bcrypt.compare(body.oldPassword, user.passwordHash || '');
+    const matches = await bcrypt.compare(
+      body.oldPassword,
+      user.passwordHash || '',
+    );
     if (!matches) {
       throw new BadRequestException('Incorrect old password');
     }

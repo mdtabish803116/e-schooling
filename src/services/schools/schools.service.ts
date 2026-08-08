@@ -7,7 +7,10 @@ import {
 import { DataSource, In, MoreThanOrEqual } from 'typeorm';
 import { School } from '../../models/entities/school/school.entity';
 import { SchoolOwnerMember } from '../../models/entities/school/school-owner-member.entity';
-import { validateEmail, validateMobile } from '../../shared/utils/validation.utils';
+import {
+  validateEmail,
+  validateMobile,
+} from '../../shared/utils/validation.utils';
 import { SchoolSubscription } from '../../models/entities/subscription/school-subscription.entity';
 import { ModuleMaster } from '../../models/entities/rbac/module-master.entity';
 import { SchoolRole } from '../../models/entities/rbac/school-role.entity';
@@ -17,7 +20,12 @@ import { PlatformFeature } from '../../models/entities/entitlement/platform-feat
 import { SubscriptionPlanPlatformFeatureMapping } from '../../models/entities/entitlement/subscription-plan-platform-feature-mapping.entity';
 import { SchoolFeatureOverride } from '../../models/entities/entitlement/school-feature-override.entity';
 import { SchoolUserRole } from '../../models/entities/rbac/school-user-role.entity';
-import { SchoolOwnerRoleEnum, SubscriptionStatusEnum, OverrideTypeEnum, PlanCodeEnum } from '../../models/enums/enums';
+import {
+  SchoolOwnerRoleEnum,
+  SubscriptionStatusEnum,
+  OverrideTypeEnum,
+  PlanCodeEnum,
+} from '../../models/enums/enums';
 import { AuthContext } from '../../interfaces/auth-context.interface';
 import { CreateSchoolDto } from '../../interfaces/request/school/create-school.dto';
 import { UpdateSchoolDto } from '../../interfaces/request/school/update-school.dto';
@@ -30,7 +38,7 @@ import { Section } from '../../models/entities/academic/section.entity';
 
 @Injectable()
 export class SchoolsService {
-  constructor(private dataSource: DataSource) { }
+  constructor(private dataSource: DataSource) {}
 
   /**
    * Helper to generate unique internal school code.
@@ -38,24 +46,32 @@ export class SchoolsService {
   private async generateUniqueSchoolCode(schoolName: string): Promise<string> {
     const firstWord = schoolName.trim().split(' ')[0].toUpperCase();
     const cleanWord = firstWord.replace(/[^A-Z]/g, '').substring(0, 5) || 'SCH';
-    
+
     let isUnique = false;
     let code = '';
-    
+
     while (!isUnique) {
       const randomNums = Math.floor(1000 + Math.random() * 9000);
       code = `SCH-${cleanWord}_${randomNums}`;
-      const existing = await this.dataSource.getRepository(School).findOne({ where: { internalSchoolCode: code } });
+      const existing = await this.dataSource
+        .getRepository(School)
+        .findOne({ where: { internalSchoolCode: code } });
       if (!existing) isUnique = true;
     }
     return code;
   }
 
-  private async assertOwnershipOfSchool(ownerId: string, schoolId: string): Promise<void> {
+  private async assertOwnershipOfSchool(
+    ownerId: string,
+    schoolId: string,
+  ): Promise<void> {
     const membership = await this.dataSource
       .getRepository(SchoolOwnerMember)
       .findOne({ where: { schoolOwnerId: ownerId, schoolId } });
-    if (!membership) throw new ForbiddenException('You do not have access to manage this school');
+    if (!membership)
+      throw new ForbiddenException(
+        'You do not have access to manage this school',
+      );
   }
 
   /**
@@ -63,29 +79,50 @@ export class SchoolsService {
    * Note: Subscription must be initiated separately via SubscriptionsService.
    */
   async createSchool(caller: AuthContext, dto: CreateSchoolDto) {
-    if (caller.actorType !== 'school_owner') throw new ForbiddenException('Only registered school owners can create new schools');
+    if (caller.actorType !== 'school_owner')
+      throw new ForbiddenException(
+        'Only registered school owners can create new schools',
+      );
 
-    const schoolName = dto.schoolName ? dto.schoolName.trim().replace(/[<>]/g, '') : '';
-    const email = dto.email ? dto.email.trim().toLowerCase().replace(/[<>]/g, '') : '';
+    const schoolName = dto.schoolName
+      ? dto.schoolName.trim().replace(/[<>]/g, '')
+      : '';
+    const email = dto.email
+      ? dto.email.trim().toLowerCase().replace(/[<>]/g, '')
+      : '';
     const phone = dto.phone ? dto.phone.trim().replace(/[<>]/g, '') : '';
 
     if (!schoolName || schoolName.length < 3 || schoolName.length > 100) {
-      throw new BadRequestException('School name must be between 3 and 100 characters long.');
+      throw new BadRequestException(
+        'School name must be between 3 and 100 characters long.',
+      );
     }
 
     if (/\s{2,}/.test(dto.schoolName)) {
-      throw new BadRequestException('Multiple consecutive spaces are not allowed in school name.');
+      throw new BadRequestException(
+        'Multiple consecutive spaces are not allowed in school name.',
+      );
     }
 
-    if (!validateEmail(email)) throw new BadRequestException('Please enter a valid school email address.');
-    if (!validateMobile(phone)) throw new BadRequestException('Please enter a valid school phone number (10 to 15 digits).');
+    if (!validateEmail(email))
+      throw new BadRequestException(
+        'Please enter a valid school email address.',
+      );
+    if (!validateMobile(phone))
+      throw new BadRequestException(
+        'Please enter a valid school phone number (10 to 15 digits).',
+      );
 
     // Uniqueness check for school email
-    const existingSchoolEmail = await this.dataSource.getRepository(School).findOne({
-      where: { email }
-    });
+    const existingSchoolEmail = await this.dataSource
+      .getRepository(School)
+      .findOne({
+        where: { email },
+      });
     if (existingSchoolEmail) {
-      throw new BadRequestException('This school email address is already registered. Please use another email.');
+      throw new BadRequestException(
+        'This school email address is already registered. Please use another email.',
+      );
     }
 
     const queryRunner = this.dataSource.createQueryRunner();
@@ -94,14 +131,16 @@ export class SchoolsService {
 
     try {
       const internalCode = await this.generateUniqueSchoolCode(schoolName);
-      
+
       const school = new School();
       Object.assign(school, dto);
       school.schoolName = schoolName;
       school.email = email;
       school.phone = phone;
       school.internalSchoolCode = internalCode;
-      school.externalSchoolCode = dto.externalSchoolCode ? dto.externalSchoolCode.trim() : null;
+      school.externalSchoolCode = dto.externalSchoolCode
+        ? dto.externalSchoolCode.trim()
+        : null;
       school.isActive = true;
       school.createdById = caller.id;
 
@@ -119,7 +158,8 @@ export class SchoolsService {
       await queryRunner.commitTransaction();
 
       return {
-        message: 'School registered successfully. Please select a subscription plan to continue.',
+        message:
+          'School registered successfully. Please select a subscription plan to continue.',
         school: savedSchool,
       };
     } catch (error) {
@@ -130,7 +170,11 @@ export class SchoolsService {
     }
   }
 
-  async updateSchool(caller: AuthContext, schoolId: string, dto: UpdateSchoolDto) {
+  async updateSchool(
+    caller: AuthContext,
+    schoolId: string,
+    dto: UpdateSchoolDto,
+  ) {
     await this.assertOwnershipOfSchool(caller.id, schoolId);
     const schoolRepo = this.dataSource.getRepository(School);
     const school = await schoolRepo.findOne({ where: { id: schoolId } });
@@ -139,27 +183,39 @@ export class SchoolsService {
     if (dto.schoolName !== undefined) {
       const schoolName = dto.schoolName.trim().replace(/[<>]/g, '');
       if (schoolName.length < 3 || schoolName.length > 100) {
-        throw new BadRequestException('School name must be between 3 and 100 characters long.');
+        throw new BadRequestException(
+          'School name must be between 3 and 100 characters long.',
+        );
       }
       if (/\s{2,}/.test(dto.schoolName)) {
-        throw new BadRequestException('Multiple consecutive spaces are not allowed in school name.');
+        throw new BadRequestException(
+          'Multiple consecutive spaces are not allowed in school name.',
+        );
       }
       dto.schoolName = schoolName;
     }
 
     if (dto.email !== undefined) {
       const email = dto.email.trim().toLowerCase().replace(/[<>]/g, '');
-      if (!validateEmail(email)) throw new BadRequestException('Please enter a valid school email address.');
+      if (!validateEmail(email))
+        throw new BadRequestException(
+          'Please enter a valid school email address.',
+        );
       const existing = await schoolRepo.findOne({ where: { email } });
       if (existing && existing.id !== schoolId) {
-        throw new BadRequestException('This school email address is already registered to another school.');
+        throw new BadRequestException(
+          'This school email address is already registered to another school.',
+        );
       }
       dto.email = email;
     }
 
     if (dto.phone !== undefined) {
       const phone = dto.phone.trim().replace(/[<>]/g, '');
-      if (!validateMobile(phone)) throw new BadRequestException('Please enter a valid school phone number (10 to 15 digits).');
+      if (!validateMobile(phone))
+        throw new BadRequestException(
+          'Please enter a valid school phone number (10 to 15 digits).',
+        );
       dto.phone = phone;
     }
 
@@ -171,34 +227,42 @@ export class SchoolsService {
   }
 
   async listSchools(caller: AuthContext) {
-    const memberships = await this.dataSource.getRepository(SchoolOwnerMember).find({
-      where: { schoolOwnerId: caller.id, isActive: true },
-    });
+    const memberships = await this.dataSource
+      .getRepository(SchoolOwnerMember)
+      .find({
+        where: { schoolOwnerId: caller.id, isActive: true },
+      });
     if (!memberships.length) return { schools: [] };
 
-    const schoolIds = memberships.map(m => m.schoolId);
+    const schoolIds = memberships.map((m) => m.schoolId);
     const schools = await this.dataSource.getRepository(School).find({
       where: { id: In(schoolIds) },
-      order: { createdAt: 'DESC' }
+      order: { createdAt: 'DESC' },
     });
 
     return {
-      schools: schools.map(s => ({
+      schools: schools.map((s) => ({
         ...s,
-        isPrimaryOwner: memberships.find(m => m.schoolId === s.id)?.isPrimaryOwner ?? false
-      }))
+        isPrimaryOwner:
+          memberships.find((m) => m.schoolId === s.id)?.isPrimaryOwner ?? false,
+      })),
     };
   }
 
   async getSchool(caller: AuthContext, schoolId: string) {
     if (caller.actorType === 'school_owner') {
       await this.assertOwnershipOfSchool(caller.id, schoolId);
-    } else if (caller.actorType === 'school_user' || caller.actorType === 'student') {
+    } else if (
+      caller.actorType === 'school_user' ||
+      caller.actorType === 'student'
+    ) {
       if (String(caller.schoolId) !== String(schoolId)) {
         throw new ForbiddenException('Access denied to school details');
       }
     }
-    const school = await this.dataSource.getRepository(School).findOne({ where: { id: schoolId } });
+    const school = await this.dataSource
+      .getRepository(School)
+      .findOne({ where: { id: schoolId } });
     if (!school) throw new NotFoundException('School not found');
     return { school };
   }
@@ -208,46 +272,84 @@ export class SchoolsService {
    * Uses bulk-fetching to prevent N+1 query performance issues.
    */
   async getOwnerMasterContext(caller: AuthContext) {
-    const memberships = await this.dataSource.getRepository(SchoolOwnerMember).find({
-      where: { schoolOwnerId: caller.id, isActive: true },
-    });
+    const memberships = await this.dataSource
+      .getRepository(SchoolOwnerMember)
+      .find({
+        where: { schoolOwnerId: caller.id, isActive: true },
+      });
     if (!memberships.length) return { schools: [] };
 
-    const schoolIds = memberships.map(m => m.schoolId);
+    const schoolIds = memberships.map((m) => m.schoolId);
 
     // 1. Bulk fetch all primary school assets and platform features in parallel
-    const [schools, subscriptions, roles, modules, features, planFeatureMappings, overrides] = await Promise.all([
-      this.dataSource.getRepository(School).find({ where: { id: In(schoolIds) } }),
-      this.dataSource.getRepository(SchoolSubscription).find({ where: { schoolId: In(schoolIds) }, relations: ['subscriptionPlan'] }),
-      this.dataSource.getRepository(SchoolRole).find({ where: { schoolId: In(schoolIds), isActive: true, isDeleted: false } }),
-      this.dataSource.getRepository(ModuleMaster).find({ where: { isActive: true }, order: { displayOrder: 'ASC' } }),
-      this.dataSource.getRepository(PlatformFeature).find({ where: { isActive: true } }),
-      this.dataSource.getRepository(SubscriptionPlanPlatformFeatureMapping).find({ where: { isActive: true, isEnabled: true } }),
-      this.dataSource.getRepository(SchoolFeatureOverride).find({ where: { schoolId: In(schoolIds), isActive: true, isDeleted: false } }),
+    const [
+      schools,
+      subscriptions,
+      roles,
+      modules,
+      features,
+      planFeatureMappings,
+      overrides,
+    ] = await Promise.all([
+      this.dataSource
+        .getRepository(School)
+        .find({ where: { id: In(schoolIds) } }),
+      this.dataSource.getRepository(SchoolSubscription).find({
+        where: { schoolId: In(schoolIds) },
+        relations: ['subscriptionPlan'],
+      }),
+      this.dataSource.getRepository(SchoolRole).find({
+        where: { schoolId: In(schoolIds), isActive: true, isDeleted: false },
+      }),
+      this.dataSource
+        .getRepository(ModuleMaster)
+        .find({ where: { isActive: true }, order: { displayOrder: 'ASC' } }),
+      this.dataSource
+        .getRepository(PlatformFeature)
+        .find({ where: { isActive: true } }),
+      this.dataSource
+        .getRepository(SubscriptionPlanPlatformFeatureMapping)
+        .find({ where: { isActive: true, isEnabled: true } }),
+      this.dataSource.getRepository(SchoolFeatureOverride).find({
+        where: { schoolId: In(schoolIds), isActive: true, isDeleted: false },
+      }),
     ]);
 
     // 2. Bulk fetch all role permissions
-    const roleIds = roles.map(r => r.id);
-    let rolePermissionMap: Record<string, any[]> = {};
+    const roleIds = roles.map((r) => r.id);
+    const rolePermissionMap: Record<string, any[]> = {};
 
     if (roleIds.length > 0) {
-      const permissions = await this.dataSource.getRepository(SchoolRolePermission).createQueryBuilder('rp')
-        .innerJoinAndSelect(ModuleOperationPermission, 'p', 'p.id = rp.permission_id')
-        .select(['rp.role_id as role_id', 'p.id as p_id', 'p.description as p_desc'])
+      const permissions = await this.dataSource
+        .getRepository(SchoolRolePermission)
+        .createQueryBuilder('rp')
+        .innerJoinAndSelect(
+          ModuleOperationPermission,
+          'p',
+          'p.id = rp.permission_id',
+        )
+        .select([
+          'rp.role_id as role_id',
+          'p.id as p_id',
+          'p.description as p_desc',
+        ])
         .where('rp.role_id IN (:...roleIds)', { roleIds })
         .andWhere('rp.isActive = true')
         .getRawMany();
 
-      permissions.forEach(p => {
+      permissions.forEach((p) => {
         if (!rolePermissionMap[p.role_id]) rolePermissionMap[p.role_id] = [];
-        rolePermissionMap[p.role_id].push({ id: p.p_id, description: p.p_desc });
+        rolePermissionMap[p.role_id].push({
+          id: p.p_id,
+          description: p.p_desc,
+        });
       });
     }
 
     // 3. Aggregate results in memory with dynamic entitlement checks and real-time expiry validation
-    const results = schools.map(school => {
-      const schoolSub = subscriptions.find(s => s.schoolId === school.id);
-      const schoolRoles = roles.filter(r => r.schoolId === school.id);
+    const results = schools.map((school) => {
+      const schoolSub = subscriptions.find((s) => s.schoolId === school.id);
+      const schoolRoles = roles.filter((r) => r.schoolId === school.id);
 
       let isExpired = true;
       let isTrialExpired = false;
@@ -261,8 +363,11 @@ export class SchoolsService {
           const hasExpired = schoolSub.trialEndAt && schoolSub.trialEndAt < now;
           isExpired = !!hasExpired;
           isTrialExpired = !!hasExpired;
-        } else if (schoolSub.subscriptionState === SubscriptionStatusEnum.ACTIVE) {
-          const hasExpired = schoolSub.currentPeriodEnd && schoolSub.currentPeriodEnd < now;
+        } else if (
+          schoolSub.subscriptionState === SubscriptionStatusEnum.ACTIVE
+        ) {
+          const hasExpired =
+            schoolSub.currentPeriodEnd && schoolSub.currentPeriodEnd < now;
           isExpired = !!hasExpired;
         } else {
           isExpired = true; // EXPIRED, CANCELLED, etc.
@@ -274,20 +379,34 @@ export class SchoolsService {
 
       if (!isExpired && schoolSub) {
         // Find baseline features for this plan
-        const planMappings = planFeatureMappings.filter(m => m.subscriptionPlanId === schoolSub.subscriptionPlanId);
-        const planFeatureIds = new Set(planMappings.map(m => m.platformFeatureId));
+        const planMappings = planFeatureMappings.filter(
+          (m) => m.subscriptionPlanId === schoolSub.subscriptionPlanId,
+        );
+        const planFeatureIds = new Set(
+          planMappings.map((m) => m.platformFeatureId),
+        );
 
         // Filter overrides for this school
-        const schoolOverrides = overrides.filter(o => o.schoolId === school.id);
+        const schoolOverrides = overrides.filter(
+          (o) => o.schoolId === school.id,
+        );
 
-        features.forEach(f => {
+        features.forEach((f) => {
           // Find if there is an active override for this feature code
           const activeOverride = schoolOverrides
-            .filter(o => o.platformFeatureId === f.id && (!o.startDate || o.startDate <= now) && (!o.endDate || o.endDate >= now))
+            .filter(
+              (o) =>
+                o.platformFeatureId === f.id &&
+                (!o.startDate || o.startDate <= now) &&
+                (!o.endDate || o.endDate >= now),
+            )
             .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
 
           if (activeOverride) {
-            if (activeOverride.overrideType !== OverrideTypeEnum.DISABLE && activeOverride.isEnabled) {
+            if (
+              activeOverride.overrideType !== OverrideTypeEnum.DISABLE &&
+              activeOverride.isEnabled
+            ) {
               allowedFeatureIds.add(f.id);
             }
           } else {
@@ -299,12 +418,14 @@ export class SchoolsService {
       }
 
       // Filter sidebarModules based on calculated allowed feature IDs
-      const filteredModules = isExpired ? [] : modules.filter(module => {
-        if (!module.platformFeatureId) {
-          return true; // Free module (e.g. Dashboard)
-        }
-        return allowedFeatureIds.has(module.platformFeatureId);
-      });
+      const filteredModules = isExpired
+        ? []
+        : modules.filter((module) => {
+            if (!module.platformFeatureId) {
+              return true; // Free module (e.g. Dashboard)
+            }
+            return allowedFeatureIds.has(module.platformFeatureId);
+          });
 
       return {
         id: school.id,
@@ -312,27 +433,34 @@ export class SchoolsService {
         code: school.internalSchoolCode,
         email: school.email,
         phone: school.phone,
-        isPrimaryOwner: memberships.find(m => m.schoolId === school.id)?.isPrimaryOwner ?? false,
-        subscription: schoolSub ? {
-          planId: schoolSub.subscriptionPlanId,
-          planName: schoolSub.subscriptionPlan?.name,
-          planCode: schoolSub.subscriptionPlan?.code,
-          status: schoolSub.subscriptionState,
-          expiryDate: schoolSub.subscriptionState === SubscriptionStatusEnum.TRIAL ? schoolSub.trialEndAt : schoolSub.currentPeriodEnd,
-          isExpired,
-          isTrialExpired,
-          canAccessTrial,
-        } : {
-          planId: null,
-          planName: null,
-          planCode: null,
-          status: null,
-          expiryDate: null,
-          isExpired: true,
-          isTrialExpired: false,
-          canAccessTrial: true,
-        },
-        roles: schoolRoles.map(r => ({
+        isPrimaryOwner:
+          memberships.find((m) => m.schoolId === school.id)?.isPrimaryOwner ??
+          false,
+        subscription: schoolSub
+          ? {
+              planId: schoolSub.subscriptionPlanId,
+              planName: schoolSub.subscriptionPlan?.name,
+              planCode: schoolSub.subscriptionPlan?.code,
+              status: schoolSub.subscriptionState,
+              expiryDate:
+                schoolSub.subscriptionState === SubscriptionStatusEnum.TRIAL
+                  ? schoolSub.trialEndAt
+                  : schoolSub.currentPeriodEnd,
+              isExpired,
+              isTrialExpired,
+              canAccessTrial,
+            }
+          : {
+              planId: null,
+              planName: null,
+              planCode: null,
+              status: null,
+              expiryDate: null,
+              isExpired: true,
+              isTrialExpired: false,
+              canAccessTrial: true,
+            },
+        roles: schoolRoles.map((r) => ({
           id: r.id,
           name: r.name,
           permissions: rolePermissionMap[r.id] || [],
@@ -355,9 +483,14 @@ export class SchoolsService {
         where: { schoolOwnerId: caller.id, schoolId, isActive: true },
       });
       if (!member) {
-        throw new ForbiddenException('School context not found or access denied');
+        throw new ForbiddenException(
+          'School context not found or access denied',
+        );
       }
-    } else if (caller.actorType === 'school_user' || caller.actorType === 'student') {
+    } else if (
+      caller.actorType === 'school_user' ||
+      caller.actorType === 'student'
+    ) {
       if (String(caller.schoolId) !== String(schoolId)) {
         throw new ForbiddenException('Access denied to school details');
       }
@@ -366,14 +499,36 @@ export class SchoolsService {
     }
 
     // 2. Fetch all primary assets for this school and platform features in parallel
-    const [school, subscriptions, roles, modules, features, planFeatureMappings, overrides] = await Promise.all([
-      this.dataSource.getRepository(School).findOne({ where: { id: schoolId } }),
-      this.dataSource.getRepository(SchoolSubscription).find({ where: { schoolId }, relations: ['subscriptionPlan'] }),
-      this.dataSource.getRepository(SchoolRole).find({ where: { schoolId, isActive: true, isDeleted: false } }),
-      this.dataSource.getRepository(ModuleMaster).find({ where: { isActive: true }, order: { displayOrder: 'ASC' } }),
-      this.dataSource.getRepository(PlatformFeature).find({ where: { isActive: true } }),
-      this.dataSource.getRepository(SubscriptionPlanPlatformFeatureMapping).find({ where: { isActive: true, isEnabled: true } }),
-      this.dataSource.getRepository(SchoolFeatureOverride).find({ where: { schoolId, isActive: true, isDeleted: false } }),
+    const [
+      school,
+      subscriptions,
+      roles,
+      modules,
+      features,
+      planFeatureMappings,
+      overrides,
+    ] = await Promise.all([
+      this.dataSource
+        .getRepository(School)
+        .findOne({ where: { id: schoolId } }),
+      this.dataSource
+        .getRepository(SchoolSubscription)
+        .find({ where: { schoolId }, relations: ['subscriptionPlan'] }),
+      this.dataSource
+        .getRepository(SchoolRole)
+        .find({ where: { schoolId, isActive: true, isDeleted: false } }),
+      this.dataSource
+        .getRepository(ModuleMaster)
+        .find({ where: { isActive: true }, order: { displayOrder: 'ASC' } }),
+      this.dataSource
+        .getRepository(PlatformFeature)
+        .find({ where: { isActive: true } }),
+      this.dataSource
+        .getRepository(SubscriptionPlanPlatformFeatureMapping)
+        .find({ where: { isActive: true, isEnabled: true } }),
+      this.dataSource
+        .getRepository(SchoolFeatureOverride)
+        .find({ where: { schoolId, isActive: true, isDeleted: false } }),
     ]);
 
     if (!school) {
@@ -381,26 +536,39 @@ export class SchoolsService {
     }
 
     // 3. Fetch role permissions
-    const roleIds = roles.map(r => r.id);
-    let rolePermissionMap: Record<string, any[]> = {};
+    const roleIds = roles.map((r) => r.id);
+    const rolePermissionMap: Record<string, any[]> = {};
 
     if (roleIds.length > 0) {
-      const permissions = await this.dataSource.getRepository(SchoolRolePermission).createQueryBuilder('rp')
-        .innerJoinAndSelect(ModuleOperationPermission, 'p', 'p.id = rp.permission_id')
-        .select(['rp.role_id as role_id', 'p.id as p_id', 'p.description as p_desc'])
+      const permissions = await this.dataSource
+        .getRepository(SchoolRolePermission)
+        .createQueryBuilder('rp')
+        .innerJoinAndSelect(
+          ModuleOperationPermission,
+          'p',
+          'p.id = rp.permission_id',
+        )
+        .select([
+          'rp.role_id as role_id',
+          'p.id as p_id',
+          'p.description as p_desc',
+        ])
         .where('rp.role_id IN (:...roleIds)', { roleIds })
         .andWhere('rp.is_active = true')
         .getRawMany();
 
-      permissions.forEach(p => {
+      permissions.forEach((p) => {
         if (!rolePermissionMap[p.role_id]) rolePermissionMap[p.role_id] = [];
-        rolePermissionMap[p.role_id].push({ id: p.p_id, description: p.p_desc });
+        rolePermissionMap[p.role_id].push({
+          id: p.p_id,
+          description: p.p_desc,
+        });
       });
     }
 
     // 4. Determine subscription status & allowed features
-    const schoolSub = subscriptions.find(s => s.schoolId === school.id);
-    const schoolRoles = roles.filter(r => r.schoolId === school.id);
+    const schoolSub = subscriptions.find((s) => s.schoolId === school.id);
+    const schoolRoles = roles.filter((r) => r.schoolId === school.id);
 
     let isExpired = true;
     let isTrialExpired = false;
@@ -414,8 +582,11 @@ export class SchoolsService {
         const hasExpired = schoolSub.trialEndAt && schoolSub.trialEndAt < now;
         isExpired = !!hasExpired;
         isTrialExpired = !!hasExpired;
-      } else if (schoolSub.subscriptionState === SubscriptionStatusEnum.ACTIVE) {
-        const hasExpired = schoolSub.currentPeriodEnd && schoolSub.currentPeriodEnd < now;
+      } else if (
+        schoolSub.subscriptionState === SubscriptionStatusEnum.ACTIVE
+      ) {
+        const hasExpired =
+          schoolSub.currentPeriodEnd && schoolSub.currentPeriodEnd < now;
         isExpired = !!hasExpired;
       } else {
         isExpired = true;
@@ -425,17 +596,29 @@ export class SchoolsService {
     const allowedFeatureIds = new Set<string>();
 
     if (!isExpired && schoolSub) {
-      const planMappings = planFeatureMappings.filter(m => m.subscriptionPlanId === schoolSub.subscriptionPlanId);
-      const planFeatureIds = new Set(planMappings.map(m => m.platformFeatureId));
-      const schoolOverrides = overrides.filter(o => o.schoolId === school.id);
+      const planMappings = planFeatureMappings.filter(
+        (m) => m.subscriptionPlanId === schoolSub.subscriptionPlanId,
+      );
+      const planFeatureIds = new Set(
+        planMappings.map((m) => m.platformFeatureId),
+      );
+      const schoolOverrides = overrides.filter((o) => o.schoolId === school.id);
 
-      features.forEach(f => {
+      features.forEach((f) => {
         const activeOverride = schoolOverrides
-          .filter(o => o.platformFeatureId === f.id && (!o.startDate || o.startDate <= now) && (!o.endDate || o.endDate >= now))
+          .filter(
+            (o) =>
+              o.platformFeatureId === f.id &&
+              (!o.startDate || o.startDate <= now) &&
+              (!o.endDate || o.endDate >= now),
+          )
           .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
 
         if (activeOverride) {
-          if (activeOverride.overrideType !== OverrideTypeEnum.DISABLE && activeOverride.isEnabled) {
+          if (
+            activeOverride.overrideType !== OverrideTypeEnum.DISABLE &&
+            activeOverride.isEnabled
+          ) {
             allowedFeatureIds.add(f.id);
           }
         } else {
@@ -446,19 +629,23 @@ export class SchoolsService {
       });
     }
 
-    let filteredModules = isExpired ? [] : modules.filter(module => {
-      if (!module.platformFeatureId) {
-        return true;
-      }
-      return allowedFeatureIds.has(module.platformFeatureId);
-    });
+    let filteredModules = isExpired
+      ? []
+      : modules.filter((module) => {
+          if (!module.platformFeatureId) {
+            return true;
+          }
+          return allowedFeatureIds.has(module.platformFeatureId);
+        });
 
     // 5. If caller is staff (school_user), filter by their granular permissions
     if (caller.actorType === 'school_user') {
-      const userRoles = await this.dataSource.getRepository(SchoolUserRole).find({
-        where: { userId: caller.id, isActive: true, isDeleted: false },
-      });
-      const userRoleIds = userRoles.map(ur => ur.roleId);
+      const userRoles = await this.dataSource
+        .getRepository(SchoolUserRole)
+        .find({
+          where: { userId: caller.id, isActive: true, isDeleted: false },
+        });
+      const userRoleIds = userRoles.map((ur) => ur.roleId);
       const permittedModuleCodes = new Set<string>();
 
       if (userRoleIds.length > 0) {
@@ -475,10 +662,12 @@ export class SchoolsService {
           .andWhere('p.is_delete = false')
           .andWhere('m.is_active = true')
           .getRawMany();
-        userPermissions.forEach(p => permittedModuleCodes.add(p.modulecode.toLowerCase()));
+        userPermissions.forEach((p) =>
+          permittedModuleCodes.add(p.modulecode.toLowerCase()),
+        );
       }
 
-      filteredModules = filteredModules.filter(module => {
+      filteredModules = filteredModules.filter((module) => {
         const codeLower = module.code.toLowerCase();
         if (codeLower === 'dashboard' || codeLower === 'home') return true;
         return permittedModuleCodes.has(codeLower);
@@ -491,27 +680,35 @@ export class SchoolsService {
       code: school.internalSchoolCode,
       email: school.email,
       phone: school.phone,
-      isPrimaryOwner: caller.actorType === 'school_owner' ? (member?.isPrimaryOwner ?? false) : false,
-      subscription: schoolSub ? {
-        planId: schoolSub.subscriptionPlanId,
-        planName: schoolSub.subscriptionPlan?.name,
-        planCode: schoolSub.subscriptionPlan?.code,
-        status: schoolSub.subscriptionState,
-        expiryDate: schoolSub.subscriptionState === SubscriptionStatusEnum.TRIAL ? schoolSub.trialEndAt : schoolSub.currentPeriodEnd,
-        isExpired,
-        isTrialExpired,
-        canAccessTrial,
-      } : {
-        planId: null,
-        planName: null,
-        planCode: null,
-        status: null,
-        expiryDate: null,
-        isExpired: true,
-        isTrialExpired: false,
-        canAccessTrial: true,
-      },
-      roles: schoolRoles.map(r => ({
+      isPrimaryOwner:
+        caller.actorType === 'school_owner'
+          ? (member?.isPrimaryOwner ?? false)
+          : false,
+      subscription: schoolSub
+        ? {
+            planId: schoolSub.subscriptionPlanId,
+            planName: schoolSub.subscriptionPlan?.name,
+            planCode: schoolSub.subscriptionPlan?.code,
+            status: schoolSub.subscriptionState,
+            expiryDate:
+              schoolSub.subscriptionState === SubscriptionStatusEnum.TRIAL
+                ? schoolSub.trialEndAt
+                : schoolSub.currentPeriodEnd,
+            isExpired,
+            isTrialExpired,
+            canAccessTrial,
+          }
+        : {
+            planId: null,
+            planName: null,
+            planCode: null,
+            status: null,
+            expiryDate: null,
+            isExpired: true,
+            isTrialExpired: false,
+            canAccessTrial: true,
+          },
+      roles: schoolRoles.map((r) => ({
         id: r.id,
         name: r.name,
         permissions: rolePermissionMap[r.id] || [],
@@ -520,15 +717,22 @@ export class SchoolsService {
     };
   }
 
-  async getGlobalOwnerAnalytics(caller: AuthContext, query: SchoolAnalyticsQueryDto) {
+  async getGlobalOwnerAnalytics(
+    caller: AuthContext,
+    query: SchoolAnalyticsQueryDto,
+  ) {
     if (caller.actorType !== 'school_owner') {
-      throw new ForbiddenException('Only registered school owners can access global dashboard analytics');
+      throw new ForbiddenException(
+        'Only registered school owners can access global dashboard analytics',
+      );
     }
 
-    const memberships = await this.dataSource.getRepository(SchoolOwnerMember).find({
-      where: { schoolOwnerId: caller.id, isActive: true },
-    });
-    const schoolIds = memberships.map(m => m.schoolId);
+    const memberships = await this.dataSource
+      .getRepository(SchoolOwnerMember)
+      .find({
+        where: { schoolOwnerId: caller.id, isActive: true },
+      });
+    const schoolIds = memberships.map((m) => m.schoolId);
 
     if (schoolIds.length === 0) {
       return {
@@ -548,14 +752,16 @@ export class SchoolsService {
     // Total Students
     let totalStudents = 0;
     if (query.academicSessionId) {
-      totalStudents = await this.dataSource.getRepository(StudentEnrollment).count({
-        where: {
-          schoolId: In(schoolIds),
-          academicSessionId: query.academicSessionId,
-          isActive: true,
-          isDeleted: false,
-        },
-      });
+      totalStudents = await this.dataSource
+        .getRepository(StudentEnrollment)
+        .count({
+          where: {
+            schoolId: In(schoolIds),
+            academicSessionId: query.academicSessionId,
+            isActive: true,
+            isDeleted: false,
+          },
+        });
     } else {
       totalStudents = await this.dataSource.getRepository(Student).count({
         where: {
@@ -585,7 +791,9 @@ export class SchoolsService {
     });
 
     // Role breakdown
-    const rawRoles = await this.dataSource.getRepository(SchoolRole).createQueryBuilder('role')
+    const rawRoles = await this.dataSource
+      .getRepository(SchoolRole)
+      .createQueryBuilder('role')
       .select('role.name', 'name')
       .addSelect('COUNT(role.id)', 'count')
       .where('role.schoolId IN (:...schoolIds)', { schoolIds })
@@ -593,10 +801,15 @@ export class SchoolsService {
       .andWhere('role.is_delete = false')
       .groupBy('role.name')
       .getRawMany();
-    const roleBreakdown = rawRoles.map(r => ({ name: r.name, count: parseInt(r.count, 10) }));
+    const roleBreakdown = rawRoles.map((r) => ({
+      name: r.name,
+      count: parseInt(r.count, 10),
+    }));
 
     // Staff type breakdown
-    const rawStaff = await this.dataSource.getRepository(SchoolUser).createQueryBuilder('user')
+    const rawStaff = await this.dataSource
+      .getRepository(SchoolUser)
+      .createQueryBuilder('user')
       .select('user.userType', 'userType')
       .addSelect('COUNT(user.id)', 'count')
       .where('user.schoolId IN (:...schoolIds)', { schoolIds })
@@ -604,11 +817,13 @@ export class SchoolsService {
       .andWhere('user.is_delete = false')
       .groupBy('user.userType')
       .getRawMany();
-    
+
     const staffTypeBreakdown = { academic: 0, non_academic: 0 };
-    rawStaff.forEach(s => {
-      if (s.userType === 'academic') staffTypeBreakdown.academic = parseInt(s.count, 10);
-      if (s.userType === 'non_academic') staffTypeBreakdown.non_academic = parseInt(s.count, 10);
+    rawStaff.forEach((s) => {
+      if (s.userType === 'academic')
+        staffTypeBreakdown.academic = parseInt(s.count, 10);
+      if (s.userType === 'non_academic')
+        staffTypeBreakdown.non_academic = parseInt(s.count, 10);
     });
 
     // Total Classes
@@ -641,33 +856,45 @@ export class SchoolsService {
     };
   }
 
-  async getSingleSchoolAnalytics(caller: AuthContext, schoolId: string, query: SchoolAnalyticsQueryDto) {
+  async getSingleSchoolAnalytics(
+    caller: AuthContext,
+    schoolId: string,
+    query: SchoolAnalyticsQueryDto,
+  ) {
     const isOwner = caller.actorType === 'school_owner';
-    
+
     if (isOwner) {
-      const member = await this.dataSource.getRepository(SchoolOwnerMember).findOne({
-        where: { schoolOwnerId: caller.id, schoolId, isActive: true },
-      });
+      const member = await this.dataSource
+        .getRepository(SchoolOwnerMember)
+        .findOne({
+          where: { schoolOwnerId: caller.id, schoolId, isActive: true },
+        });
       if (!member) {
-        throw new ForbiddenException('School context not found or access denied');
+        throw new ForbiddenException(
+          'School context not found or access denied',
+        );
       }
     } else {
       if (String(caller.schoolId) !== String(schoolId)) {
-        throw new ForbiddenException('Access denied to this school\'s analytics');
+        throw new ForbiddenException(
+          "Access denied to this school's analytics",
+        );
       }
     }
 
     // Total Students
     let totalStudents = 0;
     if (query.academicSessionId) {
-      totalStudents = await this.dataSource.getRepository(StudentEnrollment).count({
-        where: {
-          schoolId,
-          academicSessionId: query.academicSessionId,
-          isActive: true,
-          isDeleted: false,
-        },
-      });
+      totalStudents = await this.dataSource
+        .getRepository(StudentEnrollment)
+        .count({
+          where: {
+            schoolId,
+            academicSessionId: query.academicSessionId,
+            isActive: true,
+            isDeleted: false,
+          },
+        });
     } else {
       totalStudents = await this.dataSource.getRepository(Student).count({
         where: {
@@ -752,19 +979,34 @@ export class SchoolsService {
 
     // Monthly trend for the current year
     const startOfYear = new Date(now.getFullYear(), 0, 1);
-    const rawMonthlyTrend = await this.dataSource.getRepository(Student).createQueryBuilder('student')
-      .select("EXTRACT(MONTH FROM student.createdAt)", 'month')
+    const rawMonthlyTrend = await this.dataSource
+      .getRepository(Student)
+      .createQueryBuilder('student')
+      .select('EXTRACT(MONTH FROM student.createdAt)', 'month')
       .addSelect('COUNT(student.id)', 'count')
       .where('student.schoolId = :schoolId', { schoolId })
       .andWhere('student.isActive = true')
       .andWhere('student.is_delete = false')
       .andWhere('student.createdAt >= :startOfYear', { startOfYear })
-      .groupBy("EXTRACT(MONTH FROM student.createdAt)")
+      .groupBy('EXTRACT(MONTH FROM student.createdAt)')
       .getRawMany();
 
-    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const monthNames = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
     const trendMap = new Map<number, number>();
-    rawMonthlyTrend.forEach(t => {
+    rawMonthlyTrend.forEach((t) => {
       const m = parseInt(t.month, 10);
       trendMap.set(m, parseInt(t.count, 10));
     });

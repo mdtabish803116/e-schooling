@@ -1,36 +1,92 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+  Index,
+} from 'typeorm';
 
 @Entity({ name: 'school_user_roles', schema: 'e_schooling' })
 export class SchoolUserRole {
-  @PrimaryGeneratedColumn('increment', { type: 'bigint', comment: 'Primary key' })
+  @PrimaryGeneratedColumn('increment', {
+    type: 'bigint',
+    comment: 'Primary key',
+  })
   id: string;
 
   @Index()
-  @Column({ name: 'user_id', type: 'bigint', nullable: true, comment: 'Reference to SchoolUser' })
+  @Column({
+    name: 'user_id',
+    type: 'bigint',
+    nullable: true,
+    comment: 'Reference to SchoolUser',
+  })
   userId: string;
 
-  @Column({ name: 'user_type', type: 'varchar', nullable: true, default: 'school_user', comment: 'Always school_user for this mapping' })
+  @Column({
+    name: 'user_type',
+    type: 'varchar',
+    nullable: true,
+    default: 'school_user',
+    comment: 'Always school_user for this mapping',
+  })
   userType: string;
 
   @Index()
-  @Column({ name: 'role_id', type: 'bigint', nullable: true, comment: 'Reference to Role' })
+  @Column({
+    name: 'role_id',
+    type: 'bigint',
+    nullable: true,
+    comment: 'Reference to Role',
+  })
   roleId: string;
 
-  @Column({ name: 'created_by_id', type: 'bigint', nullable: true, comment: 'Reference to Creator' })
+  @Column({
+    name: 'created_by_id',
+    type: 'bigint',
+    nullable: true,
+    comment: 'Reference to Creator',
+  })
   createdById: string;
 
-  @Column({ name: 'updated_by_id', type: 'bigint', nullable: true, comment: 'Reference to Updater' })
+  @Column({
+    name: 'updated_by_id',
+    type: 'bigint',
+    nullable: true,
+    comment: 'Reference to Updater',
+  })
   updatedById: string;
 
-  @Column({ name: 'is_active', type: 'boolean', nullable: false, default: true, comment: 'Active status toggle' })
+  @Column({
+    name: 'is_active',
+    type: 'boolean',
+    nullable: false,
+    default: true,
+    comment: 'Active status toggle',
+  })
   isActive: boolean;
 
-  @Column({ name: 'is_delete', type: 'boolean', nullable: false, default: false, comment: 'Soft delete marker' })
+  @Column({
+    name: 'is_delete',
+    type: 'boolean',
+    nullable: false,
+    default: false,
+    comment: 'Soft delete marker',
+  })
   isDeleted: boolean;
 
-  @CreateDateColumn({ name: 'created_at', type: 'timestamp', comment: 'Creation timestamp' })
+  @CreateDateColumn({
+    name: 'created_at',
+    type: 'timestamp',
+    comment: 'Creation timestamp',
+  })
   createdAt: Date;
 
-  @UpdateDateColumn({ name: 'updated_at', type: 'timestamp', comment: 'Last update timestamp' })
+  @UpdateDateColumn({
+    name: 'updated_at',
+    type: 'timestamp',
+    comment: 'Last update timestamp',
+  })
   updatedAt: Date;
 }

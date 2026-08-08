@@ -9,7 +9,7 @@ export class Config {
     if (value === undefined) {
       return undefined;
     }
-    
+
     if (type === Number) {
       return Number(value);
     }
@@ -59,7 +59,9 @@ export class Config {
     const apiSecret = this.getSecret('CLOUDINARY_API_SECRET', String);
 
     if (!cloudName || !apiKey || !apiSecret) {
-      throw new Error('Cloudinary configuration is missing. Please ensure CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET are set.');
+      throw new Error(
+        'Cloudinary configuration is missing. Please ensure CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET are set.',
+      );
     }
 
     return {
@@ -72,7 +74,9 @@ export class Config {
   static getPlatformRegisterApiKey(): string {
     const key = this.getSecret('PLATFORM_REGISTRATION_KEY', String);
     if (!key) {
-      throw new Error('PLATFORM_REGISTRATION_KEY is not defined in environment variables');
+      throw new Error(
+        'PLATFORM_REGISTRATION_KEY is not defined in environment variables',
+      );
     }
     return key;
   }
@@ -81,7 +85,7 @@ export class Config {
     return {
       host: this.getSecret('REDIS_HOST', String) || '127.0.0.1',
       port: Number(this.getSecret('REDIS_PORT', String) || '6379'),
-      password: this.getSecret('REDIS_PASSWORD', String) || undefined
+      password: this.getSecret('REDIS_PASSWORD', String) || undefined,
     };
   }
 }

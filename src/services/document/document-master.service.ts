@@ -57,7 +57,9 @@ export class DocumentMasterService {
     }
 
     if (query?.moduleCode) {
-      qb.andWhere(':moduleCode = ANY(dm.applicableModules)', { moduleCode: query.moduleCode });
+      qb.andWhere(':moduleCode = ANY(dm.applicableModules)', {
+        moduleCode: query.moduleCode,
+      });
     }
 
     if (query?.search) {
@@ -83,12 +85,17 @@ export class DocumentMasterService {
     };
   }
 
-  async getDocumentMasterById(schoolId: string, id: string): Promise<DocumentMaster> {
+  async getDocumentMasterById(
+    schoolId: string,
+    id: string,
+  ): Promise<DocumentMaster> {
     const doc = await this.masterRepo.findOne({
       where: { id, schoolId },
     });
     if (!doc) {
-      throw new NotFoundException(`Document master record with ID ${id} not found`);
+      throw new NotFoundException(
+        `Document master record with ID ${id} not found`,
+      );
     }
     return doc;
   }
@@ -104,7 +111,9 @@ export class DocumentMasterService {
       where: { schoolId, code, isDeleted: false },
     });
     if (existing) {
-      throw new ConflictException(`Document master with code "${code}" already exists for this school`);
+      throw new ConflictException(
+        `Document master with code "${code}" already exists for this school`,
+      );
     }
 
     const doc = this.masterRepo.create({
@@ -139,19 +148,27 @@ export class DocumentMasterService {
     if (dto.name !== undefined) doc.name = dto.name;
     if (dto.description !== undefined) doc.description = dto.description;
     if (dto.category !== undefined) doc.category = dto.category;
-    if (dto.acceptedFileTypes !== undefined) doc.acceptedFileTypes = dto.acceptedFileTypes;
+    if (dto.acceptedFileTypes !== undefined)
+      doc.acceptedFileTypes = dto.acceptedFileTypes;
     if (dto.maxFileSizeMb !== undefined) doc.maxFileSizeMb = dto.maxFileSizeMb;
     if (dto.isMandatory !== undefined) doc.isMandatory = dto.isMandatory;
-    if (dto.applicableModules !== undefined) doc.applicableModules = dto.applicableModules;
-    if (dto.expiryTrackingEnabled !== undefined) doc.expiryTrackingEnabled = dto.expiryTrackingEnabled;
-    if (dto.verificationRequired !== undefined) doc.verificationRequired = dto.verificationRequired;
+    if (dto.applicableModules !== undefined)
+      doc.applicableModules = dto.applicableModules;
+    if (dto.expiryTrackingEnabled !== undefined)
+      doc.expiryTrackingEnabled = dto.expiryTrackingEnabled;
+    if (dto.verificationRequired !== undefined)
+      doc.verificationRequired = dto.verificationRequired;
     if (dto.isActive !== undefined) doc.isActive = dto.isActive;
     doc.updatedById = userId || null;
 
     return this.masterRepo.save(doc);
   }
 
-  async deleteDocumentMaster(schoolId: string, id: string, userId?: string): Promise<void> {
+  async deleteDocumentMaster(
+    schoolId: string,
+    id: string,
+    userId?: string,
+  ): Promise<void> {
     const doc = await this.getDocumentMasterById(schoolId, id);
 
     // Reference check
@@ -171,9 +188,14 @@ export class DocumentMasterService {
     await this.masterRepo.save(doc);
   }
 
-  async restoreDocumentMaster(schoolId: string, id: string, userId?: string): Promise<DocumentMaster> {
+  async restoreDocumentMaster(
+    schoolId: string,
+    id: string,
+    userId?: string,
+  ): Promise<DocumentMaster> {
     const doc = await this.masterRepo.findOne({ where: { id, schoolId } });
-    if (!doc) throw new NotFoundException(`Document master with ID ${id} not found`);
+    if (!doc)
+      throw new NotFoundException(`Document master with ID ${id} not found`);
 
     doc.isDeleted = false;
     doc.deletedAt = null;
@@ -190,9 +212,12 @@ export class DocumentMasterService {
       .andWhere('dm.isActive = true');
 
     if (moduleCode) {
-      qb.andWhere('(:moduleCode = ANY(dm.applicableModules) OR cardinality(dm.applicableModules) = 0)', {
-        moduleCode,
-      });
+      qb.andWhere(
+        '(:moduleCode = ANY(dm.applicableModules) OR cardinality(dm.applicableModules) = 0)',
+        {
+          moduleCode,
+        },
+      );
     }
 
     qb.orderBy('dm.name', 'ASC');
@@ -226,7 +251,10 @@ export class DocumentMasterService {
       .createQueryBuilder()
       .update(DocumentMaster)
       .set(updateFields)
-      .where('schoolId = :schoolId AND id IN (:...ids)', { schoolId, ids: dto.ids })
+      .where('schoolId = :schoolId AND id IN (:...ids)', {
+        schoolId,
+        ids: dto.ids,
+      })
       .execute();
 
     return { updated: res.affected || 0 };
@@ -234,20 +262,30 @@ export class DocumentMasterService {
 
   /* ─────────────────── Entity Documents ─────────────────── */
 
-  async getEntityDocuments(schoolId: string, entityType: string, entityId: string) {
+  async getEntityDocuments(
+    schoolId: string,
+    entityType: string,
+    entityId: string,
+  ) {
     return this.entityDocRepo.find({
       where: { schoolId, entityType, entityId, isDeleted: false },
       order: { createdAt: 'DESC' },
     });
   }
 
-  async uploadEntityDocument(schoolId: string, dto: UploadEntityDocumentDto, userId?: string) {
+  async uploadEntityDocument(
+    schoolId: string,
+    dto: UploadEntityDocumentDto,
+    userId?: string,
+  ) {
     const master = await this.masterRepo.findOne({
       where: { id: dto.documentMasterId, schoolId, isDeleted: false },
     });
 
     if (!master) {
-      throw new NotFoundException(`Document master ID ${dto.documentMasterId} not found`);
+      throw new NotFoundException(
+        `Document master ID ${dto.documentMasterId} not found`,
+      );
     }
 
     const doc = this.entityDocRepo.create({
@@ -278,7 +316,8 @@ export class DocumentMasterService {
       where: { id: docId, schoolId, isDeleted: false },
     });
 
-    if (!doc) throw new NotFoundException(`Entity document ID ${docId} not found`);
+    if (!doc)
+      throw new NotFoundException(`Entity document ID ${docId} not found`);
 
     doc.verificationStatus = dto.verificationStatus;
     doc.verifiedById = userId || null;
@@ -293,7 +332,8 @@ export class DocumentMasterService {
       where: { id: docId, schoolId, isDeleted: false },
     });
 
-    if (!doc) throw new NotFoundException(`Entity document ID ${docId} not found`);
+    if (!doc)
+      throw new NotFoundException(`Entity document ID ${docId} not found`);
 
     doc.isDeleted = true;
     doc.deletedAt = new Date();

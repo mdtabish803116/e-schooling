@@ -84,7 +84,11 @@ export class AddDocumentMasterTables1784832300000 implements MigrationInterface 
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`DROP TABLE IF EXISTS "e_schooling"."entity_documents";`);
-    await queryRunner.query(`DROP TABLE IF EXISTS "e_schooling"."document_masters";`);
+    await queryRunner.query(
+      `DROP TABLE IF EXISTS "e_schooling"."entity_documents";`,
+    );
+    await queryRunner.query(
+      `DROP TABLE IF EXISTS "e_schooling"."document_masters";`,
+    );
   }
 }

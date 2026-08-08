@@ -1,5 +1,18 @@
-import { Controller, Post, Body, Headers, UseGuards, Get, Patch } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import {
+  Controller,
+  Post,
+  Body,
+  Headers,
+  UseGuards,
+  Get,
+  Patch,
+} from '@nestjs/common';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import { AuthService } from '../../../../services/auth/auth.service';
 import { SchoolOwnerRegisterDto } from '../../../../interfaces/request/auth/school-owner-register.dto';
 import { SchoolOwnerLoginDto } from '../../../../interfaces/request/auth/school-owner-login.dto';
@@ -31,8 +44,11 @@ export class AuthController {
     },
   })
   @Post('register')
-  async register(@Body() registerDto: SchoolOwnerRegisterDto) {
-    return this.authService.register(registerDto);
+  async register(
+    @Body() registerDto: SchoolOwnerRegisterDto,
+    @Headers() headers: any,
+  ) {
+    return this.authService.register(registerDto, headers);
   }
 
   @ApiOperation({ summary: 'Login as a school owner' })
@@ -47,8 +63,8 @@ export class AuthController {
     },
   })
   @Post('login')
-  async login(@Body() loginDto: SchoolOwnerLoginDto) {
-    return this.authService.login(loginDto);
+  async login(@Body() loginDto: SchoolOwnerLoginDto, @Headers() headers: any) {
+    return this.authService.login(loginDto, headers);
   }
 
   @ApiOperation({
@@ -70,8 +86,11 @@ export class AuthController {
     },
   })
   @Post('user/login')
-  async userLogin(@Body() loginDto: SchoolUserLoginDto) {
-    return this.authService.schoolUserLogin(loginDto);
+  async userLogin(
+    @Body() loginDto: SchoolUserLoginDto,
+    @Headers() headers: any,
+  ) {
+    return this.authService.schoolUserLogin(loginDto, headers);
   }
 
   @ApiOperation({ summary: 'Login as a student' })
@@ -92,8 +111,11 @@ export class AuthController {
     },
   })
   @Post('student/login')
-  async studentLogin(@Body() loginDto: StudentLoginDto) {
-    return this.authService.studentLogin(loginDto);
+  async studentLogin(
+    @Body() loginDto: StudentLoginDto,
+    @Headers() headers: any,
+  ) {
+    return this.authService.studentLogin(loginDto, headers);
   }
 
   @ApiOperation({ summary: 'Login as a platform admin' })
@@ -113,8 +135,11 @@ export class AuthController {
     },
   })
   @Post('platform/login')
-  async platformLogin(@Body() loginDto: PlatformLoginDto) {
-    return this.authService.platformLogin(loginDto);
+  async platformLogin(
+    @Body() loginDto: PlatformLoginDto,
+    @Headers() headers: any,
+  ) {
+    return this.authService.platformLogin(loginDto, headers);
   }
 
   @ApiOperation({ summary: 'Register a platform admin (Internal)' })
@@ -172,10 +197,7 @@ export class AuthController {
   @ApiBearerAuth('JWT-auth')
   @UseGuards(JwtAuthGuard)
   @Patch('profile')
-  async updateProfile(
-    @CurrentUser() caller: any,
-    @Body() body: any,
-  ) {
+  async updateProfile(@CurrentUser() caller: any, @Body() body: any) {
     return this.authService.updateProfile(caller, body);
   }
 }

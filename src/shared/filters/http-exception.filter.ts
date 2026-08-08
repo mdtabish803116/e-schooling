@@ -55,7 +55,11 @@ export class GlobalHttpExceptionFilter implements ExceptionFilter {
         message = exception.message;
       }
 
-      const msgStr = Array.isArray(message) ? message.join(', ') : (typeof message === 'string' ? message : '');
+      const msgStr = Array.isArray(message)
+        ? message.join(', ')
+        : typeof message === 'string'
+          ? message
+          : '';
       if (
         msgStr.includes('invalid input syntax for type bigint') ||
         msgStr.includes('invalid input syntax for integer') ||
@@ -84,7 +88,8 @@ export class GlobalHttpExceptionFilter implements ExceptionFilter {
     }
 
     const errorCodeFinal =
-      errorCode === 'INTERNAL_SERVER_ERROR' && exception instanceof HttpException
+      errorCode === 'INTERNAL_SERVER_ERROR' &&
+      exception instanceof HttpException
         ? this.httpStatusToDefaultCode(status)
         : errorCode;
 
