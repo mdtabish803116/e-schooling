@@ -1,19 +1,22 @@
 import {
+  Body,
   Controller,
+  Delete,
   Get,
+  Param,
   Post,
   Put,
-  Delete,
-  Body,
-  Param,
   UseGuards,
 } from '@nestjs/common';
-import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
-import { JwtAuthGuard } from '../../../../shared/guards/jwt-auth.guard';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import {
   TimetableService,
-  CreatePeriodPayload,
+  type AssignSlotPayload,
+  type CreatePeriodPayload,
+  type SubstituteTeacherPayload,
+  type TimetableEventPayload,
 } from '../../../../services/timetable/timetable.service';
+import { JwtAuthGuard } from '../../../../shared/guards/jwt-auth.guard';
 
 @ApiTags('Timetable Management')
 @ApiBearerAuth('JWT-auth')
@@ -78,7 +81,10 @@ export class TimetableController {
 
   @ApiOperation({ summary: 'Assign timetable slot' })
   @Post('timetable-slots')
-  async assignSlot(@Param('schoolId') schoolId: string, @Body() payload: any) {
+  async assignSlot(
+    @Param('schoolId') schoolId: string,
+    @Body() payload: AssignSlotPayload,
+  ) {
     return this.timetableService.assignSlot(schoolId, payload);
   }
 
@@ -87,7 +93,7 @@ export class TimetableController {
   async updateSlot(
     @Param('schoolId') schoolId: string,
     @Param('id') id: string,
-    @Body() payload: any,
+    @Body() payload: AssignSlotPayload,
   ) {
     return this.timetableService.updateSlot(schoolId, id, payload);
   }
@@ -144,7 +150,7 @@ export class TimetableController {
   @Post('substitute-teachers')
   async assignSubstituteTeacher(
     @Param('schoolId') schoolId: string,
-    @Body() payload: any,
+    @Body() payload: SubstituteTeacherPayload,
   ) {
     return this.timetableService.assignSubstituteTeacher(schoolId, payload);
   }
@@ -157,7 +163,10 @@ export class TimetableController {
 
   @ApiOperation({ summary: 'Create a calendar event' })
   @Post('timetable/events')
-  async addEvent(@Param('schoolId') schoolId: string, @Body() payload: any) {
+  async addEvent(
+    @Param('schoolId') schoolId: string,
+    @Body() payload: TimetableEventPayload,
+  ) {
     return this.timetableService.addEvent(schoolId, payload);
   }
 
@@ -166,7 +175,7 @@ export class TimetableController {
   async updateEvent(
     @Param('schoolId') schoolId: string,
     @Param('id') id: string,
-    @Body() payload: any,
+    @Body() payload: Partial<TimetableEventPayload>,
   ) {
     return this.timetableService.updateEvent(schoolId, id, payload);
   }
