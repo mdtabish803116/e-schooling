@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -1077,7 +1078,7 @@ export class StudentAdmissionsService {
 
     enquiry.enquiryStatus = enquiryStatus;
     if (enquiryStatus === 'CONVERTED') {
-      enquiry.stage = 'APPROVAL';
+      enquiry.stage = 'ADMITTED';
     }
     return repo.save(enquiry);
   }
@@ -1145,6 +1146,49 @@ export class StudentAdmissionsService {
           where: { enquiryNo: applicationId, schoolId },
         });
       }
+    }
+
+    if (app) {
+      if (app.convertedStudentId || app.stage === 'ADMITTED') {
+        throw new ConflictException(
+          'This admission application has already been converted to an admitted student.',
+        );
+      }
+      if (app.enquiryId) {
+        const linkedEnq = await enqRepo.findOne({
+          where: { id: app.enquiryId, schoolId },
+        });
+        if (
+          linkedEnq &&
+          (linkedEnq.enquiryStatus === 'CONVERTED' ||
+            linkedEnq.stage === 'ADMITTED')
+        ) {
+          throw new ConflictException(
+            'The student enquiry associated with this application has already been admitted.',
+          );
+        }
+        if (!enq) enq = linkedEnq;
+      }
+    }
+
+    if (enq) {
+      if (enq.enquiryStatus === 'CONVERTED' || enq.stage === 'ADMITTED') {
+        throw new ConflictException(
+          'This student enquiry lead has already been converted to an admitted student.',
+        );
+      }
+      const linkedApp = await appRepo.findOne({
+        where: { enquiryId: enq.id, schoolId },
+      });
+      if (
+        linkedApp &&
+        (linkedApp.convertedStudentId || linkedApp.stage === 'ADMITTED')
+      ) {
+        throw new ConflictException(
+          'An application associated with this student enquiry has already been admitted.',
+        );
+      }
+      if (!app) app = linkedApp;
     }
 
     const firstName =
@@ -1216,13 +1260,13 @@ export class StudentAdmissionsService {
     );
 
     if (app) {
-      app.stage = 'APPROVAL';
+      app.stage = 'ADMITTED';
       app.verificationStatus = 'VERIFIED';
       app.convertedStudentId = convertedStudentId;
       await appRepo.save(app);
     }
     if (enq) {
-      enq.stage = 'APPROVAL';
+      enq.stage = 'ADMITTED';
       enq.enquiryStatus = 'CONVERTED';
       await enqRepo.save(enq);
     }
