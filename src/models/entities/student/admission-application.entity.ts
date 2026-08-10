@@ -10,7 +10,7 @@ import {
 @Entity({ name: 'admission_applications', schema: 'e_schooling' })
 @Index(['schoolId'])
 export class AdmissionApplication {
-  @PrimaryGeneratedColumn('uuid')
+  @PrimaryGeneratedColumn({ type: 'bigint' })
   id: string;
 
   @Column({ name: 'school_id', type: 'varchar' })

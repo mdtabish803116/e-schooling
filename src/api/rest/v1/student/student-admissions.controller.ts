@@ -1,41 +1,45 @@
 import {
-  Controller,
-  Post,
-  Get,
-  Patch,
-  Delete,
-  Query,
   Body,
+  Controller,
+  Delete,
+  Get,
   Param,
+  Patch,
+  Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import {
-  ApiTags,
+  ApiBearerAuth,
   ApiOperation,
   ApiResponse,
-  ApiBearerAuth,
+  ApiTags,
 } from '@nestjs/swagger';
-import { StudentAdmissionsService } from '../../../../services/student/student-admissions.service';
-import { StudentAdmissionDto } from '../../../../interfaces/request/student/student-admission.dto';
-import { UpdateStudentDto } from '../../../../interfaces/request/student/update-student.dto';
-import { BulkProgressionDto } from '../../../../interfaces/request/student/bulk-progression.dto';
-import { JwtAuthGuard } from '../../../../shared/guards/jwt-auth.guard';
-import { FeatureGuard } from '../../../../shared/guards/feature.guard';
-import { PermissionGuard } from '../../../../shared/guards/permission.guard';
-import { Permission } from '../../../../shared/decorators/permission.decorator';
-import { Feature } from '../../../../shared/decorators/feature.decorator';
-import {
-  ResourceEnum,
-  ActionEnum,
-  JobTypeEnum,
-  ActionTypeEnum,
-} from '../../../../models/enums/enums';
-import { CurrentUser } from '../../../../shared/decorators/current-user.decorator';
-import { CurrentAcademicSession } from '../../../../shared/decorators/current-academic-session.decorator';
-import type { AuthContext } from '../../../../interfaces/auth-context.interface';
+import { DataSource } from 'typeorm';
 import { QueueProducerService } from '../../../../api/worker/queues/queue-producer.service';
 import { QueueNames } from '../../../../api/worker/queues/queue.constants';
 import { seedStudentsForSchool } from '../../../../core/seed/seed-students';
+import type { AuthContext } from '../../../../interfaces/auth-context.interface';
+import { BulkProgressionDto } from '../../../../interfaces/request/student/bulk-progression.dto';
+import { StudentAdmissionDto } from '../../../../interfaces/request/student/student-admission.dto';
+import { UpdateStudentDto } from '../../../../interfaces/request/student/update-student.dto';
+import {
+  ActionEnum,
+  ActionTypeEnum,
+  JobTypeEnum,
+  ResourceEnum,
+} from '../../../../models/enums/enums';
+import {
+  StudentAdmissionsService,
+  type CreateEnquiryDto,
+} from '../../../../services/student/student-admissions.service';
+import { CurrentAcademicSession } from '../../../../shared/decorators/current-academic-session.decorator';
+import { CurrentUser } from '../../../../shared/decorators/current-user.decorator';
+import { Feature } from '../../../../shared/decorators/feature.decorator';
+import { Permission } from '../../../../shared/decorators/permission.decorator';
+import { FeatureGuard } from '../../../../shared/guards/feature.guard';
+import { JwtAuthGuard } from '../../../../shared/guards/jwt-auth.guard';
+import { PermissionGuard } from '../../../../shared/guards/permission.guard';
 
 @ApiTags('Student Admissions')
 @ApiBearerAuth('JWT-auth')
@@ -45,6 +49,7 @@ export class StudentAdmissionsController {
   constructor(
     private admissionsService: StudentAdmissionsService,
     private queueProducerService: QueueProducerService,
+    private dataSource: DataSource,
   ) {}
 
   @ApiOperation({ summary: 'Admit a new student to the school' })
@@ -251,10 +256,7 @@ export class StudentAdmissionsController {
   @Permission(ResourceEnum.STUDENTS, ActionEnum.CREATE)
   @Feature('STUDENT_MANAGEMENT')
   async seedStudents(@Param('schoolId') schoolId: string) {
-    return seedStudentsForSchool(
-      (this.admissionsService as any).dataSource,
-      schoolId,
-    );
+    return seedStudentsForSchool(this.dataSource, schoolId);
   }
 
   @ApiOperation({
@@ -266,7 +268,7 @@ export class StudentAdmissionsController {
   async importStudentsCsv(
     @CurrentUser() caller: AuthContext,
     @Param('schoolId') schoolId: string,
-    @Body() body: { rows: any[] },
+    @Body() body: { rows: Record<string, unknown>[] },
   ) {
     const job = await this.queueProducerService.addJob({
       queueName: QueueNames.IMPORTS_EXPORTS,
@@ -339,7 +341,10 @@ export class StudentAdmissionsController {
   @Post('admissions/enquiries')
   @Permission(ResourceEnum.STUDENTS, ActionEnum.CREATE)
   @Feature('STUDENT_MANAGEMENT')
-  async createEnquiry(@Param('schoolId') schoolId: string, @Body() dto: any) {
+  async createEnquiry(
+    @Param('schoolId') schoolId: string,
+    @Body() dto: CreateEnquiryDto,
+  ) {
     return this.admissionsService.createEnquiry(schoolId, dto);
   }
 
@@ -381,6 +386,26 @@ export class StudentAdmissionsController {
       applicationId,
       body.stage,
       body.remarks,
+    );
+  }
+
+  @ApiOperation({
+    summary: 'Convert admission application candidate to enrolled student',
+  })
+  @Post('admissions/applications/:applicationId/convert')
+  @Permission(ResourceEnum.STUDENTS, ActionEnum.CREATE)
+  @Feature('STUDENT_MANAGEMENT')
+  async convertApplicationToStudent(
+    @CurrentUser() caller: AuthContext,
+    @Param('schoolId') schoolId: string,
+    @Param('applicationId') applicationId: string,
+    @Body() body: Partial<StudentAdmissionDto>,
+  ) {
+    return this.admissionsService.convertApplicationToStudent(
+      caller,
+      schoolId,
+      applicationId,
+      body,
     );
   }
 }

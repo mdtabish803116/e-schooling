@@ -3,7 +3,6 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
-  OnModuleInit,
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { DataSource, In } from 'typeorm';
@@ -20,11 +19,11 @@ import { SchoolRole } from '../../models/entities/rbac/school-role.entity';
 import { SchoolUserRole } from '../../models/entities/rbac/school-user-role.entity';
 import { SchoolOwnerMember } from '../../models/entities/school/school-owner-member.entity';
 import { School } from '../../models/entities/school/school.entity';
+import { AdmissionApplication } from '../../models/entities/student/admission-application.entity';
+import { AdmissionEnquiry } from '../../models/entities/student/admission-enquiry.entity';
 import { PromotionLog } from '../../models/entities/student/promotion-log.entity';
 import { StudentEnrollment } from '../../models/entities/student/student-enrollment.entity';
 import { Student } from '../../models/entities/student/student.entity';
-import { AdmissionEnquiry } from '../../models/entities/student/admission-enquiry.entity';
-import { AdmissionApplication } from '../../models/entities/student/admission-application.entity';
 import { SchoolSubscription } from '../../models/entities/subscription/school-subscription.entity';
 import {
   ActionTypeEnum,
@@ -32,6 +31,20 @@ import {
   EnrollmentTypeEnum,
   OverrideTypeEnum,
 } from '../../models/enums/enums';
+
+export interface CreateEnquiryDto {
+  studentName?: string;
+  parentName?: string;
+  contactNumber?: string;
+  email?: string;
+  targetClassId?: string;
+  targetClassName?: string;
+  gender?: string;
+  previousSchool?: string;
+  source?: string;
+  notes?: string;
+  assignedToStaffName?: string;
+}
 
 @Injectable()
 export class StudentAdmissionsService {
@@ -241,7 +254,7 @@ export class StudentAdmissionsService {
       enrollment.academicSessionId = dto.academicSessionId;
       enrollment.classId = dto.classId;
       enrollment.sectionId = dto.sectionId;
-      if (dto.rollNumber) (enrollment as any).rollNumber = dto.rollNumber;
+      if (dto.rollNumber) enrollment.rollNumber = dto.rollNumber;
       enrollment.enrollmentType = EnrollmentTypeEnum.ADMISSION;
       enrollment.enrollmentState = EnrollmentStatusEnum.ACTIVE;
       enrollment.isCurrent = true;
@@ -636,8 +649,9 @@ export class StudentAdmissionsService {
     ];
 
     for (const field of studentFields) {
-      if ((dto as any)[field] !== undefined) {
-        (student as any)[field] = (dto as any)[field];
+      const value = dto[field as keyof UpdateStudentDto];
+      if (value !== undefined) {
+        Object.assign(student, { [field]: value });
       }
     }
 
@@ -662,7 +676,7 @@ export class StudentAdmissionsService {
       }
       if (enrollment) {
         enrollment.isCurrent = true;
-        (enrollment as any).rollNumber = dto.rollNumber;
+        enrollment.rollNumber = dto.rollNumber;
         await this.dataSource.getRepository(StudentEnrollment).save(enrollment);
       }
     }
@@ -871,7 +885,9 @@ export class StudentAdmissionsService {
       where: { id: studentId, schoolId, isDeleted: false },
     });
     if (!student) throw new NotFoundException('Student not found');
-    return Array.isArray(student.documents) ? student.documents : [];
+    return Array.isArray(student.documents)
+      ? (student.documents as Record<string, unknown>[])
+      : [];
   }
 
   async uploadStudentDocument(
@@ -920,7 +936,9 @@ export class StudentAdmissionsService {
     if (!student) throw new NotFoundException('Student not found');
 
     const documents = Array.isArray(student.documents) ? student.documents : [];
-    student.documents = documents.filter((doc: any) => doc.id !== documentId);
+    student.documents = documents.filter(
+      (doc: { id?: string }) => doc.id !== documentId,
+    );
     await studentRepo.save(student);
     return { message: 'Document deleted successfully' };
   }
@@ -936,7 +954,7 @@ export class StudentAdmissionsService {
     });
   }
 
-  async createEnquiry(schoolId: string, dto: any) {
+  async createEnquiry(schoolId: string, dto: CreateEnquiryDto) {
     const repo = this.dataSource.getRepository(AdmissionEnquiry);
     const count = await repo.count({ where: { schoolId } });
     const enquiryNo = `ENQ-${new Date().getFullYear()}-${String(count + 1).padStart(3, '0')}`;
@@ -944,9 +962,9 @@ export class StudentAdmissionsService {
     const enquiry = repo.create({
       schoolId,
       enquiryNo,
-      studentName: dto.studentName,
-      parentName: dto.parentName,
-      contactNumber: dto.contactNumber,
+      studentName: dto.studentName || '',
+      parentName: dto.parentName || '',
+      contactNumber: dto.contactNumber || '',
       email: dto.email,
       targetClassId: dto.targetClassId || 'cls-1',
       targetClassName: dto.targetClassName || 'Class 9',
@@ -1002,5 +1020,89 @@ export class StudentAdmissionsService {
     if (remarks) application.approvalRemarks = remarks;
     if (stage === 'VERIFICATION') application.verificationStatus = 'VERIFIED';
     return repo.save(application);
+  }
+
+  async convertApplicationToStudent(
+    caller: AuthContext,
+    schoolId: string,
+    applicationId: string,
+    dto: Partial<StudentAdmissionDto> = {},
+  ) {
+    const appRepo = this.dataSource.getRepository(AdmissionApplication);
+    const enqRepo = this.dataSource.getRepository(AdmissionEnquiry);
+
+    const app = await appRepo.findOne({
+      where: { id: applicationId, schoolId },
+    });
+    let enq: AdmissionEnquiry | null = null;
+
+    if (!app) {
+      enq = await enqRepo.findOne({ where: { id: applicationId, schoolId } });
+    }
+
+    const firstName =
+      dto.firstName ||
+      app?.firstName ||
+      enq?.studentName?.split(' ')[0] ||
+      'Admitted';
+    const lastName =
+      dto.lastName ||
+      app?.lastName ||
+      enq?.studentName?.split(' ').slice(1).join(' ') ||
+      'Student';
+    const fatherName =
+      dto.fatherName || app?.fatherName || enq?.parentName || 'Parent';
+    const fatherMobile =
+      dto.fatherMobile ||
+      app?.fatherPhone ||
+      enq?.contactNumber ||
+      '9876543210';
+    const gender = dto.gender || app?.gender || enq?.gender || 'MALE';
+    const classId =
+      dto.classId || app?.targetClassId || enq?.targetClassId || '1';
+    const sectionId = dto.sectionId || '1';
+    const academicSessionId = dto.academicSessionId || '1';
+
+    const admitPayload: StudentAdmissionDto = {
+      firstName,
+      lastName,
+      gender,
+      dob: dto.dob || app?.dob || '2015-01-01',
+      fatherName,
+      fatherMobile,
+      classId,
+      sectionId,
+      academicSessionId,
+      roleId: dto.roleId || '10',
+      admissionNumber:
+        dto.admissionNumber || `ADM-${Date.now().toString().slice(-6)}`,
+      state: dto.state || 'Default State',
+      district: dto.district || 'Default District',
+      pincode: dto.pincode || '100001',
+    };
+
+    const admittedStudent = (await this.admitStudent(
+      caller,
+      schoolId,
+      admitPayload,
+    )) as { student?: { id?: string }; id?: string };
+
+    const convertedStudentId = String(
+      admittedStudent?.student?.id || admittedStudent?.id || Date.now(),
+    );
+
+    if (app) {
+      app.stage = 'APPROVAL';
+      app.verificationStatus = 'VERIFIED';
+      app.convertedStudentId = convertedStudentId;
+      await appRepo.save(app);
+    }
+    if (enq) {
+      enq.stage = 'APPROVAL';
+      enq.enquiryStatus = 'CONVERTED';
+      await enqRepo.save(enq);
+    }
+
+    return admittedStudent;
   }
 }
