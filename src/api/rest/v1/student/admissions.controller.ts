@@ -5,6 +5,7 @@ import {
   Patch,
   Body,
   Param,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
@@ -92,6 +93,7 @@ export class AdmissionsController {
     @CurrentUser() caller: AuthContext,
     @Param('schoolId') schoolId: string,
     @Param('applicationId') applicationId: string,
+    @Query('academicSessionId') queryAcademicSessionId: string,
     @Body() body: any,
   ) {
     return this.admissionsService.convertApplicationToStudent(
@@ -99,6 +101,7 @@ export class AdmissionsController {
       schoolId,
       applicationId,
       body,
+      queryAcademicSessionId,
     );
   }
 }

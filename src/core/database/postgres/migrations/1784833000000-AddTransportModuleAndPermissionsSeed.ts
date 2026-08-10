@@ -154,7 +154,7 @@ export class AddTransportModuleAndPermissionsSeed1784833000000 implements Migrat
       );
 
       CREATE TABLE IF NOT EXISTS "e_schooling"."admission_enquiries" (
-        "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        "id" bigserial PRIMARY KEY,
         "school_id" varchar(100) NOT NULL,
         "enquiry_no" varchar(50) NOT NULL,
         "student_name" varchar(150) NOT NULL,
@@ -175,7 +175,7 @@ export class AddTransportModuleAndPermissionsSeed1784833000000 implements Migrat
       );
 
       CREATE TABLE IF NOT EXISTS "e_schooling"."admission_applications" (
-        "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        "id" bigserial PRIMARY KEY,
         "school_id" varchar(100) NOT NULL,
         "application_no" varchar(50) NOT NULL,
         "enquiry_id" varchar(100),

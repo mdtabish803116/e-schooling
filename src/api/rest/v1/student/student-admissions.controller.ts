@@ -399,6 +399,7 @@ export class StudentAdmissionsController {
     @CurrentUser() caller: AuthContext,
     @Param('schoolId') schoolId: string,
     @Param('applicationId') applicationId: string,
+    @Query('academicSessionId') queryAcademicSessionId: string,
     @Body() body: Partial<StudentAdmissionDto>,
   ) {
     return this.admissionsService.convertApplicationToStudent(
@@ -406,6 +407,7 @@ export class StudentAdmissionsController {
       schoolId,
       applicationId,
       body,
+      queryAcademicSessionId,
     );
   }
 }

@@ -148,25 +148,102 @@ export class StudentAdmissionsService {
       }
     }
 
-    // Validate academic references
-    const targetClass = await this.dataSource
-      .getRepository(Class)
-      .findOne({ where: { id: dto.classId, schoolId } });
-    if (!targetClass) throw new NotFoundException('Class not found');
-    const targetSection = await this.dataSource
-      .getRepository(Section)
-      .findOne({ where: { id: dto.sectionId, schoolId } });
-    if (!targetSection) throw new NotFoundException('Section not found');
-    const targetSession = await this.dataSource
-      .getRepository(AcademicSession)
-      .findOne({ where: { id: dto.academicSessionId, schoolId } });
-    if (!targetSession)
-      throw new NotFoundException('Academic session not found');
-    const targetRole = await this.dataSource
-      .getRepository(SchoolRole)
-      .findOne({ where: { id: dto.roleId, schoolId } });
-    if (!targetRole)
-      throw new NotFoundException('Role not found for this school');
+    // Validate academic references safely
+    let targetClass: Class | null = null;
+    if (dto.classId && !isNaN(Number(dto.classId))) {
+      targetClass = await this.dataSource
+        .getRepository(Class)
+        .findOne({ where: { id: dto.classId, schoolId, isDeleted: false } });
+    }
+    if (!targetClass) {
+      targetClass = await this.dataSource.getRepository(Class).findOne({
+        where: { schoolId, isDeleted: false },
+        order: { createdAt: 'ASC' },
+      });
+    }
+    if (!targetClass)
+      throw new NotFoundException('Class not found for this school');
+    dto.classId = targetClass.id;
+
+    let targetSection: Section | null = null;
+    if (dto.sectionId && !isNaN(Number(dto.sectionId))) {
+      targetSection = await this.dataSource
+        .getRepository(Section)
+        .findOne({ where: { id: dto.sectionId, schoolId, isDeleted: false } });
+    }
+    if (!targetSection) {
+      targetSection = await this.dataSource.getRepository(Section).findOne({
+        where: { classId: targetClass.id, schoolId, isDeleted: false },
+        order: { createdAt: 'ASC' },
+      });
+    }
+    if (!targetSection)
+      throw new NotFoundException('Section not found for this class');
+    dto.sectionId = targetSection.id;
+
+    let targetSession: AcademicSession | null = null;
+    if (
+      dto.academicSessionId &&
+      dto.academicSessionId !== 'sess-current' &&
+      dto.academicSessionId !== 'current' &&
+      dto.academicSessionId !== 'active' &&
+      !isNaN(Number(dto.academicSessionId))
+    ) {
+      targetSession = await this.dataSource
+        .getRepository(AcademicSession)
+        .findOne({
+          where: { id: dto.academicSessionId, schoolId, isDeleted: false },
+        });
+    }
+    if (!targetSession) {
+      const sessionRepo = this.dataSource.getRepository(AcademicSession);
+      targetSession = await sessionRepo.findOne({
+        where: { schoolId, isCurrent: true, isDeleted: false },
+      });
+      if (!targetSession) {
+        targetSession = await sessionRepo.findOne({
+          where: { schoolId, isDeleted: false },
+          order: { createdAt: 'DESC' },
+        });
+      }
+      if (!targetSession) {
+        const newSession = sessionRepo.create({
+          schoolId,
+          name: '2025-2026',
+          startDate: '2025-04-01',
+          endDate: '2026-03-31',
+          isCurrent: true,
+          isActive: true,
+        });
+        targetSession = await sessionRepo.save(newSession);
+      }
+    }
+    dto.academicSessionId = targetSession.id;
+
+    let targetRoleId: string | undefined = undefined;
+    if (dto.roleId && !isNaN(Number(dto.roleId))) {
+      const targetRole = await this.dataSource
+        .getRepository(SchoolRole)
+        .findOne({ where: { id: dto.roleId, schoolId } });
+      if (targetRole) {
+        targetRoleId = targetRole.id;
+      }
+    }
+    if (!targetRoleId) {
+      const roleRepo = this.dataSource.getRepository(SchoolRole);
+      const studentRole = await roleRepo.findOne({
+        where: [
+          { schoolId, name: 'Student' },
+          { schoolId, name: 'student' },
+        ],
+      });
+      if (studentRole) {
+        targetRoleId = studentRole.id;
+      } else {
+        const anyRole = await roleRepo.findOne({ where: { schoolId } });
+        if (anyRole) targetRoleId = anyRole.id;
+      }
+    }
 
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
@@ -262,12 +339,14 @@ export class StudentAdmissionsService {
 
       await queryRunner.manager.save(enrollment);
 
-      const userRole = new SchoolUserRole();
-      userRole.userId = savedStudent.id;
-      userRole.roleId = dto.roleId;
-      userRole.createdById = caller.id;
-      userRole.userType = 'student';
-      await queryRunner.manager.save(userRole);
+      if (targetRoleId) {
+        const userRole = new SchoolUserRole();
+        userRole.userId = savedStudent.id;
+        userRole.roleId = targetRoleId;
+        userRole.createdById = caller.id;
+        userRole.userType = 'student';
+        await queryRunner.manager.save(userRole);
+      }
 
       await queryRunner.commitTransaction();
 
@@ -986,7 +1065,13 @@ export class StudentAdmissionsService {
     enquiryStatus: string,
   ) {
     const repo = this.dataSource.getRepository(AdmissionEnquiry);
-    const enquiry = await repo.findOne({ where: { id, schoolId } });
+    let enquiry: AdmissionEnquiry | null = null;
+    if (id && !isNaN(Number(id))) {
+      enquiry = await repo.findOne({ where: { id, schoolId } });
+    }
+    if (!enquiry && id) {
+      enquiry = await repo.findOne({ where: { enquiryNo: id, schoolId } });
+    }
     if (!enquiry)
       throw new NotFoundException('Admission Enquiry record not found');
 
@@ -1012,7 +1097,15 @@ export class StudentAdmissionsService {
     remarks?: string,
   ) {
     const repo = this.dataSource.getRepository(AdmissionApplication);
-    const application = await repo.findOne({ where: { id, schoolId } });
+    let application: AdmissionApplication | null = null;
+    if (id && !isNaN(Number(id))) {
+      application = await repo.findOne({ where: { id, schoolId } });
+    }
+    if (!application && id) {
+      application = await repo.findOne({
+        where: { applicationNo: id, schoolId },
+      });
+    }
     if (!application)
       throw new NotFoundException('Admission Application record not found');
 
@@ -1027,17 +1120,31 @@ export class StudentAdmissionsService {
     schoolId: string,
     applicationId: string,
     dto: Partial<StudentAdmissionDto> = {},
+    queryAcademicSessionId?: string,
   ) {
     const appRepo = this.dataSource.getRepository(AdmissionApplication);
     const enqRepo = this.dataSource.getRepository(AdmissionEnquiry);
 
-    const app = await appRepo.findOne({
-      where: { id: applicationId, schoolId },
-    });
+    let app: AdmissionApplication | null = null;
     let enq: AdmissionEnquiry | null = null;
 
-    if (!app) {
-      enq = await enqRepo.findOne({ where: { id: applicationId, schoolId } });
+    if (applicationId && !isNaN(Number(applicationId))) {
+      app = await appRepo.findOne({
+        where: { id: applicationId, schoolId },
+      });
+      if (!app) {
+        enq = await enqRepo.findOne({ where: { id: applicationId, schoolId } });
+      }
+    }
+    if (!app && !enq && applicationId) {
+      app = await appRepo.findOne({
+        where: { applicationNo: applicationId, schoolId },
+      });
+      if (!app) {
+        enq = await enqRepo.findOne({
+          where: { enquiryNo: applicationId, schoolId },
+        });
+      }
     }
 
     const firstName =
@@ -1061,7 +1168,24 @@ export class StudentAdmissionsService {
     const classId =
       dto.classId || app?.targetClassId || enq?.targetClassId || '1';
     const sectionId = dto.sectionId || '1';
-    const academicSessionId = dto.academicSessionId || '1';
+
+    const rawSessionId =
+      queryAcademicSessionId &&
+      queryAcademicSessionId !== 'sess-current' &&
+      queryAcademicSessionId !== 'current' &&
+      queryAcademicSessionId !== 'active' &&
+      !isNaN(Number(queryAcademicSessionId))
+        ? queryAcademicSessionId
+        : dto.academicSessionId;
+
+    const academicSessionId =
+      rawSessionId &&
+      rawSessionId !== 'sess-current' &&
+      rawSessionId !== 'current' &&
+      rawSessionId !== 'active' &&
+      !isNaN(Number(rawSessionId))
+        ? rawSessionId
+        : undefined;
 
     const admitPayload: StudentAdmissionDto = {
       firstName,
@@ -1072,7 +1196,7 @@ export class StudentAdmissionsService {
       fatherMobile,
       classId,
       sectionId,
-      academicSessionId,
+      academicSessionId: academicSessionId!,
       roleId: dto.roleId || '10',
       admissionNumber:
         dto.admissionNumber || `ADM-${Date.now().toString().slice(-6)}`,
