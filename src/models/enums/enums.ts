@@ -147,7 +147,6 @@ export enum ActionTypeEnum {
 }
 
 export enum JobTypeEnum {
-  STUDENT_IMPORT = 'student_import',
   PROMOTION = 'promotion',
   DEMOTION = 'demotion',
   SECTION_TRANSFER = 'section_transfer',
@@ -156,9 +155,12 @@ export enum JobTypeEnum {
   SEND_WHATSAPP = 'send_whatsapp',
   SEND_EMAIL = 'send_email',
   DAILY_CLEANUP = 'daily_cleanup',
-  EXPORT_EXCEL = 'export_excel',
-  GENERIC_IMPORT = 'generic_import',
-  GENERIC_EXPORT = 'generic_export',
+  STUDENT_EXPORT = 'student_export',
+  STUDENT_IMPORT = 'student_import',
+  CLASS_EXPORT = 'class_export',
+  CLASS_IMPORT = 'class_import',
+  STAFF_EXPORT = 'staff_export',
+  STAFF_IMPORT = 'staff_import',
 }
 
 export enum JobStatusEnum {

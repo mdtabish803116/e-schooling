@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Job } from 'bullmq';
+import { WorkerJobContext } from '../worker-job.interface';
 import { DataSource, MoreThan } from 'typeorm';
 import { SubscriptionsService } from '../../../services/subscription/subscription.service';
 import { Order } from '../../../models/entities/finance/order.entity';
@@ -14,10 +14,10 @@ export class PaymentReconciliationProcessor {
     private readonly subscriptionsService: SubscriptionsService,
   ) {}
 
-  async process(job: Job): Promise<unknown> {
-    const { name, id } = job;
+  async process(job: WorkerJobContext): Promise<unknown> {
+    const { jobType, id } = job;
     this.logger.log(
-      `[PaymentReconciliationProcessor] Processing job ${id} (${name})`,
+      `[PaymentReconciliationProcessor] Processing job ${id} (${jobType})`,
     );
 
     const fifteenDaysAgo = new Date();
@@ -27,7 +27,6 @@ export class PaymentReconciliationProcessor {
       `[Payment Reconciliation] Scanning for PENDING orders created after ${fifteenDaysAgo.toISOString()}`,
     );
 
-    // Retrieve all pending orders in the last 15 days
     const pendingOrders = await this.dataSource.getRepository(Order).find({
       where: {
         status: OrderStatusEnum.PENDING,
@@ -49,7 +48,7 @@ export class PaymentReconciliationProcessor {
     for (const order of pendingOrders) {
       processedCount++;
       const currentProgress = Math.min(
-        10 + Math.floor((processedCount / pendingOrders.length) * 80),
+        10 + Math.floor((processedCount / (pendingOrders.length || 1)) * 80),
         90,
       );
       await job.updateProgress(currentProgress);

@@ -1,37 +1,43 @@
 import {
-  Controller,
-  Post,
-  Get,
-  Patch,
-  Delete,
   Body,
+  Controller,
+  Delete,
+  Get,
   Param,
-  UseGuards,
+  Patch,
+  Post,
   Query,
+  UseGuards,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
-import { JwtAuthGuard } from '../../../../shared/guards/jwt-auth.guard';
-import { CurrentUser } from '../../../../shared/decorators/current-user.decorator';
-import { CurrentAcademicSession } from '../../../../shared/decorators/current-academic-session.decorator';
-import { FeatureGuard } from '../../../../shared/guards/feature.guard';
-import { PermissionGuard } from '../../../../shared/guards/permission.guard';
-import { Feature } from '../../../../shared/decorators/feature.decorator';
-import { Permission } from '../../../../shared/decorators/permission.decorator';
-import { AcademicService } from '../../../../services/academic/academic.service';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { QueueProducerService } from '../../../../api/worker/queues/queue-producer.service';
+import { QueueNames } from '../../../../api/worker/queues/queue.constants';
 import type { AuthContext } from '../../../../interfaces/auth-context.interface';
-import { ResourceEnum, ActionEnum } from '../../../../models/enums/enums';
+import { AllocateRoomDto } from '../../../../interfaces/request/academic/allocate-room.dto';
+import { CopyAcademicSessionDataDto } from '../../../../interfaces/request/academic/copy-academic-session-data.dto';
+import { CreateAcademicSessionDto } from '../../../../interfaces/request/academic/create-academic-session.dto';
 import { CreateClassDto } from '../../../../interfaces/request/academic/create-class.dto';
-import { UpdateClassDto } from '../../../../interfaces/request/academic/update-class.dto';
+import { CreateRoomDto } from '../../../../interfaces/request/academic/create-room.dto';
 import { CreateSectionDto } from '../../../../interfaces/request/academic/create-section.dto';
+import { TransferStudentsDto } from '../../../../interfaces/request/academic/transfer-students.dto';
+import { UpdateAcademicSessionDto } from '../../../../interfaces/request/academic/update-academic-session.dto';
+import { UpdateClassDto } from '../../../../interfaces/request/academic/update-class.dto';
+import { UpdateRoomDto } from '../../../../interfaces/request/academic/update-room.dto';
 import { UpdateSectionDto } from '../../../../interfaces/request/academic/update-section.dto';
 import { UpdateSubjectDto } from '../../../../interfaces/request/academic/update-subject.dto';
-import { TransferStudentsDto } from '../../../../interfaces/request/academic/transfer-students.dto';
-import { CreateAcademicSessionDto } from '../../../../interfaces/request/academic/create-academic-session.dto';
-import { UpdateAcademicSessionDto } from '../../../../interfaces/request/academic/update-academic-session.dto';
-import { CopyAcademicSessionDataDto } from '../../../../interfaces/request/academic/copy-academic-session-data.dto';
-import { CreateRoomDto } from '../../../../interfaces/request/academic/create-room.dto';
-import { UpdateRoomDto } from '../../../../interfaces/request/academic/update-room.dto';
-import { AllocateRoomDto } from '../../../../interfaces/request/academic/allocate-room.dto';
+import {
+  ActionEnum,
+  JobTypeEnum,
+  ResourceEnum,
+} from '../../../../models/enums/enums';
+import { AcademicService } from '../../../../services/academic/academic.service';
+import { CurrentAcademicSession } from '../../../../shared/decorators/current-academic-session.decorator';
+import { CurrentUser } from '../../../../shared/decorators/current-user.decorator';
+import { Feature } from '../../../../shared/decorators/feature.decorator';
+import { Permission } from '../../../../shared/decorators/permission.decorator';
+import { FeatureGuard } from '../../../../shared/guards/feature.guard';
+import { JwtAuthGuard } from '../../../../shared/guards/jwt-auth.guard';
+import { PermissionGuard } from '../../../../shared/guards/permission.guard';
 
 @ApiTags('Academic Management')
 @ApiBearerAuth('JWT-auth')
@@ -39,7 +45,10 @@ import { AllocateRoomDto } from '../../../../interfaces/request/academic/allocat
 @Feature('ACADEMIC_MANAGEMENT')
 @Controller('schools/:schoolId/academic')
 export class AcademicController {
-  constructor(private readonly academicService: AcademicService) {}
+  constructor(
+    private readonly academicService: AcademicService,
+    private readonly queueProducerService: QueueProducerService,
+  ) {}
 
   // CLASSES
   @ApiOperation({ summary: 'Create a new class' })
@@ -64,6 +73,39 @@ export class AcademicController {
   ) {
     const academicSessionId = querySessionId || sessionFromHeader || undefined;
     return this.academicService.getClasses(schoolId, user, academicSessionId);
+  }
+
+  @ApiOperation({
+    summary: 'Queue bulk class CSV export via BullMQ Redis worker',
+  })
+  @Post('classes/export-csv')
+  @Permission(ResourceEnum.CLASSES, ActionEnum.VIEW)
+  async exportClassesCsv(
+    @CurrentUser() caller: AuthContext,
+    @Param('schoolId') schoolId: string,
+    @CurrentAcademicSession() sessionFromHeader: string | null,
+    @Query('academicSessionId') querySessionId?: string,
+  ) {
+    const academicSessionId = querySessionId || sessionFromHeader || undefined;
+    const job = await this.queueProducerService.addJob({
+      queueName: QueueNames.EXPORT,
+      jobType: JobTypeEnum.CLASS_EXPORT,
+      payload: {
+        entityName: ResourceEnum.CLASSES,
+        schoolId,
+        caller,
+        academicSessionId,
+      },
+      tenantId: schoolId,
+      createdBy: caller.id,
+    });
+
+    return {
+      message:
+        'Class export job successfully queued in background worker mode.',
+      jobId: job.jobId,
+      status: job.status,
+    };
   }
 
   @ApiOperation({ summary: 'Get class details by ID' })

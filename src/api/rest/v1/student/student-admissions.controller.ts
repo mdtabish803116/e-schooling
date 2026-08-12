@@ -271,7 +271,7 @@ export class StudentAdmissionsController {
     @Body() body: { rows: Record<string, unknown>[] },
   ) {
     const job = await this.queueProducerService.addJob({
-      queueName: QueueNames.IMPORTS_EXPORTS,
+      queueName: QueueNames.IMPORT,
       jobType: JobTypeEnum.STUDENT_IMPORT,
       payload: {
         schoolId,
@@ -299,18 +299,23 @@ export class StudentAdmissionsController {
   async exportStudentsCsv(
     @CurrentUser() caller: AuthContext,
     @Param('schoolId') schoolId: string,
+    @CurrentAcademicSession() sessionFromHeader: string | null,
     @Query('classId') classId?: string,
     @Query('sectionId') sectionId?: string,
+    @Query('academicSessionId') querySessionId?: string,
     @Query('search') search?: string,
   ) {
+    const academicSessionId = querySessionId || sessionFromHeader || undefined;
     const job = await this.queueProducerService.addJob({
-      queueName: QueueNames.IMPORTS_EXPORTS,
-      jobType: JobTypeEnum.EXPORT_EXCEL,
+      queueName: QueueNames.EXPORT,
+      jobType: JobTypeEnum.STUDENT_EXPORT,
       payload: {
+        entityName: ResourceEnum.STUDENTS,
         schoolId,
         caller,
         classId,
         sectionId,
+        academicSessionId,
         search,
       },
       tenantId: schoolId,

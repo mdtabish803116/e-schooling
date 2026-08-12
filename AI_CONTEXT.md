@@ -22,7 +22,7 @@ This file is the quick-start handoff for AI agents working in the `e-schooling` 
 - **Database**: PostgreSQL 16+ via `pg` (`^8.20.0`)
 - **ORM & Migrations**: TypeORM v0.3 (`@nestjs/typeorm`)
 - **Authentication**: Passport.js (`@nestjs/passport`), `@nestjs/jwt`, `passport-jwt`, `bcrypt`
-- **Async Queue & Background Jobs**: BullMQ (`^5.76.9`), Redis via `ioredis` (`^5.10.1`)
+- **Async Queue & Background Jobs**: PostgreSQL Native `LISTEN` / `NOTIFY` + Outbox Table Pattern (`SELECT ... FOR UPDATE SKIP LOCKED` for zero-Redis serverless background processing)
 - **Validation & Transformation**: `class-validator`, `class-transformer`
 - **File Storage**: Cloudinary SDK (`^2.10.0`), `@types/multer`
 - **Payment Gateway**: Razorpay Node SDK (`^2.9.6`)
@@ -220,15 +220,17 @@ export class StudentController {
 
 ## Queue & Background Worker Architecture
 
-Background asynchronous jobs are processed using BullMQ:
-- Queue names & consumers are registered in `src/api/worker/queues/`.
-- Processors extend BullMQ worker interfaces and handle tasks in isolation:
-  - `StudentImportProcessor`: Processes bulk student CSV/Excel uploads and creates `student` and `student_enrollment` records.
-  - `StudentProgressionProcessor`: Executes bulk student promotions, demotions, and section transfers.
-  - `StaffExportProcessor` & `ClassExportProcessor`: Asynchronously formats and exports system data to downloadable Excel/CSV files.
-  - `PaymentReconciliationProcessor`: Syncs pending Razorpay payment statuses.
-  - `CleanupProcessor`: Purges expired temporary upload files and stale background job logs.
-- Job progress and status updates are persisted in the `background_jobs` table via `BackgroundJobService`.
+Background asynchronous jobs are processed using **PostgreSQL Native `LISTEN` / `NOTIFY` + Outbox Queue Pattern** (Zero Redis dependency):
+- **Event Bus (`PgPubSubService`)**: REST API inserts jobs into `background_jobs` outbox table and executes `NOTIFY background_jobs_channel, '{"jobId":"..."}'`.
+- **Worker Consumer (`QueueConsumerService`)**: Listens on `LISTEN background_jobs_channel` and runs a fallback ticker querying `SELECT ... FOR UPDATE SKIP LOCKED` for `PENDING` outbox records.
+- **Batch Processing Utility (`processInBatches`)**: Processes heavy bulk operations in chunked PostgreSQL transactions (200–250 records per batch) with `UPSERT` (`ON CONFLICT DO UPDATE`) and per-batch all-or-nothing atomicity.
+- **Processors**:
+  - `StudentImportProcessor`: Processes bulk CSV student imports in batch transactions with idempotent upserts.
+  - `StudentProgressionProcessor`: Executes bulk student movements/promotions in batch transactions.
+  - `NotificationProcessor`: Handles WhatsApp, SMS, Email, and Push notifications in rate-limited batches.
+  - `StaffExportProcessor` & `ClassExportProcessor`: Formats and exports system data to CSV/Excel files.
+  - `PaymentReconciliationProcessor`: Reconciles pending Razorpay orders.
+  - `CleanupProcessor`: Purges temporary files and stale job logs.
 
 ---
 

@@ -1,9 +1,9 @@
 import { Module } from '@nestjs/common';
-import { RedisConnectionService } from '../redis/redis-connection.service';
+import { PgPubSubService } from '../pg-pubsub/pg-pubsub.service';
 import { QueueProducerService } from './queue-producer.service';
 
 @Module({
-  providers: [RedisConnectionService, QueueProducerService],
-  exports: [RedisConnectionService, QueueProducerService],
+  providers: [PgPubSubService, QueueProducerService],
+  exports: [PgPubSubService, QueueProducerService],
 })
 export class QueueModule {}

@@ -1,16 +1,21 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Job } from 'bullmq';
+import { WorkerJobContext } from '../../worker-job.interface';
 import { DataSource } from 'typeorm';
 import { SchoolUser } from '../../../../models/entities/school/school-user.entity';
+import { StorageService } from '../../../../shared/storage/storage.service';
+import { JobTypeEnum } from '../../../../models/enums/enums';
 
 @Injectable()
 export class StaffExportProcessor {
   private readonly logger = new Logger(StaffExportProcessor.name);
 
-  constructor(private readonly dataSource: DataSource) {}
+  constructor(
+    private readonly dataSource: DataSource,
+    private readonly storageService: StorageService,
+  ) {}
 
-  async process(job: Job): Promise<unknown> {
-    const { schoolId } = job.data;
+  async process(job: WorkerJobContext): Promise<unknown> {
+    const { schoolId } = job.data || {};
     this.logger.log(
       `[StaffExportProcessor] Processing staff export job ${job.id} for school: ${schoolId}`,
     );
@@ -38,14 +43,33 @@ export class StaffExportProcessor {
     );
 
     const csvContent = [headers.join(','), ...rows].join('\n');
+    await job.updateProgress(90);
+
+    const filename = `staff-export-school-${schoolId}-${Date.now()}.csv`;
+    const file = {
+      buffer: Buffer.from(csvContent, 'utf-8'),
+      originalname: filename,
+      mimetype: 'text/csv',
+    } as Express.Multer.File;
+
+    let fileUrl = '';
+    try {
+      fileUrl = await this.storageService.uploadFile(file);
+    } catch (error) {
+      this.logger.error(`Cloudinary upload failed: ${error.message}`);
+      throw new Error(
+        `Failed to upload export to cloud storage: ${error.message}`,
+      );
+    }
+
     await job.updateProgress(100);
 
     return {
       success: true,
-      jobType: 'staff_export',
+      jobType: JobTypeEnum.STAFF_EXPORT,
       totalExported: users.length,
-      csvContent,
-      filename: `staff-export-school-${schoolId}-${Date.now()}.csv`,
+      fileUrl,
+      filename,
       message: `Exported ${users.length} staff records successfully.`,
     };
   }
