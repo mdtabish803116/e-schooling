@@ -6,6 +6,7 @@ import {
   Param,
   Post,
   Put,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
@@ -187,5 +188,23 @@ export class TimetableController {
     @Param('id') id: string,
   ) {
     return this.timetableService.deleteEvent(schoolId, id);
+  }
+
+  @ApiOperation({ summary: 'Get timetable settings' })
+  @Get('timetable/settings')
+  async getSettings(
+    @Param('schoolId') schoolId: string,
+    @Query('sessionId') sessionId?: string,
+  ) {
+    return this.timetableService.getTimetableSettings(schoolId, sessionId);
+  }
+
+  @ApiOperation({ summary: 'Update timetable settings' })
+  @Put('timetable/settings')
+  async updateSettings(
+    @Param('schoolId') schoolId: string,
+    @Body() payload: any,
+  ) {
+    return this.timetableService.upsertTimetableSettings(schoolId, payload);
   }
 }
