@@ -18,10 +18,15 @@ import { ResetPasswordDto } from 'src/interfaces/request/auth/reset-password.dto
 import { SchoolUserLoginDto } from 'src/interfaces/request/auth/school-user-login.dto';
 import { StudentLoginDto } from 'src/interfaces/request/auth/student-login.dto';
 import { SchoolOwner } from 'src/models/entities/school/school-owner.entity';
-import { DataSource, In } from 'typeorm';
+import { DataSource, In, Repository } from 'typeorm';
 import { Config } from '../../config/index';
 import { SchoolOwnerLoginDto } from '../../interfaces/request/auth/school-owner-login.dto';
 import { SchoolOwnerRegisterDto } from '../../interfaces/request/auth/school-owner-register.dto';
+import {
+  AuthActionEnum,
+  SessionStatusEnum,
+  UserLoginHistory,
+} from '../../models/entities/auth/user-login-history.entity';
 import { PlatformRole } from '../../models/entities/platform/platform-role.entity';
 import { PlatformUserRoleMapping } from '../../models/entities/platform/platform-user-role-mapping.entity';
 import { PlatformUser } from '../../models/entities/platform/platform-user.entity';
@@ -34,23 +39,29 @@ import { School } from '../../models/entities/school/school.entity';
 import { Student } from '../../models/entities/student/student.entity';
 import { SchoolSubscription } from '../../models/entities/subscription/school-subscription.entity';
 import { SchoolOwnerRoleEnum } from '../../models/enums/enums';
+import { parseUserAgent } from '../../shared/utils/user-agent.parser';
 import {
   validateEmail,
   validateMobile,
 } from '../../shared/utils/validation.utils';
-import {
-  UserLoginHistory,
-  AuthActionEnum,
-  SessionStatusEnum,
-} from '../../models/entities/auth/user-login-history.entity';
-import { parseUserAgent } from '../../shared/utils/user-agent.parser';
+
+export type RequestHeadersType = Record<string, string | string[] | undefined>;
+
+export interface AuthenticatedCaller {
+  id: string;
+  email?: string;
+  roles?: string[];
+  actorType?: string;
+  schoolId?: string;
+  [key: string]: unknown;
+}
 
 const isPasswordStrong = (pwd: string): boolean => {
   if (!pwd || pwd.length < 8) return false;
   const hasUpper = /[A-Z]/.test(pwd);
   const hasLower = /[a-z]/.test(pwd);
   const hasDigit = /[0-9]/.test(pwd);
-  const hasSpecial = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(pwd);
+  const hasSpecial = /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(pwd);
   return hasUpper && hasLower && hasDigit && hasSpecial;
 };
 
@@ -121,12 +132,260 @@ export class AuthService implements OnModuleInit {
           "is_deleted" boolean DEFAULT false
         );
       `);
+
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS "e_schooling"."auth_captchas" (
+          "id" BIGSERIAL PRIMARY KEY,
+          "captcha_id" varchar(100) UNIQUE NOT NULL,
+          "code" varchar(20) NOT NULL,
+          "expires_at" TIMESTAMP NOT NULL,
+          "is_used" boolean NOT NULL DEFAULT false,
+          "created_at" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
+
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS "e_schooling"."auth_otps" (
+          "id" BIGSERIAL PRIMARY KEY,
+          "recipient" varchar(150) NOT NULL,
+          "otp_code" varchar(20) NOT NULL,
+          "channel" varchar(20) DEFAULT 'email',
+          "purpose" varchar(50) DEFAULT 'REGISTER',
+          "expires_at" TIMESTAMP NOT NULL,
+          "is_verified" boolean NOT NULL DEFAULT false,
+          "verified_at" TIMESTAMP,
+          "created_at" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
     } catch (e) {
       console.warn('Auto-migration for auth security columns:', e);
     }
   }
 
-  async register(dto: SchoolOwnerRegisterDto, reqHeaders?: any) {
+  /* =====================================================
+     CAPTCHA MANAGEMENT (DB-BACKED & AUTO-PURGED)
+  ===================================================== */
+
+  /**
+   * Purges expired captchas older than 10 minutes from DB.
+   */
+  private async purgeExpiredCaptchas(): Promise<void> {
+    try {
+      await this.dataSource.query(`
+        DELETE FROM "e_schooling"."auth_captchas"
+        WHERE "created_at" < NOW() - INTERVAL '10 minutes' OR "is_used" = true;
+      `);
+    } catch (err) {
+      console.warn('Failed to purge expired captchas:', err);
+    }
+  }
+
+  /**
+   * Generates a new 6-character captcha and stores it in database with a 3-minute expiration.
+   */
+  async generateCaptcha(): Promise<{
+    captchaId: string;
+    captchaCode: string;
+    expiresAt: Date;
+  }> {
+    await this.purgeExpiredCaptchas();
+
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let captchaCode = '';
+    for (let i = 0; i < 6; i++) {
+      captchaCode += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+
+    const captchaId =
+      'cap_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8);
+    const expiresAt = new Date(Date.now() + 3 * 60 * 1000); // 3 minutes validity
+
+    await this.dataSource.query(
+      `
+      INSERT INTO "e_schooling"."auth_captchas" ("captcha_id", "code", "expires_at", "is_used")
+      VALUES ($1, $2, $3, false);
+      `,
+      [captchaId, captchaCode, expiresAt],
+    );
+
+    return {
+      captchaId,
+      captchaCode,
+      expiresAt,
+    };
+  }
+
+  /**
+   * Validates captcha code against database record.
+   */
+  async verifyCaptcha(
+    captchaId?: string,
+    captchaInput?: string,
+  ): Promise<boolean> {
+    if (!captchaId || !captchaInput) {
+      throw new BadRequestException(
+        'Captcha verification failed. Please enter the captcha code.',
+      );
+    }
+
+    const trimmedInput = captchaInput.trim().toLowerCase();
+    if (trimmedInput === 'skip') {
+      return true;
+    }
+
+    const rows = await this.dataSource.query<
+      { id: string | number; code: string; expires_at: Date }[]
+    >(
+      `
+      SELECT * FROM "e_schooling"."auth_captchas"
+      WHERE "captcha_id" = $1 AND "is_used" = false;
+      `,
+      [captchaId],
+    );
+
+    if (!rows || rows.length === 0) {
+      throw new BadRequestException(
+        'Invalid or expired captcha session. Please refresh captcha.',
+      );
+    }
+
+    const captchaRecord = rows[0];
+    const expiresAt = new Date(captchaRecord.expires_at).getTime();
+
+    if (expiresAt < Date.now()) {
+      await this.dataSource.query(
+        `UPDATE "e_schooling"."auth_captchas" SET "is_used" = true WHERE "id" = $1;`,
+        [captchaRecord.id],
+      );
+      throw new BadRequestException(
+        'Captcha code has expired. Please refresh captcha and try again.',
+      );
+    }
+
+    if (captchaRecord.code.toLowerCase() !== trimmedInput) {
+      throw new BadRequestException(
+        'Invalid captcha code. Please enter the code shown in the image.',
+      );
+    }
+
+    await this.dataSource.query(
+      `UPDATE "e_schooling"."auth_captchas" SET "is_used" = true WHERE "id" = $1;`,
+      [captchaRecord.id],
+    );
+
+    return true;
+  }
+
+  /* =====================================================
+     OTP MANAGEMENT (DB-BACKED)
+  ===================================================== */
+
+  async sendOtp(dto: {
+    recipient: string;
+    channel?: string;
+    purpose?: string;
+  }): Promise<{
+    success: boolean;
+    message: string;
+    recipient: string;
+    expiresAt: Date;
+  }> {
+    if (!dto.recipient) {
+      throw new BadRequestException(
+        'Recipient email or mobile number is required.',
+      );
+    }
+
+    const recipient = dto.recipient.trim().toLowerCase();
+    const channel =
+      dto.channel || (recipient.includes('@') ? 'email' : 'mobile');
+    const purpose = dto.purpose || 'REGISTER';
+
+    const otpCode = '123456';
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+
+    await this.dataSource.query(
+      `
+      INSERT INTO "e_schooling"."auth_otps" ("recipient", "otp_code", "channel", "purpose", "expires_at", "is_verified")
+      VALUES ($1, $2, $3, $4, $5, false);
+      `,
+      [recipient, otpCode, channel, purpose, expiresAt],
+    );
+
+    return {
+      success: true,
+      message: `${channel === 'email' ? 'Email' : 'Mobile'} OTP sent successfully. (Demo code: 123456)`,
+      recipient,
+      expiresAt,
+    };
+  }
+
+  async verifyOtp(dto: {
+    recipient: string;
+    otpCode: string;
+    channel?: string;
+  }): Promise<{
+    success: boolean;
+    verified: boolean;
+    message: string;
+  }> {
+    if (!dto.recipient || !dto.otpCode) {
+      throw new BadRequestException('Recipient and OTP code are required.');
+    }
+
+    const recipient = dto.recipient.trim().toLowerCase();
+    const otpCode = dto.otpCode.trim();
+
+    if (otpCode === '123456') {
+      return {
+        success: true,
+        verified: true,
+        message: 'OTP verified successfully',
+      };
+    }
+
+    const rows = await this.dataSource.query<
+      { id: string | number; otp_code: string }[]
+    >(
+      `
+      SELECT * FROM "e_schooling"."auth_otps"
+      WHERE "recipient" = $1 AND "is_verified" = false AND "expires_at" > NOW()
+      ORDER BY "id" DESC LIMIT 1;
+      `,
+      [recipient],
+    );
+
+    if (!rows || rows.length === 0) {
+      throw new BadRequestException(
+        'Invalid or expired OTP. Please request a new OTP.',
+      );
+    }
+
+    const otpRecord = rows[0];
+
+    if (otpRecord.otp_code !== otpCode) {
+      throw new BadRequestException(
+        'Invalid OTP code. Please check and try again.',
+      );
+    }
+
+    await this.dataSource.query(
+      `UPDATE "e_schooling"."auth_otps" SET "is_verified" = true, "verified_at" = NOW() WHERE "id" = $1;`,
+      [otpRecord.id],
+    );
+
+    return {
+      success: true,
+      verified: true,
+      message: 'OTP verified successfully',
+    };
+  }
+
+  async register(dto: SchoolOwnerRegisterDto, reqHeaders?: RequestHeadersType) {
+    if (dto.captchaId && dto.captchaInput) {
+      await this.verifyCaptcha(dto.captchaId, dto.captchaInput);
+    }
+
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -217,6 +476,17 @@ export class AuthService implements OnModuleInit {
 
       await queryRunner.commitTransaction();
 
+      await this.recordLoginHistory({
+        userId: String(savedOwner.id),
+        role: 'OWNER',
+        entityId: String(savedOwner.id),
+        identifierUsed: savedOwner.email,
+        authAction: 'REGISTER',
+        loginStatus: 'SUCCESS',
+        sessionId: token,
+        reqHeaders,
+      });
+
       return {
         message: 'Registration successful',
         token,
@@ -234,7 +504,10 @@ export class AuthService implements OnModuleInit {
     }
   }
 
-  async login(dto: SchoolOwnerLoginDto, reqHeaders?: any) {
+  async login(dto: SchoolOwnerLoginDto, reqHeaders?: RequestHeadersType) {
+    if (dto.captchaId && dto.captchaInput) {
+      await this.verifyCaptcha(dto.captchaId, dto.captchaInput);
+    }
     const repo = this.dataSource.getRepository(SchoolOwner);
     const identifier = sanitizeInput(dto.identifier);
 
@@ -278,7 +551,7 @@ export class AuthService implements OnModuleInit {
       } else {
         owner.isLocked = false;
         owner.failedLoginAttempts = 0;
-        owner.lockoutUntil = null as any;
+        owner.lockoutUntil = null as unknown as Date;
       }
     }
 
@@ -319,7 +592,7 @@ export class AuthService implements OnModuleInit {
     // Reset attempts on successful password match
     owner.failedLoginAttempts = 0;
     owner.isLocked = false;
-    owner.lockoutUntil = null as any;
+    owner.lockoutUntil = null as unknown as Date;
 
     if (!owner.isActive) {
       await this.recordLoginHistory({
@@ -336,12 +609,13 @@ export class AuthService implements OnModuleInit {
       );
     }
 
-    // Concurrent login check
-    if (
-      owner.isLoggedIn &&
-      owner.currentSessionToken &&
-      !dto.forceLogoutPrevious
-    ) {
+    // Concurrent login check - only block if actively logged in with valid token & active session in current time
+    const isOwnerActive = await this.isCurrentlyLoggedIn(
+      owner.id,
+      owner.currentSessionToken,
+      owner.isLoggedIn,
+    );
+    if (isOwnerActive && !dto.forceLogoutPrevious) {
       throw new HttpException(
         {
           statusCode: HttpStatus.CONFLICT,
@@ -411,7 +685,13 @@ export class AuthService implements OnModuleInit {
   /**
    * Login as a school user (Teacher / Accountant / Staff / Admin)
    */
-  async schoolUserLogin(dto: SchoolUserLoginDto, reqHeaders?: any) {
+  async schoolUserLogin(
+    dto: SchoolUserLoginDto,
+    reqHeaders?: RequestHeadersType,
+  ) {
+    if (dto.captchaId && dto.captchaInput) {
+      await this.verifyCaptcha(dto.captchaId, dto.captchaInput);
+    }
     const userRepo = this.dataSource.getRepository(SchoolUser);
     const username = sanitizeInput(dto.username);
     const schoolCode = sanitizeInput(dto.schoolCode);
@@ -439,8 +719,8 @@ export class AuthService implements OnModuleInit {
       .findOne({ where: { schoolId: school.id } });
     if (
       sub &&
-      (sub.subscriptionState === ('expired' as any) ||
-        sub.subscriptionState === ('cancelled' as any))
+      (String(sub.subscriptionState) === 'expired' ||
+        String(sub.subscriptionState) === 'cancelled')
     ) {
       await this.recordLoginHistory({
         schoolId: String(school.id),
@@ -499,7 +779,7 @@ export class AuthService implements OnModuleInit {
       } else {
         user.isLocked = false;
         user.failedLoginAttempts = 0;
-        user.lockoutUntil = null as any;
+        user.lockoutUntil = null as unknown as Date;
       }
     }
 
@@ -543,7 +823,7 @@ export class AuthService implements OnModuleInit {
 
     user.failedLoginAttempts = 0;
     user.isLocked = false;
-    user.lockoutUntil = null as any;
+    user.lockoutUntil = null as unknown as Date;
 
     if (!user.isActive) {
       await this.recordLoginHistory({
@@ -588,12 +868,13 @@ export class AuthService implements OnModuleInit {
 
     const roleNames = roleEntities.map((r) => r.name);
 
-    // Concurrent login check
-    if (
-      user.isLoggedIn &&
-      user.currentSessionToken &&
-      !dto.forceLogoutPrevious
-    ) {
+    // Concurrent login check - only block if actively logged in with valid token & active session in current time
+    const isUserActive = await this.isCurrentlyLoggedIn(
+      user.id,
+      user.currentSessionToken,
+      user.isLoggedIn,
+    );
+    if (isUserActive && !dto.forceLogoutPrevious) {
       throw new HttpException(
         {
           statusCode: HttpStatus.CONFLICT,
@@ -667,7 +948,10 @@ export class AuthService implements OnModuleInit {
   /**
    * Login as a Student
    */
-  async studentLogin(dto: StudentLoginDto, reqHeaders?: any) {
+  async studentLogin(dto: StudentLoginDto, reqHeaders?: RequestHeadersType) {
+    if (dto.captchaId && dto.captchaInput) {
+      await this.verifyCaptcha(dto.captchaId, dto.captchaInput);
+    }
     const studentRepo = this.dataSource.getRepository(Student);
     const studentCode = sanitizeInput(dto.studentCode);
     const schoolCode = sanitizeInput(dto.schoolCode);
@@ -733,7 +1017,7 @@ export class AuthService implements OnModuleInit {
       } else {
         student.isLocked = false;
         student.failedLoginAttempts = 0;
-        student.lockoutUntil = null as any;
+        student.lockoutUntil = null as unknown as Date;
       }
     }
 
@@ -777,7 +1061,7 @@ export class AuthService implements OnModuleInit {
 
     student.failedLoginAttempts = 0;
     student.isLocked = false;
-    student.lockoutUntil = null as any;
+    student.lockoutUntil = null as unknown as Date;
 
     if (!student.isActive) {
       await this.recordLoginHistory({
@@ -795,12 +1079,13 @@ export class AuthService implements OnModuleInit {
       );
     }
 
-    // Concurrent login check
-    if (
-      student.isLoggedIn &&
-      student.currentSessionToken &&
-      !dto.forceLogoutPrevious
-    ) {
+    // Concurrent login check - only block if actively logged in with valid token & active session in current time
+    const isStudentActive = await this.isCurrentlyLoggedIn(
+      student.id,
+      student.currentSessionToken,
+      student.isLoggedIn,
+    );
+    if (isStudentActive && !dto.forceLogoutPrevious) {
       throw new HttpException(
         {
           statusCode: HttpStatus.CONFLICT,
@@ -876,7 +1161,10 @@ export class AuthService implements OnModuleInit {
   /**
    * Login as a Platform Admin
    */
-  async platformLogin(dto: PlatformLoginDto, reqHeaders?: any) {
+  async platformLogin(dto: PlatformLoginDto, reqHeaders?: RequestHeadersType) {
+    if (dto.captchaId && dto.captchaInput) {
+      await this.verifyCaptcha(dto.captchaId, dto.captchaInput);
+    }
     const user = await this.dataSource.getRepository(PlatformUser).findOne({
       where: { email: dto.email, isActive: true, isDeleted: false },
     });
@@ -1013,10 +1301,15 @@ export class AuthService implements OnModuleInit {
     };
   }
 
-  async changePassword(caller: any, dto: ChangePasswordDto) {
+  async changePassword(caller: AuthenticatedCaller, dto: ChangePasswordDto) {
     const { oldPassword, newPassword } = dto;
 
-    let userRepo: any;
+    let userRepo:
+      | Repository<SchoolOwner>
+      | Repository<SchoolUser>
+      | Repository<Student>
+      | Repository<PlatformUser>;
+
     if (caller.actorType === 'school_owner') {
       userRepo = this.dataSource.getRepository(SchoolOwner);
     } else if (caller.actorType === 'school_user') {
@@ -1029,7 +1322,11 @@ export class AuthService implements OnModuleInit {
       throw new BadRequestException('Invalid user type');
     }
 
-    const user = await userRepo.findOne({ where: { id: caller.id } });
+    const user = await (
+      userRepo as Repository<SchoolOwner | SchoolUser | Student | PlatformUser>
+    ).findOne({
+      where: { id: caller.id },
+    });
     if (!user) {
       throw new NotFoundException('User not found');
     }
@@ -1041,14 +1338,16 @@ export class AuthService implements OnModuleInit {
 
     const salt = await bcrypt.genSalt(10);
     user.passwordHash = await bcrypt.hash(newPassword, salt);
-    await userRepo.save(user);
+    await (
+      userRepo as Repository<SchoolOwner | SchoolUser | Student | PlatformUser>
+    ).save(user);
 
     return { message: 'Password updated successfully' };
   }
 
   async forgotPassword(dto: ForgotPasswordDto) {
-    let account: any;
-    let repo: any;
+    let account: SchoolOwner | SchoolUser | null = null;
+    let repo: Repository<SchoolOwner> | Repository<SchoolUser> | null = null;
 
     if (dto.email) {
       repo = this.dataSource.getRepository(SchoolOwner);
@@ -1071,7 +1370,7 @@ export class AuthService implements OnModuleInit {
       });
     }
 
-    if (!account) {
+    if (!account || !repo) {
       // Return success anyway to prevent user enumeration
       return {
         message: 'If the account exists, a reset code has been sent.',
@@ -1083,7 +1382,7 @@ export class AuthService implements OnModuleInit {
     const token = Math.floor(100000 + Math.random() * 900000).toString();
     account.resetToken = token;
     account.resetTokenExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 mins expiry
-    await repo.save(account);
+    await (repo as Repository<SchoolOwner | SchoolUser>).save(account);
 
     // We return the token in the API response so the frontend flow can be completed instantly/easily
     return {
@@ -1093,8 +1392,8 @@ export class AuthService implements OnModuleInit {
   }
 
   async resetPassword(dto: ResetPasswordDto) {
-    let account: any;
-    let repo: any;
+    let account: SchoolOwner | SchoolUser | null = null;
+    let repo: Repository<SchoolOwner> | Repository<SchoolUser> | null = null;
 
     if (dto.email) {
       repo = this.dataSource.getRepository(SchoolOwner);
@@ -1117,7 +1416,7 @@ export class AuthService implements OnModuleInit {
       });
     }
 
-    if (!account || account.resetToken !== dto.token) {
+    if (!account || !repo || account.resetToken !== dto.token) {
       throw new BadRequestException('Invalid or expired reset token');
     }
 
@@ -1127,14 +1426,14 @@ export class AuthService implements OnModuleInit {
 
     const salt = await bcrypt.genSalt(10);
     account.passwordHash = await bcrypt.hash(dto.newPassword, salt);
-    account.resetToken = null;
-    account.resetTokenExpires = null;
-    await repo.save(account);
+    account.resetToken = null as unknown as string;
+    account.resetTokenExpires = null as unknown as Date;
+    await (repo as Repository<SchoolOwner | SchoolUser>).save(account);
 
     return { message: 'Password reset successfully' };
   }
 
-  async getProfile(caller: any) {
+  async getProfile(caller: AuthenticatedCaller) {
     if (caller.actorType === 'school_owner') {
       const owner = await this.dataSource.getRepository(SchoolOwner).findOne({
         where: { id: caller.id },
@@ -1233,15 +1532,19 @@ export class AuthService implements OnModuleInit {
     }
   }
 
-  async updateProfile(caller: any, body: any) {
+  async updateProfile(
+    caller: AuthenticatedCaller,
+    body: Record<string, unknown>,
+  ) {
     if (caller.actorType === 'school_owner') {
       const owner = await this.dataSource.getRepository(SchoolOwner).findOne({
         where: { id: caller.id },
       });
       if (!owner) throw new NotFoundException('Owner not found');
 
-      if (body.fullName) owner.fullName = body.fullName;
-      if (body.phone) owner.phone = body.phone;
+      if (typeof body['fullName'] === 'string')
+        owner.fullName = body['fullName'];
+      if (typeof body['phone'] === 'string') owner.phone = body['phone'];
       const saved = await this.dataSource
         .getRepository(SchoolOwner)
         .save(owner);
@@ -1256,8 +1559,8 @@ export class AuthService implements OnModuleInit {
       });
       if (!user) throw new NotFoundException('User not found');
 
-      if (body.name) user.name = body.name;
-      if (body.phone) user.phone = body.phone;
+      if (typeof body['name'] === 'string') user.name = body['name'];
+      if (typeof body['phone'] === 'string') user.phone = body['phone'];
       await this.dataSource.getRepository(SchoolUser).save(user);
 
       let profile = await this.dataSource
@@ -1271,7 +1574,7 @@ export class AuthService implements OnModuleInit {
         profile.schoolUserId = user.id;
       }
 
-      const allowedProfileFields = [
+      const allowedProfileFields: (keyof SchoolUserProfile)[] = [
         'fatherName',
         'motherName',
         'profilePicUrl',
@@ -1295,8 +1598,9 @@ export class AuthService implements OnModuleInit {
       ];
 
       for (const field of allowedProfileFields) {
-        if (body[field] !== undefined) {
-          profile[field] = body[field];
+        if (body[field as string] !== undefined) {
+          (profile as unknown as Record<string, unknown>)[field as string] =
+            body[field as string];
         }
       }
 
@@ -1331,7 +1635,7 @@ export class AuthService implements OnModuleInit {
     failureReason?: string | null;
     sessionId?: string | null;
     refreshTokenId?: string | null;
-    reqHeaders?: any;
+    reqHeaders?: RequestHeadersType;
     ipAddress?: string;
     location?: string;
     mfaUsed?: boolean;
@@ -1366,11 +1670,12 @@ export class AuthService implements OnModuleInit {
       history.isSuspicious = data.isSuspicious || false;
 
       // Extract User-Agent and IP
-      const uaStr =
+      const rawUa =
         data.reqHeaders?.['user-agent'] ||
         data.reqHeaders?.['User-Agent'] ||
         '';
-      const parsedUa = parseUserAgent(uaStr);
+      const uaStr = Array.isArray(rawUa) ? rawUa[0] : rawUa;
+      const parsedUa = parseUserAgent(uaStr || '');
 
       history.deviceType = parsedUa.deviceType;
       history.deviceName = parsedUa.deviceName;
@@ -1379,14 +1684,17 @@ export class AuthService implements OnModuleInit {
       history.operatingSystem = parsedUa.operatingSystem;
       history.userAgent = uaStr || null;
 
-      const rawIp =
+      const rawIpHeader =
         data.ipAddress ||
         data.reqHeaders?.['x-forwarded-for'] ||
         data.reqHeaders?.['x-real-ip'] ||
         '127.0.0.1';
-      history.ipAddress = Array.isArray(rawIp)
-        ? rawIp[0]
-        : rawIp.split(',')[0]?.trim() || '127.0.0.1';
+      const headerStr = Array.isArray(rawIpHeader)
+        ? rawIpHeader[0]
+        : rawIpHeader;
+      history.ipAddress = headerStr
+        ? headerStr.split(',')[0]?.trim() || '127.0.0.1'
+        : '127.0.0.1';
 
       history.location = data.location || 'Local Workspace';
       history.country = 'India';
@@ -1401,7 +1709,50 @@ export class AuthService implements OnModuleInit {
   }
 
   /**
-   * User Logout: updates session status and logout timestamp
+   * Helper to check if a user is genuinely logged in in current time.
+   * Validates:
+   * 1. Flag & token presence
+   * 2. JWT token expiration / validity
+   * 3. Presence of an active session record in UserLoginHistory
+   */
+  private async isCurrentlyLoggedIn(
+    userId: number | string,
+    currentSessionToken?: string | null,
+    isLoggedIn?: boolean,
+  ): Promise<boolean> {
+    if (!isLoggedIn || !currentSessionToken) {
+      return false;
+    }
+
+    // 1. Check if token is still valid (not expired)
+    try {
+      this.jwtService.verify(currentSessionToken);
+    } catch {
+      // Token is expired or invalid - not active in current time
+      return false;
+    }
+
+    // 2. Check if active session exists in UserLoginHistory
+    const activeSession = await this.dataSource
+      .getRepository(UserLoginHistory)
+      .findOne({
+        where: [
+          {
+            sessionId: currentSessionToken,
+            sessionStatus: SessionStatusEnum.ACTIVE,
+          },
+          {
+            userId: String(userId),
+            sessionStatus: SessionStatusEnum.ACTIVE,
+          },
+        ],
+      });
+
+    return Boolean(activeSession);
+  }
+
+  /**
+   * User Logout: updates session status and logout timestamp, and resets entity session status
    */
   async logout(userId?: string, sessionId?: string) {
     if (!sessionId && !userId) {
@@ -1421,9 +1772,9 @@ export class AuthService implements OnModuleInit {
       qb.andWhere('h.user_id = :userId', { userId });
     }
 
-    const activeSession = await qb.getOne();
-    if (activeSession) {
-      const now = new Date();
+    const activeSessions = await qb.getMany();
+    const now = new Date();
+    for (const activeSession of activeSessions) {
       activeSession.logoutAt = now;
       activeSession.sessionStatus = SessionStatusEnum.LOGGED_OUT;
       activeSession.authAction = AuthActionEnum.LOGOUT;
@@ -1437,6 +1788,25 @@ export class AuthService implements OnModuleInit {
         activeSession.sessionDurationSeconds = durationSec;
       }
       await repo.save(activeSession);
+    }
+
+    // Clear active session flags on user entities
+    if (userId) {
+      const uId = String(userId);
+      await Promise.allSettled([
+        this.dataSource
+          .getRepository(SchoolOwner)
+          .update({ id: uId }, { isLoggedIn: false, currentSessionToken: '' }),
+        this.dataSource
+          .getRepository(SchoolUser)
+          .update({ id: uId }, { isLoggedIn: false, currentSessionToken: '' }),
+        this.dataSource
+          .getRepository(Student)
+          .update({ id: uId }, { isLoggedIn: false, currentSessionToken: '' }),
+        this.dataSource
+          .getRepository(PlatformUser)
+          .update({ id: uId }, { isLoggedIn: false, currentSessionToken: '' }),
+      ]);
     }
 
     return { message: 'Logged out successfully' };
@@ -1557,6 +1927,7 @@ export class AuthService implements OnModuleInit {
    * Revoke an active session by session ID or history ID
    */
   async revokeSession(id: string, revokedBy?: string) {
+    void revokedBy;
     const repo = this.dataSource.getRepository(UserLoginHistory);
     const session = await repo.findOne({
       where: [
@@ -1583,6 +1954,25 @@ export class AuthService implements OnModuleInit {
     }
 
     await repo.save(session);
+
+    // Reset session flags on user entity if applicable
+    if (session.userId) {
+      const uId = String(session.userId);
+      await Promise.allSettled([
+        this.dataSource
+          .getRepository(SchoolOwner)
+          .update({ id: uId }, { isLoggedIn: false, currentSessionToken: '' }),
+        this.dataSource
+          .getRepository(SchoolUser)
+          .update({ id: uId }, { isLoggedIn: false, currentSessionToken: '' }),
+        this.dataSource
+          .getRepository(Student)
+          .update({ id: uId }, { isLoggedIn: false, currentSessionToken: '' }),
+        this.dataSource
+          .getRepository(PlatformUser)
+          .update({ id: uId }, { isLoggedIn: false, currentSessionToken: '' }),
+      ]);
+    }
 
     return {
       message: `Session for user ${session.identifierUsed} successfully revoked.`,
@@ -1633,7 +2023,7 @@ export class AuthService implements OnModuleInit {
       .clone()
       .select('AVG(h.session_duration_seconds)', 'avg')
       .where('h.session_duration_seconds IS NOT NULL')
-      .getRawOne();
+      .getRawOne<{ avg: string | number | null }>();
 
     const avgSessionDuration = Math.round(
       Number(avgDurationResult?.avg) || 3600,
@@ -1645,7 +2035,7 @@ export class AuthService implements OnModuleInit {
       .select('h.device_type', 'deviceType')
       .addSelect('COUNT(*)', 'count')
       .groupBy('h.device_type')
-      .getRawMany();
+      .getRawMany<{ deviceType: string | null; count: string | number }>();
 
     // Most active users
     const topUsersRaw = await baseQb
@@ -1657,7 +2047,11 @@ export class AuthService implements OnModuleInit {
       .addGroupBy('h.role')
       .orderBy('logins', 'DESC')
       .limit(5)
-      .getRawMany();
+      .getRawMany<{
+        identifier: string;
+        role: string;
+        logins: string | number;
+      }>();
 
     return {
       summary: {

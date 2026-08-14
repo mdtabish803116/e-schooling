@@ -4,7 +4,7 @@ import {
   NotFoundException,
   OnModuleInit,
 } from '@nestjs/common';
-import { DataSource, In } from 'typeorm';
+import { DataSource, In, Between } from 'typeorm';
 import { AuthContext } from '../../interfaces/auth-context.interface';
 import {
   LockAttendanceDto,
@@ -45,8 +45,22 @@ export class AttendanceService implements OnModuleInit {
       await this.dataSource.query(`
         CREATE INDEX IF NOT EXISTS "IDX_attendance_locks_school_date" ON "e_schooling"."attendance_locks" ("school_id", "date");
       `);
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS "e_schooling"."attendance_settings" (
+          "id" BIGSERIAL PRIMARY KEY,
+          "school_id" bigint NOT NULL UNIQUE,
+          "defaulter_threshold" numeric DEFAULT 75,
+          "notify_parents" boolean DEFAULT true,
+          "allow_future_attendance" boolean DEFAULT false,
+          "auto_lock_past_days" int DEFAULT 7,
+          "late_arrival_penalty" boolean DEFAULT false,
+          "half_day_time_cutoff" varchar DEFAULT '11:30 AM',
+          "created_at" TIMESTAMP NOT NULL DEFAULT now(),
+          "updated_at" TIMESTAMP NOT NULL DEFAULT now()
+        );
+      `);
     } catch (e) {
-      console.warn('Auto-creating attendance_locks table:', e);
+      console.warn('Auto-creating attendance tables:', e);
     }
   }
 
@@ -793,43 +807,81 @@ export class AttendanceService implements OnModuleInit {
     await this.assertAccessToSchool(caller, schoolId);
 
     const yearMonth = query.yearMonth || new Date().toISOString().slice(0, 7);
-    const startDate = `${yearMonth}-01`;
     const [yStr, mStr] = yearMonth.split('-');
-    const nextM = Number(mStr) === 12 ? 1 : Number(mStr) + 1;
-    const nextY = Number(mStr) === 12 ? Number(yStr) + 1 : Number(yStr);
-    const endDate = `${nextY}-${String(nextM).padStart(2, '0')}-01`;
+    const yNum = parseInt(yStr, 10) || new Date().getFullYear();
+    const mNum = parseInt(mStr, 10) || new Date().getMonth() + 1;
+    const lastDay = new Date(yNum, mNum, 0).getDate();
+
+    const startDate = `${yNum}-${String(mNum).padStart(2, '0')}-01`;
+    const endDate = `${yNum}-${String(mNum).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
 
     const sessionQb = this.dataSource
       .getRepository(AttendanceSession)
       .createQueryBuilder('session')
-      .where('session.schoolId = :schoolId', { schoolId: String(schoolId) })
+      .where('session.school_id = :schoolId', { schoolId: String(schoolId) })
       .andWhere('session.is_delete = false')
-      .andWhere('session.date >= :startDate AND session.date < :endDate', {
+      .andWhere('session.date >= :startDate AND session.date <= :endDate', {
         startDate,
         endDate,
       });
 
     if (query.classId) {
-      sessionQb.andWhere('session.classId = :classId', {
+      sessionQb.andWhere('session.class_id = :classId', {
         classId: String(query.classId),
       });
     }
     if (query.sectionId) {
-      sessionQb.andWhere('session.sectionId = :sectionId', {
+      sessionQb.andWhere('session.section_id = :sectionId', {
         sectionId: String(query.sectionId),
       });
     }
-    if (query.academicSessionId) {
-      sessionQb.andWhere('session.academicSessionId = :academicSessionId', {
-        academicSessionId: String(query.academicSessionId),
+
+    let sessions = await sessionQb.getMany();
+    if (!sessions.length) {
+      // Fallback with TypeORM find
+      const whereCond: any = {
+        schoolId: String(schoolId),
+        isDeleted: false,
+        date: Between(startDate, endDate),
+      };
+      if (query.classId) whereCond.classId = String(query.classId);
+      if (query.sectionId) whereCond.sectionId = String(query.sectionId);
+      sessions = await this.dataSource.getRepository(AttendanceSession).find({
+        where: whereCond,
       });
     }
 
-    const sessions = await sessionQb.getMany();
+    if (query.academicSessionId && sessions.length > 0) {
+      const matched = sessions.filter(
+        (s) =>
+          String(s.academicSessionId) === String(query.academicSessionId) ||
+          !s.academicSessionId,
+      );
+      if (matched.length > 0) {
+        sessions = matched;
+      }
+    }
+
     if (!sessions.length) return [];
 
     const sessionIds = sessions.map((s) => s.id);
-    const sessionMap = new Map(sessions.map((s) => [s.id, String(s.date)]));
+    const sessionMap = new Map(
+      sessions.map((s) => {
+        let dStr = '';
+        if (s.date) {
+          const raw = s.date as any;
+          if (raw instanceof Date) {
+            const y = raw.getFullYear();
+            const m = String(raw.getMonth() + 1).padStart(2, '0');
+            const d = String(raw.getDate()).padStart(2, '0');
+            dStr = `${y}-${m}-${d}`;
+          } else {
+            dStr = String(raw).slice(0, 10);
+          }
+        }
+        return [s.id, dStr];
+      }),
+    );
 
     const records = await this.dataSource.getRepository(AttendanceRecord).find({
       where: { sessionId: In(sessionIds), isDeleted: false },
@@ -843,30 +895,20 @@ export class AttendanceService implements OnModuleInit {
     );
     let enrollmentMap = new Map<string, string>();
     if (enrollmentIds.length > 0) {
-      const enrollments = await this.dataSource
-        .getRepository(StudentEnrollment)
-        .find({
-          where: { id: In(enrollmentIds) },
-        });
-      enrollmentMap = new Map(
-        enrollments.map((e) => [String(e.id), String(e.studentId)]),
-      );
+      try {
+        const enrollments = await this.dataSource
+          .getRepository(StudentEnrollment)
+          .find({
+            where: { id: In(enrollmentIds) },
+          });
+        enrollmentMap = new Map(
+          enrollments.map((e) => [String(e.id), String(e.studentId)]),
+        );
+      } catch {}
     }
 
     return records.map((r) => {
-      const rawDate = sessionMap.get(r.sessionId);
-      let dateStr = '';
-      if (rawDate) {
-        const rawDateAsAny = rawDate as any;
-        if (rawDateAsAny instanceof Date) {
-          const y = rawDateAsAny.getFullYear();
-          const m = String(rawDateAsAny.getMonth() + 1).padStart(2, '0');
-          const d = String(rawDateAsAny.getDate()).padStart(2, '0');
-          dateStr = `${y}-${m}-${d}`;
-        } else {
-          dateStr = String(rawDate).slice(0, 10);
-        }
-      }
+      const dateStr = sessionMap.get(r.sessionId) || '';
       const actualStudentId =
         enrollmentMap.get(String(r.studentEnrollmentId)) ||
         String(r.studentEnrollmentId);
@@ -877,8 +919,8 @@ export class AttendanceService implements OnModuleInit {
         studentId: actualStudentId,
         studentEnrollmentId: String(r.studentEnrollmentId),
         date: dateStr,
-        attendanceMark: String(r.attendanceMark).toUpperCase(),
-        status: String(r.attendanceMark).toUpperCase(),
+        attendanceMark: String(r.attendanceMark || 'PRESENT').toUpperCase(),
+        status: String(r.attendanceMark || 'PRESENT').toUpperCase(),
         remarks: r.remarks || '',
       };
     });
@@ -1048,5 +1090,77 @@ export class AttendanceService implements OnModuleInit {
         remarks: r.remarks || '',
       };
     });
+  }
+
+  async getAttendanceSettings(schoolId: string) {
+    try {
+      const rows = await this.dataSource.query(
+        `SELECT * FROM "e_schooling"."attendance_settings" WHERE "school_id" = $1 LIMIT 1`,
+        [schoolId],
+      );
+      if (rows && rows.length > 0) {
+        const row = rows[0];
+        return {
+          schoolId,
+          defaulterThreshold: Number(row.defaulter_threshold) || 75,
+          notifyParents: row.notify_parents ?? true,
+          allowFutureAttendance: row.allow_future_attendance ?? false,
+          autoLockPastDays: Number(row.auto_lock_past_days) ?? 7,
+          lateArrivalPenalty: row.late_arrival_penalty ?? false,
+          halfDayTimeCutoff: row.half_day_time_cutoff || '11:30 AM',
+        };
+      }
+    } catch (e) {
+      console.warn('Error fetching attendance settings:', e);
+    }
+    return {
+      schoolId,
+      defaulterThreshold: 75,
+      notifyParents: true,
+      allowFutureAttendance: false,
+      autoLockPastDays: 7,
+      lateArrivalPenalty: false,
+      halfDayTimeCutoff: '11:30 AM',
+    };
+  }
+
+  async updateAttendanceSettings(schoolId: string, settings: any) {
+    const defaulterThreshold = settings.defaulterThreshold ?? 75;
+    const notifyParents = settings.notifyParents ?? true;
+    const allowFutureAttendance = settings.allowFutureAttendance ?? false;
+    const autoLockPastDays = settings.autoLockPastDays ?? 7;
+    const lateArrivalPenalty = settings.lateArrivalPenalty ?? false;
+    const halfDayTimeCutoff = settings.halfDayTimeCutoff || '11:30 AM';
+
+    try {
+      await this.dataSource.query(
+        `
+        INSERT INTO "e_schooling"."attendance_settings"
+          ("school_id", "defaulter_threshold", "notify_parents", "allow_future_attendance", "auto_lock_past_days", "late_arrival_penalty", "half_day_time_cutoff", "updated_at")
+        VALUES ($1, $2, $3, $4, $5, $6, $7, now())
+        ON CONFLICT ("school_id") DO UPDATE SET
+          "defaulter_threshold" = EXCLUDED."defaulter_threshold",
+          "notify_parents" = EXCLUDED."notify_parents",
+          "allow_future_attendance" = EXCLUDED."allow_future_attendance",
+          "auto_lock_past_days" = EXCLUDED."auto_lock_past_days",
+          "late_arrival_penalty" = EXCLUDED."late_arrival_penalty",
+          "half_day_time_cutoff" = EXCLUDED."half_day_time_cutoff",
+          "updated_at" = now();
+        `,
+        [
+          schoolId,
+          defaulterThreshold,
+          notifyParents,
+          allowFutureAttendance,
+          autoLockPastDays,
+          lateArrivalPenalty,
+          halfDayTimeCutoff,
+        ],
+      );
+    } catch (e) {
+      console.warn('Error saving attendance settings:', e);
+    }
+
+    return this.getAttendanceSettings(schoolId);
   }
 }

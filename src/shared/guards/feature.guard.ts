@@ -9,6 +9,7 @@ import { DataSource } from 'typeorm';
 import { EntitlementService } from '../../services/entitlement/entitlement.service';
 import { FEATURE_KEY } from '../decorators/feature.decorator';
 import { SchoolOwnerMember } from '../../models/entities/school/school-owner-member.entity';
+import { School } from '../../models/entities/school/school.entity';
 
 @Injectable()
 export class FeatureGuard implements CanActivate {
@@ -33,11 +34,13 @@ export class FeatureGuard implements CanActivate {
     const schoolId = user?.schoolId || routeSchoolId;
 
     if (!schoolId) {
-      throw new ForbiddenException('School context missing in request');
+      throw new ForbiddenException({
+        message: 'School context is missing in request. Please select a school.',
+      });
     }
 
     // SCHOOL ID TENANT VALIDATION & OWNERSHIP CHECK
-    if (routeSchoolId) {
+    if (routeSchoolId && routeSchoolId !== 'undefined') {
       if (user.actorType === 'school_owner') {
         const membership = await this.dataSource
           .getRepository(SchoolOwnerMember)
@@ -48,14 +51,33 @@ export class FeatureGuard implements CanActivate {
               isActive: true,
             },
           });
-        if (!membership) {
-          throw new ForbiddenException('Unauthorized access to this school');
+
+        let hasAccess = !!membership;
+        if (!hasAccess) {
+          const school = await this.dataSource.getRepository(School).findOne({
+            where: { id: routeSchoolId, isDeleted: false } as any,
+          });
+          if (
+            school &&
+            (String(school.createdById) === String(user.id) ||
+              (school as any).ownerId === String(user.id))
+          ) {
+            hasAccess = true;
+          }
+        }
+
+        if (!hasAccess) {
+          throw new ForbiddenException({
+            message: `Access Restricted: You do not have ownership or administrative access to School #${routeSchoolId}. Please select a school belonging to your owner account.`,
+          });
         }
       } else if (
         user.schoolId &&
         String(user.schoolId) !== String(routeSchoolId)
       ) {
-        throw new ForbiddenException('Unauthorized access to this school');
+        throw new ForbiddenException({
+          message: `Access Restricted: Your staff account is assigned to School #${user.schoolId} and cannot access School #${routeSchoolId}. Please return to your assigned school portal.`,
+        });
       }
     }
 

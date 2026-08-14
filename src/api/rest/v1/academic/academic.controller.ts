@@ -415,7 +415,7 @@ export class AcademicController {
     summary: 'Set an academic session as the current active session',
   })
   @Permission(ResourceEnum.ACADEMIC_SESSIONS, ActionEnum.UPDATE)
-  @Patch('sessions/:id/set-current')
+  @Patch(['sessions/:id/set-current', 'sessions/:id/activate'])
   async setAsCurrentAcademicSession(
     @Param('schoolId') schoolId: string,
     @Param('id') id: string,

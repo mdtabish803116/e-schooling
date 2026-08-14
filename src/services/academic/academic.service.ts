@@ -408,11 +408,15 @@ export class AcademicService implements OnModuleInit {
     });
 
     if (academicSessionId) {
-      classes = classes.filter(
+      const sessionMatched = classes.filter(
         (cls) =>
           cls.academicSessionId === String(academicSessionId) ||
-          cls.academicSessionId === null,
+          cls.academicSessionId === null ||
+          cls.academicSessionId === undefined,
       );
+      if (sessionMatched.length > 0) {
+        classes = sessionMatched;
+      }
     }
 
     if (classes.length === 0) return [];
@@ -1221,16 +1225,32 @@ export class AcademicService implements OnModuleInit {
     classId?: string,
     academicSessionId?: string,
   ) {
+    const cleanClassId =
+      classId &&
+      classId !== 'undefined' &&
+      classId !== 'null' &&
+      classId !== 'all' &&
+      String(classId).trim() !== ''
+        ? String(classId).trim()
+        : undefined;
+
     const where: FindOptionsWhere<Section> = { schoolId, isDeleted: false };
-    if (classId) where.classId = classId;
-    let sections = await this.sectionRepo.find({ where });
+    if (cleanClassId) where.classId = cleanClassId;
+    let sections = await this.sectionRepo.find({
+      where,
+      order: { name: 'ASC' },
+    });
 
     if (academicSessionId) {
-      sections = sections.filter(
+      const sessionMatched = sections.filter(
         (s) =>
           s.academicSessionId === String(academicSessionId) ||
-          s.academicSessionId === null,
+          s.academicSessionId === null ||
+          s.academicSessionId === undefined,
       );
+      if (sessionMatched.length > 0) {
+        sections = sessionMatched;
+      }
     }
 
     if (sections.length === 0) return [];
@@ -1257,7 +1277,24 @@ export class AcademicService implements OnModuleInit {
             (s) => sectionIds.includes(s.id) || classIds.includes(s.classId),
           );
         } else {
-          return [];
+          // Fallback: If user has view access to related academic modules, allow viewing sections
+          const [hasClasses, hasStudents, hasAttendance, hasTimetable, hasExams] =
+            await Promise.all([
+              this.checkModulePermission(caller, schoolId, 'classes', 'view'),
+              this.checkModulePermission(caller, schoolId, 'students', 'view'),
+              this.checkModulePermission(caller, schoolId, 'attendance', 'view'),
+              this.checkModulePermission(caller, schoolId, 'timetable', 'view'),
+              this.checkModulePermission(caller, schoolId, 'exams', 'view'),
+            ]);
+          if (
+            !hasClasses &&
+            !hasStudents &&
+            !hasAttendance &&
+            !hasTimetable &&
+            !hasExams
+          ) {
+            return [];
+          }
         }
       }
     }
@@ -1265,47 +1302,48 @@ export class AcademicService implements OnModuleInit {
     if (sections.length === 0) return [];
 
     const sectionIds = sections.map((s) => s.id);
-
-    // Fetch assignments in parallel
-    const assignmentsPromise = this.assignmentRepo.find({
-      where: {
-        sectionId: In(sectionIds),
-        isClassTeacher: false,
-        isDeleted: false,
-        isActive: true,
-      },
-      relations: ['teacher'],
-    });
-
-    // Fetch active student counts for each section
-    const studentCountsPromise = this.dataSource
-      .getRepository(StudentEnrollment)
-      .createQueryBuilder('enrollment')
-      .select('enrollment.section_id', 'sectionId')
-      .addSelect('COUNT(enrollment.id)', 'count')
-      .where('enrollment.school_id = :schoolId', { schoolId })
-      .andWhere('enrollment.section_id IN (:...sectionIds)', { sectionIds })
-      .andWhere('enrollment.is_current = true')
-      .andWhere('enrollment.is_active = true')
-      .andWhere('enrollment.is_delete = false')
-      .groupBy('enrollment.section_id')
-      .getRawMany<{ sectionId: string; count: string }>();
-
-    const [assignments, studentCounts] = await Promise.all([
-      assignmentsPromise,
-      studentCountsPromise,
-    ]);
-
+    let assignments: any[] = [];
     const studentCountMap = new Map<string, number>();
-    studentCounts.forEach((sc) => {
-      studentCountMap.set(sc.sectionId, parseInt(sc.count, 10));
-    });
+
+    try {
+      assignments = await this.assignmentRepo.find({
+        where: {
+          sectionId: In(sectionIds),
+          isClassTeacher: false,
+          isDeleted: false,
+          isActive: true,
+        },
+        relations: ['teacher'],
+      });
+    } catch {}
+
+    try {
+      const studentCounts = await this.dataSource
+        .getRepository(StudentEnrollment)
+        .createQueryBuilder('enrollment')
+        .select('enrollment.section_id', 'sectionId')
+        .addSelect('COUNT(enrollment.id)', 'count')
+        .where('enrollment.school_id = :schoolId', { schoolId })
+        .andWhere('enrollment.section_id IN (:...sectionIds)', { sectionIds })
+        .andWhere('enrollment.is_current = true')
+        .andWhere('enrollment.is_active = true')
+        .andWhere('enrollment.is_delete = false')
+        .groupBy('enrollment.section_id')
+        .getRawMany<{ sectionId: string; count: string }>();
+
+      studentCounts.forEach((sc) => {
+        studentCountMap.set(sc.sectionId, parseInt(sc.count, 10));
+      });
+    } catch {}
 
     return sections.map((s) => {
-      const assignment = assignments.find((a) => a.sectionId === s.id);
+      const assignment = assignments.find((a) => String(a.sectionId) === String(s.id));
       const stCount = studentCountMap.get(s.id) || 0;
       return {
         ...s,
+        id: String(s.id),
+        classId: String(s.classId),
+        schoolId: String(s.schoolId),
         status: s.isActive ? 'ACTIVE' : 'INACTIVE',
         sectionTeacherId: assignment ? assignment.teacherId : null,
         sectionTeacherName: assignment?.teacher
@@ -1858,6 +1896,16 @@ export class AcademicService implements OnModuleInit {
     dto: CreateAcademicSessionDto,
     userId: string,
   ) {
+    if (!dto.name || !dto.name.trim()) {
+      throw new BadRequestException('Academic session name is required.');
+    }
+    if (!dto.startDate || !dto.endDate) {
+      throw new BadRequestException('Start date and End date are required.');
+    }
+    if (new Date(dto.startDate) >= new Date(dto.endDate)) {
+      throw new BadRequestException('Session start date must be strictly before end date.');
+    }
+
     // Check duplicate name for the school
     const normalizedName = dto.name.replace(/\s+/g, '').toLowerCase();
     const existingSessions = await this.sessionRepo.find({
@@ -1885,7 +1933,7 @@ export class AcademicService implements OnModuleInit {
 
     const session = this.sessionRepo.create({
       schoolId,
-      name: dto.name,
+      name: dto.name.trim(),
       startDate: dto.startDate,
       endDate: dto.endDate,
       isCurrent: shouldBeCurrent,
@@ -1928,6 +1976,12 @@ export class AcademicService implements OnModuleInit {
       throw new NotFoundException('Academic session not found');
     }
 
+    const newStartDate = dto.startDate || session.startDate;
+    const newEndDate = dto.endDate || session.endDate;
+    if (newStartDate && newEndDate && new Date(newStartDate) >= new Date(newEndDate)) {
+      throw new BadRequestException('Session start date must be strictly before end date.');
+    }
+
     if (dto.name && dto.name !== session.name) {
       const normalizedName = dto.name.replace(/\s+/g, '').toLowerCase();
       const existingSessions = await this.sessionRepo.find({
@@ -1954,6 +2008,7 @@ export class AcademicService implements OnModuleInit {
 
     Object.assign(session, {
       ...dto,
+      ...(dto.name ? { name: dto.name.trim() } : {}),
       updatedById: userId,
     });
 
@@ -1990,23 +2045,38 @@ export class AcademicService implements OnModuleInit {
     id: string,
     userId: string,
   ) {
-    const session = await this.sessionRepo.findOne({
-      where: { id, schoolId, isDeleted: false },
-    });
-    if (!session) {
-      throw new NotFoundException('Academic session not found');
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      const session = await queryRunner.manager.findOne(this.sessionRepo.target, {
+        where: { id, schoolId, isDeleted: false },
+      });
+      if (!session) {
+        throw new NotFoundException('Academic session not found for this school');
+      }
+
+      // Atomically deactivate all other sessions for this school
+      await queryRunner.manager.update(
+        this.sessionRepo.target,
+        { schoolId, isDeleted: false },
+        { isCurrent: false },
+      );
+
+      session.isCurrent = true;
+      session.isActive = true;
+      session.updatedById = userId;
+      const saved = await queryRunner.manager.save(this.sessionRepo.target, session);
+
+      await queryRunner.commitTransaction();
+      return saved;
+    } catch (err) {
+      await queryRunner.rollbackTransaction();
+      throw err;
+    } finally {
+      await queryRunner.release();
     }
-
-    // Unset all other sessions
-    await this.sessionRepo.update(
-      { schoolId, isDeleted: false },
-      { isCurrent: false },
-    );
-
-    session.isCurrent = true;
-    session.isActive = true;
-    session.updatedById = userId;
-    return await this.sessionRepo.save(session);
   }
 
   async getCurrentAcademicSession(schoolId: string) {

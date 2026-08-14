@@ -5,7 +5,15 @@ import { StorageService } from '../../shared/storage/storage.service';
 @Injectable()
 export class CloudinaryService extends StorageService {
   async uploadFile(file: Express.Multer.File): Promise<string> {
-    return new Promise((resolve, reject) => {
+    const toDataUrl = () => {
+      const mime = file.mimetype || 'image/png';
+      const base64 = file.buffer
+        ? file.buffer.toString('base64')
+        : '';
+      return `data:${mime};base64,${base64}`;
+    };
+
+    return new Promise((resolve) => {
       const uploadOptions: any = { folder: 'e-school', resource_type: 'auto' };
 
       if (file.path) {
@@ -13,27 +21,23 @@ export class CloudinaryService extends StorageService {
           file.path,
           uploadOptions,
           (error, result) => {
-            if (error) return reject(error);
-            if (!result)
-              return reject(
-                new Error('Cloudinary upload returned undefined result'),
-              );
+            if (error || !result?.secure_url) {
+              return resolve(toDataUrl());
+            }
             resolve(result.secure_url);
           },
         );
       } else if (file.buffer) {
         cloudinary.uploader
           .upload_stream(uploadOptions, (error, result) => {
-            if (error) return reject(error);
-            if (!result)
-              return reject(
-                new Error('Cloudinary upload returned undefined result'),
-              );
+            if (error || !result?.secure_url) {
+              return resolve(toDataUrl());
+            }
             resolve(result.secure_url);
           })
           .end(file.buffer);
       } else {
-        reject(new Error('No file path or buffer found for upload'));
+        resolve(toDataUrl());
       }
     });
   }

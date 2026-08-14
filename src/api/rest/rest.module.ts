@@ -17,6 +17,8 @@ import { DocumentModule } from './v1/document/document.module';
 import { FeesModule } from './v1/fees/fees.module';
 import { TransportModule } from './v1/transport/transport.module';
 import { BackgroundJobsModule } from './v1/background-jobs/background-jobs.module';
+import { LookupsModule } from './v1/lookups/lookups.module';
+import { ExamModule } from './v1/exam/exam.module';
 
 @Module({
   imports: [
@@ -38,6 +40,8 @@ import { BackgroundJobsModule } from './v1/background-jobs/background-jobs.modul
     FeesModule,
     TransportModule,
     BackgroundJobsModule,
+    LookupsModule,
+    ExamModule,
   ],
   controllers: [],
   providers: [],
