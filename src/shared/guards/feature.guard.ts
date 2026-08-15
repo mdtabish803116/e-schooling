@@ -35,7 +35,8 @@ export class FeatureGuard implements CanActivate {
 
     if (!schoolId) {
       throw new ForbiddenException({
-        message: 'School context is missing in request. Please select a school.',
+        message:
+          'School context is missing in request. Please select a school.',
       });
     }
 
@@ -55,7 +56,7 @@ export class FeatureGuard implements CanActivate {
         let hasAccess = !!membership;
         if (!hasAccess) {
           const school = await this.dataSource.getRepository(School).findOne({
-            where: { id: routeSchoolId, isDeleted: false } as any,
+            where: { id: routeSchoolId, isDeleted: false },
           });
           if (
             school &&

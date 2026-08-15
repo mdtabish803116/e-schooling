@@ -89,9 +89,7 @@ export class SchoolsService {
     const schoolName = dto.schoolName
       ? dto.schoolName.trim().replace(/\s{2,}/g, ' ')
       : '';
-    const email = dto.email
-      ? dto.email.trim().toLowerCase()
-      : '';
+    const email = dto.email ? dto.email.trim().toLowerCase() : '';
     const phone = dto.phone ? dto.phone.trim() : '';
 
     if (!schoolName || schoolName.length < 3 || schoolName.length > 150) {
@@ -127,9 +125,12 @@ export class SchoolsService {
 
     try {
       // Check duplicate school for this owner
-      const ownerMemberships = await queryRunner.manager.find(SchoolOwnerMember, {
-        where: { schoolOwnerId: caller.id, isDeleted: false },
-      });
+      const ownerMemberships = await queryRunner.manager.find(
+        SchoolOwnerMember,
+        {
+          where: { schoolOwnerId: caller.id, isDeleted: false },
+        },
+      );
       if (ownerMemberships.length > 0) {
         const schoolIds = ownerMemberships.map((m) => m.schoolId);
         const existingSchools = await queryRunner.manager.find(School, {
@@ -152,18 +153,26 @@ export class SchoolsService {
       school.email = email;
       school.phone = phone;
       school.internalSchoolCode = internalCode;
-      school.externalSchoolCode = dto.externalSchoolCode ? dto.externalSchoolCode.trim() : null;
+      school.externalSchoolCode = dto.externalSchoolCode
+        ? dto.externalSchoolCode.trim()
+        : null;
       school.logoUrl = dto.logoUrl ? dto.logoUrl.trim() : '';
       school.totalClasses = Number(dto.totalClasses) || 0;
       school.totalSections = Number(dto.totalSections) || 0;
       school.totalStudents = Number(dto.totalStudents) || 0;
       school.totalTeachers = Number(dto.totalTeachers) || 0;
       school.addressArea = dto.addressArea ? dto.addressArea.trim() : '';
-      school.addressLandmark = dto.addressLandmark ? dto.addressLandmark.trim() : '';
+      school.addressLandmark = dto.addressLandmark
+        ? dto.addressLandmark.trim()
+        : '';
       school.addressCity = dto.addressCity ? dto.addressCity.trim() : '';
-      school.addressDistrict = dto.addressDistrict ? dto.addressDistrict.trim() : '';
+      school.addressDistrict = dto.addressDistrict
+        ? dto.addressDistrict.trim()
+        : '';
       school.addressState = dto.addressState ? dto.addressState.trim() : '';
-      school.addressPincode = dto.addressPincode ? dto.addressPincode.trim() : '';
+      school.addressPincode = dto.addressPincode
+        ? dto.addressPincode.trim()
+        : '';
       school.isActive = true;
       school.isDeleted = false;
       school.createdById = caller.id;

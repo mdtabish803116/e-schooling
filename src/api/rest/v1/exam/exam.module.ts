@@ -11,4 +11,3 @@ import { RBACModule } from '../school-roles/rbac.module';
   exports: [ExamService],
 })
 export class ExamModule {}
-

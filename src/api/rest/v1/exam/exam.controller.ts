@@ -151,10 +151,7 @@ export class ExamController {
   @ApiOperation({ summary: 'Submit student exam marks' })
   @Permission(ResourceEnum.EXAMS, ActionEnum.CREATE)
   @Post('marks')
-  async submitMarks(
-    @Param('schoolId') schoolId: string,
-    @Body() body: any,
-  ) {
+  async submitMarks(@Param('schoolId') schoolId: string, @Body() body: any) {
     const marks = Array.isArray(body) ? body : [body];
     return this.examService.submitMarks(schoolId, marks);
   }

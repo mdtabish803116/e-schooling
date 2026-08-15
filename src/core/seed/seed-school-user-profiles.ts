@@ -16,7 +16,9 @@ export async function seedSchoolUserProfiles(
   }
 
   const users = await userRepo.find({ where: whereCond });
-  console.log(`👤 Found ${users.length} school users to verify profiles for...`);
+  console.log(
+    `👤 Found ${users.length} school users to verify profiles for...`,
+  );
 
   let createdCount = 0;
   let updatedCount = 0;

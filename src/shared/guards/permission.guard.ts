@@ -34,7 +34,8 @@ export class PermissionGuard implements CanActivate {
 
     if (!user) {
       throw new ForbiddenException({
-        message: 'Your session could not be authenticated. Please log in again to continue.',
+        message:
+          'Your session could not be authenticated. Please log in again to continue.',
       });
     }
 
@@ -58,7 +59,7 @@ export class PermissionGuard implements CanActivate {
         let hasAccess = !!membership;
         if (!hasAccess) {
           const school = await this.dataSource.getRepository(School).findOne({
-            where: { id: routeSchoolId, isDeleted: false } as any,
+            where: { id: routeSchoolId, isDeleted: false },
           });
           if (
             school &&
@@ -188,8 +189,11 @@ export class PermissionGuard implements CanActivate {
 
       const resKey = String(requiredPermission.resource).toLowerCase();
       const actKey = String(requiredPermission.action).toLowerCase();
-      const friendlyModule = resourceTitles[resKey] || String(requiredPermission.resource).replace(/_/g, ' ');
-      const friendlyAction = actionVerbs[actKey] || String(requiredPermission.action);
+      const friendlyModule =
+        resourceTitles[resKey] ||
+        String(requiredPermission.resource).replace(/_/g, ' ');
+      const friendlyAction =
+        actionVerbs[actKey] || String(requiredPermission.action);
 
       throw new ForbiddenException({
         message: `You do not have permission to ${friendlyAction} ${friendlyModule}. Please contact your school administrator if you need access. (Permission '${requiredPermission.resource}:${requiredPermission.action}' denied)`,

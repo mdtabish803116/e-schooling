@@ -208,9 +208,7 @@ export class ExamService implements OnModuleInit {
     const endDate = body.endDate ?? current.endDate;
     const status = body.status ?? current.status;
     const academicSessionId =
-      body.academicYearId ??
-      body.academicSessionId ??
-      current.academicYearId;
+      body.academicYearId ?? body.academicSessionId ?? current.academicYearId;
 
     await this.dataSource.query(
       `
@@ -269,11 +267,7 @@ export class ExamService implements OnModuleInit {
     }));
   }
 
-  async assignExamSubjects(
-    schoolId: string,
-    examId: string,
-    subjects: any[],
-  ) {
+  async assignExamSubjects(schoolId: string, examId: string, subjects: any[]) {
     for (const sub of subjects) {
       await this.dataSource.query(
         `

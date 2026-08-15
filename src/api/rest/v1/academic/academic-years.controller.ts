@@ -16,10 +16,7 @@ import { PermissionGuard } from '../../../../shared/guards/permission.guard';
 import { Permission } from '../../../../shared/decorators/permission.decorator';
 import { CurrentUser } from '../../../../shared/decorators/current-user.decorator';
 import { AcademicService } from '../../../../services/academic/academic.service';
-import {
-  ResourceEnum,
-  ActionEnum,
-} from '../../../../models/enums/enums';
+import { ResourceEnum, ActionEnum } from '../../../../models/enums/enums';
 import type { AuthContext } from '../../../../interfaces/auth-context.interface';
 
 @ApiTags('Academic Years')

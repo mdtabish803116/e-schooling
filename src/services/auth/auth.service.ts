@@ -1529,7 +1529,10 @@ export class AuthService implements OnModuleInit {
           : [];
 
       const photoUrl =
-        profile.profilePicUrl || (user as any).avatar || (user as any).profilePicUrl || null;
+        profile.profilePicUrl ||
+        (user as any).avatar ||
+        (user as any).profilePicUrl ||
+        null;
 
       return {
         user: {
@@ -1560,11 +1563,20 @@ export class AuthService implements OnModuleInit {
         owner.fullName = body['fullName'];
       if (typeof body['phone'] === 'string') owner.phone = body['phone'];
 
-      if (typeof body['profilePicUrl'] === 'string' || body['profilePicUrl'] === null) {
+      if (
+        typeof body['profilePicUrl'] === 'string' ||
+        body['profilePicUrl'] === null
+      ) {
         owner.profilePicUrl = body['profilePicUrl'] as string;
-      } else if (typeof body['avatarUrl'] === 'string' || body['avatarUrl'] === null) {
+      } else if (
+        typeof body['avatarUrl'] === 'string' ||
+        body['avatarUrl'] === null
+      ) {
         owner.profilePicUrl = body['avatarUrl'] as string;
-      } else if (typeof body['photoUrl'] === 'string' || body['photoUrl'] === null) {
+      } else if (
+        typeof body['photoUrl'] === 'string' ||
+        body['photoUrl'] === null
+      ) {
         owner.profilePicUrl = body['photoUrl'] as string;
       }
 
@@ -2129,5 +2141,3 @@ export class AuthService implements OnModuleInit {
     };
   }
 }
-
-

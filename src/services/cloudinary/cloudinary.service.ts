@@ -7,9 +7,7 @@ export class CloudinaryService extends StorageService {
   async uploadFile(file: Express.Multer.File): Promise<string> {
     const toDataUrl = () => {
       const mime = file.mimetype || 'image/png';
-      const base64 = file.buffer
-        ? file.buffer.toString('base64')
-        : '';
+      const base64 = file.buffer ? file.buffer.toString('base64') : '';
       return `data:${mime};base64,${base64}`;
     };
 

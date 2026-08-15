@@ -1278,14 +1278,19 @@ export class AcademicService implements OnModuleInit {
           );
         } else {
           // Fallback: If user has view access to related academic modules, allow viewing sections
-          const [hasClasses, hasStudents, hasAttendance, hasTimetable, hasExams] =
-            await Promise.all([
-              this.checkModulePermission(caller, schoolId, 'classes', 'view'),
-              this.checkModulePermission(caller, schoolId, 'students', 'view'),
-              this.checkModulePermission(caller, schoolId, 'attendance', 'view'),
-              this.checkModulePermission(caller, schoolId, 'timetable', 'view'),
-              this.checkModulePermission(caller, schoolId, 'exams', 'view'),
-            ]);
+          const [
+            hasClasses,
+            hasStudents,
+            hasAttendance,
+            hasTimetable,
+            hasExams,
+          ] = await Promise.all([
+            this.checkModulePermission(caller, schoolId, 'classes', 'view'),
+            this.checkModulePermission(caller, schoolId, 'students', 'view'),
+            this.checkModulePermission(caller, schoolId, 'attendance', 'view'),
+            this.checkModulePermission(caller, schoolId, 'timetable', 'view'),
+            this.checkModulePermission(caller, schoolId, 'exams', 'view'),
+          ]);
           if (
             !hasClasses &&
             !hasStudents &&
@@ -1337,7 +1342,9 @@ export class AcademicService implements OnModuleInit {
     } catch {}
 
     return sections.map((s) => {
-      const assignment = assignments.find((a) => String(a.sectionId) === String(s.id));
+      const assignment = assignments.find(
+        (a) => String(a.sectionId) === String(s.id),
+      );
       const stCount = studentCountMap.get(s.id) || 0;
       return {
         ...s,
@@ -1903,7 +1910,9 @@ export class AcademicService implements OnModuleInit {
       throw new BadRequestException('Start date and End date are required.');
     }
     if (new Date(dto.startDate) >= new Date(dto.endDate)) {
-      throw new BadRequestException('Session start date must be strictly before end date.');
+      throw new BadRequestException(
+        'Session start date must be strictly before end date.',
+      );
     }
 
     // Check duplicate name for the school
@@ -1978,8 +1987,14 @@ export class AcademicService implements OnModuleInit {
 
     const newStartDate = dto.startDate || session.startDate;
     const newEndDate = dto.endDate || session.endDate;
-    if (newStartDate && newEndDate && new Date(newStartDate) >= new Date(newEndDate)) {
-      throw new BadRequestException('Session start date must be strictly before end date.');
+    if (
+      newStartDate &&
+      newEndDate &&
+      new Date(newStartDate) >= new Date(newEndDate)
+    ) {
+      throw new BadRequestException(
+        'Session start date must be strictly before end date.',
+      );
     }
 
     if (dto.name && dto.name !== session.name) {
@@ -2050,11 +2065,16 @@ export class AcademicService implements OnModuleInit {
     await queryRunner.startTransaction();
 
     try {
-      const session = await queryRunner.manager.findOne(this.sessionRepo.target, {
-        where: { id, schoolId, isDeleted: false },
-      });
+      const session = await queryRunner.manager.findOne(
+        this.sessionRepo.target,
+        {
+          where: { id, schoolId, isDeleted: false },
+        },
+      );
       if (!session) {
-        throw new NotFoundException('Academic session not found for this school');
+        throw new NotFoundException(
+          'Academic session not found for this school',
+        );
       }
 
       // Atomically deactivate all other sessions for this school
@@ -2067,7 +2087,10 @@ export class AcademicService implements OnModuleInit {
       session.isCurrent = true;
       session.isActive = true;
       session.updatedById = userId;
-      const saved = await queryRunner.manager.save(this.sessionRepo.target, session);
+      const saved = await queryRunner.manager.save(
+        this.sessionRepo.target,
+        session,
+      );
 
       await queryRunner.commitTransaction();
       return saved;
