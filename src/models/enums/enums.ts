@@ -161,15 +161,14 @@ export enum JobTypeEnum {
   CLASS_IMPORT = 'class_import',
   STAFF_EXPORT = 'staff_export',
   STAFF_IMPORT = 'staff_import',
+  SESSION_COPY = 'session_copy',
 }
 
 export enum JobStatusEnum {
   PENDING = 'pending',
-  WAITING = 'waiting',
   ACTIVE = 'active',
   COMPLETED = 'completed',
   FAILED = 'failed',
-  DELAYED = 'delayed',
   CANCELLED = 'cancelled',
   RETRYING = 'retrying',
 }

@@ -37,6 +37,12 @@ import { SchoolUser } from '../../models/entities/school/school-user.entity';
 import { SectionTransferHistory } from '../../models/entities/student/section-transfer-history.entity';
 import { StudentEnrollment } from '../../models/entities/student/student-enrollment.entity';
 import {
+  FeeStructure,
+  FeeStructureItem,
+  FeeSchedule,
+  FeeScheduleInstallment,
+} from '../../models/entities/finance/fee.entity';
+import {
   EnrollmentStatusEnum,
   EnrollmentTypeEnum,
 } from '../../models/enums/enums';
@@ -2338,10 +2344,16 @@ export class AcademicService implements OnModuleInit {
 
     const [fromSession, toSession] = await Promise.all([
       this.sessionRepo.findOne({
-        where: { id: fromAcademicSessionId, schoolId, isDeleted: false },
+        where: [
+          { id: fromAcademicSessionId, schoolId, isDeleted: false },
+          { id: fromAcademicSessionId, isDeleted: false },
+        ],
       }),
       this.sessionRepo.findOne({
-        where: { id: toAcademicSessionId, schoolId, isDeleted: false },
+        where: [
+          { id: toAcademicSessionId, schoolId, isDeleted: false },
+          { id: toAcademicSessionId, isDeleted: false },
+        ],
       }),
     ]);
 
@@ -2356,6 +2368,9 @@ export class AcademicService implements OnModuleInit {
       );
     }
 
+    const effectiveSchoolId =
+      fromSession.schoolId || toSession.schoolId || schoolId;
+
     const copyAll = !modules || modules.length === 0;
     const shouldCopyClasses = copyAll || modules.includes('classes');
     const shouldCopySections = copyAll || modules.includes('sections');
@@ -2364,6 +2379,7 @@ export class AcademicService implements OnModuleInit {
     const shouldCopyRooms = copyAll || modules.includes('rooms');
     const shouldCopyStaff = copyAll || modules.includes('staff');
     const shouldCopyStudents = copyAll || modules.includes('students');
+    const shouldCopyFees = copyAll || modules.includes('fee_structures');
 
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
@@ -2378,6 +2394,7 @@ export class AcademicService implements OnModuleInit {
         copiedRooms: 0,
         copiedStaffAssignments: 0,
         copiedStudentEnrollments: 0,
+        copiedFeeStructures: 0,
       };
 
       const classIdMap = new Map<string, string>();
@@ -2389,11 +2406,11 @@ export class AcademicService implements OnModuleInit {
         const sourceClasses = await queryRunner.manager.find(Class, {
           where: [
             {
-              schoolId,
+              schoolId: effectiveSchoolId,
               academicSessionId: fromAcademicSessionId,
               isDeleted: false,
             },
-            { schoolId, academicSessionId: IsNull(), isDeleted: false },
+            { schoolId: effectiveSchoolId, academicSessionId: IsNull(), isDeleted: false },
           ],
         });
 
@@ -2402,7 +2419,7 @@ export class AcademicService implements OnModuleInit {
         for (const sourceClass of sourceClasses) {
           const existingTargetClass = await queryRunner.manager.findOne(Class, {
             where: {
-              schoolId,
+              schoolId: effectiveSchoolId,
               name: sourceClass.name,
               academicSessionId: toAcademicSessionId,
               isDeleted: false,
@@ -2413,7 +2430,7 @@ export class AcademicService implements OnModuleInit {
             classIdMap.set(sourceClass.id, existingTargetClass.id);
           } else {
             const newClass = queryRunner.manager.create(Class, {
-              schoolId,
+              schoolId: effectiveSchoolId,
               academicSessionId: toAcademicSessionId,
               name: sourceClass.name,
               classCode: sourceClass.classCode,
@@ -2449,11 +2466,11 @@ export class AcademicService implements OnModuleInit {
         const sourceSections = await queryRunner.manager.find(Section, {
           where: [
             {
-              schoolId,
+              schoolId: effectiveSchoolId,
               academicSessionId: fromAcademicSessionId,
               isDeleted: false,
             },
-            { schoolId, academicSessionId: IsNull(), isDeleted: false },
+            { schoolId: effectiveSchoolId, academicSessionId: IsNull(), isDeleted: false },
           ],
         });
 
@@ -2464,7 +2481,7 @@ export class AcademicService implements OnModuleInit {
             classIdMap.get(sourceSec.classId) || sourceSec.classId;
           const existingTargetSec = await queryRunner.manager.findOne(Section, {
             where: {
-              schoolId,
+              schoolId: effectiveSchoolId,
               classId: targetClassId,
               name: sourceSec.name,
               academicSessionId: toAcademicSessionId,
@@ -2476,7 +2493,7 @@ export class AcademicService implements OnModuleInit {
             sectionIdMap.set(sourceSec.id, existingTargetSec.id);
           } else {
             const newSec = queryRunner.manager.create(Section, {
-              schoolId,
+              schoolId: effectiveSchoolId,
               academicSessionId: toAcademicSessionId,
               classId: targetClassId,
               name: sourceSec.name,
@@ -2516,11 +2533,11 @@ export class AcademicService implements OnModuleInit {
         const sourceSubjects = await queryRunner.manager.find(Subject, {
           where: [
             {
-              schoolId,
+              schoolId: effectiveSchoolId,
               academicSessionId: fromAcademicSessionId,
               isDeleted: false,
             },
-            { schoolId, academicSessionId: IsNull(), isDeleted: false },
+            { schoolId: effectiveSchoolId, academicSessionId: IsNull(), isDeleted: false },
           ],
         });
 
@@ -2529,7 +2546,7 @@ export class AcademicService implements OnModuleInit {
         for (const sourceSub of sourceSubjects) {
           const existingTargetSub = await queryRunner.manager.findOne(Subject, {
             where: {
-              schoolId,
+              schoolId: effectiveSchoolId,
               name: sourceSub.name,
               academicSessionId: toAcademicSessionId,
               isDeleted: false,
@@ -2540,7 +2557,7 @@ export class AcademicService implements OnModuleInit {
             subjectIdMap.set(sourceSub.id, existingTargetSub.id);
           } else {
             const newSub = queryRunner.manager.create(Subject, {
-              schoolId,
+              schoolId: effectiveSchoolId,
               academicSessionId: toAcademicSessionId,
               name: sourceSub.name,
               isActive: true,
@@ -2575,11 +2592,11 @@ export class AcademicService implements OnModuleInit {
           {
             where: [
               {
-                schoolId,
+                schoolId: effectiveSchoolId,
                 academicSessionId: fromAcademicSessionId,
                 isDeleted: false,
               },
-              { schoolId, academicSessionId: IsNull(), isDeleted: false },
+              { schoolId: effectiveSchoolId, academicSessionId: IsNull(), isDeleted: false },
             ],
           },
         );
@@ -2600,7 +2617,7 @@ export class AcademicService implements OnModuleInit {
             ClassSectionSubject,
             {
               where: {
-                schoolId,
+                schoolId: effectiveSchoolId,
                 classId: targetClassId,
                 sectionId: targetSectionId,
                 subjectId: targetSubjectId,
@@ -2612,7 +2629,7 @@ export class AcademicService implements OnModuleInit {
 
           if (!existingMapping) {
             const newMapping = queryRunner.manager.create(ClassSectionSubject, {
-              schoolId,
+              schoolId: effectiveSchoolId,
               academicSessionId: toAcademicSessionId,
               classId: targetClassId,
               sectionId: targetSectionId,
@@ -2640,11 +2657,11 @@ export class AcademicService implements OnModuleInit {
         const sourceRooms = await queryRunner.manager.find(Room, {
           where: [
             {
-              schoolId,
+              schoolId: effectiveSchoolId,
               academicSessionId: fromAcademicSessionId,
               isDeleted: false,
             },
-            { schoolId, academicSessionId: IsNull(), isDeleted: false },
+            { schoolId: effectiveSchoolId, academicSessionId: IsNull(), isDeleted: false },
           ],
         });
 
@@ -2657,7 +2674,7 @@ export class AcademicService implements OnModuleInit {
 
           const existingTargetRoom = await queryRunner.manager.findOne(Room, {
             where: {
-              schoolId,
+              schoolId: effectiveSchoolId,
               name: sourceRoom.name,
               academicSessionId: toAcademicSessionId,
               isDeleted: false,
@@ -2666,7 +2683,7 @@ export class AcademicService implements OnModuleInit {
 
           if (!existingTargetRoom) {
             const newRoom = queryRunner.manager.create(Room, {
-              schoolId,
+              schoolId: effectiveSchoolId,
               academicSessionId: toAcademicSessionId,
               name: sourceRoom.name,
               block: sourceRoom.block,
@@ -2698,13 +2715,13 @@ export class AcademicService implements OnModuleInit {
           {
             where: [
               {
-                schoolId,
+                schoolId: effectiveSchoolId,
                 academicSessionId: fromAcademicSessionId,
                 isDeleted: false,
                 isActive: true,
               },
               {
-                schoolId,
+                schoolId: effectiveSchoolId,
                 academicSessionId: IsNull(),
                 isDeleted: false,
                 isActive: true,
@@ -2726,7 +2743,7 @@ export class AcademicService implements OnModuleInit {
             TeacherSectionAssignment,
             {
               where: {
-                schoolId,
+                schoolId: effectiveSchoolId,
                 teacherId: sourceAssign.teacherId,
                 classId: targetClassId,
                 sectionId:
@@ -2741,7 +2758,7 @@ export class AcademicService implements OnModuleInit {
             const newAssign = queryRunner.manager.create(
               TeacherSectionAssignment,
               {
-                schoolId,
+                schoolId: effectiveSchoolId,
                 academicSessionId: toAcademicSessionId,
                 teacherId: sourceAssign.teacherId,
                 classId: targetClassId,
@@ -2771,7 +2788,7 @@ export class AcademicService implements OnModuleInit {
           StudentEnrollment,
           {
             where: {
-              schoolId,
+              schoolId: effectiveSchoolId,
               academicSessionId: fromAcademicSessionId,
               isCurrent: true,
               isDeleted: false,
@@ -2792,7 +2809,7 @@ export class AcademicService implements OnModuleInit {
             StudentEnrollment,
             {
               where: {
-                schoolId,
+                schoolId: effectiveSchoolId,
                 studentId: sourceEnv.studentId,
                 academicSessionId: toAcademicSessionId,
                 isDeleted: false,
@@ -2802,7 +2819,7 @@ export class AcademicService implements OnModuleInit {
 
           if (!existingEnv) {
             const newEnv = queryRunner.manager.create(StudentEnrollment, {
-              schoolId,
+              schoolId: effectiveSchoolId,
               studentId: sourceEnv.studentId,
               classId: targetClassId,
               sectionId: targetSectionId,
@@ -2827,7 +2844,7 @@ export class AcademicService implements OnModuleInit {
             .createQueryBuilder()
             .update(StudentEnrollment)
             .set({ isCurrent: false })
-            .where('school_id = :schoolId', { schoolId })
+            .where('school_id = :schoolId', { schoolId: effectiveSchoolId })
             .andWhere('student_id IN (:...studentIds)', { studentIds })
             .andWhere('academic_session_id = :fromAcademicSessionId', {
               fromAcademicSessionId,
@@ -2839,6 +2856,105 @@ export class AcademicService implements OnModuleInit {
             newEnrollmentsToCreate,
           );
           summary.copiedStudentEnrollments = savedEnrollments.length;
+        }
+      }
+
+      // 8. Copy Fee Structures in Bulk
+      if (shouldCopyFees) {
+        const sourceStructures = await queryRunner.manager.find(FeeStructure, {
+          where: { schoolId: effectiveSchoolId, academicSessionId: fromAcademicSessionId },
+        });
+
+        for (const sourceStruct of sourceStructures) {
+          const existingTargetStruct = await queryRunner.manager.findOne(
+            FeeStructure,
+            {
+              where: {
+                schoolId: effectiveSchoolId,
+                name: sourceStruct.name,
+                academicSessionId: toAcademicSessionId,
+              },
+            },
+          );
+
+          if (!existingTargetStruct) {
+            const targetClassId = sourceStruct.classId
+              ? classIdMap.get(sourceStruct.classId) || sourceStruct.classId
+              : null;
+
+            const newStruct = queryRunner.manager.create(FeeStructure, {
+              schoolId: effectiveSchoolId,
+              academicSessionId: toAcademicSessionId,
+              name: sourceStruct.name,
+              planType: sourceStruct.planType,
+              classId: targetClassId,
+              totalAmount: sourceStruct.totalAmount,
+              status: sourceStruct.status,
+              createdById: userId,
+              updatedById: userId,
+            });
+            const savedStruct = await queryRunner.manager.save(
+              FeeStructure,
+              newStruct,
+            );
+
+            const sourceItems = await queryRunner.manager.find(FeeStructureItem, {
+              where: { feeStructureId: sourceStruct.id, schoolId: effectiveSchoolId },
+            });
+            for (const item of sourceItems) {
+              const newItem = queryRunner.manager.create(FeeStructureItem, {
+                schoolId: effectiveSchoolId,
+                academicSessionId: toAcademicSessionId,
+                feeStructureId: savedStruct.id,
+                feeHeadId: item.feeHeadId,
+                amount: item.amount,
+                isOptional: item.isOptional,
+                createdById: userId,
+                updatedById: userId,
+              });
+              await queryRunner.manager.save(FeeStructureItem, newItem);
+            }
+
+            const sourceSchedules = await queryRunner.manager.find(FeeSchedule, {
+              where: { feeStructureId: sourceStruct.id, schoolId: effectiveSchoolId },
+            });
+            for (const schedule of sourceSchedules) {
+              const newSchedule = queryRunner.manager.create(FeeSchedule, {
+                schoolId: effectiveSchoolId,
+                academicSessionId: toAcademicSessionId,
+                feeStructureId: savedStruct.id,
+                scheduleType: schedule.scheduleType,
+                dueDate: schedule.dueDate,
+                gracePeriodDays: schedule.gracePeriodDays,
+                fineRuleId: schedule.fineRuleId,
+                createdById: userId,
+                updatedById: userId,
+              });
+              await queryRunner.manager.save(FeeSchedule, newSchedule);
+            }
+
+            const sourceInstallments = await queryRunner.manager.find(
+              FeeScheduleInstallment,
+              {
+                where: { feeStructureId: sourceStruct.id, schoolId: effectiveSchoolId },
+              },
+            );
+            for (const inst of sourceInstallments) {
+              const newInst = queryRunner.manager.create(FeeScheduleInstallment, {
+                schoolId: effectiveSchoolId,
+                academicSessionId: toAcademicSessionId,
+                feeStructureId: savedStruct.id,
+                name: inst.name,
+                dueDate: inst.dueDate,
+                amount: inst.amount,
+                createdById: userId,
+                updatedById: userId,
+              });
+              await queryRunner.manager.save(FeeScheduleInstallment, newInst);
+            }
+
+            summary.copiedFeeStructures = (summary.copiedFeeStructures || 0) + 1;
+          }
         }
       }
 

@@ -4,4 +4,5 @@ export const QueueNames = {
   EXPORT: 'export_queue',
   RECONCILIATION: 'reconciliation_queue',
   STUDENT_PROGRESSION: 'student_progression_queue',
+  SESSION_COPY: 'session_copy_queue',
 };

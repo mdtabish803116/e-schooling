@@ -354,7 +354,7 @@ export class AcademicController {
 
   @ApiOperation({
     summary:
-      'Copy academic session data (classes, sections, subjects, etc.) from previous session',
+      'Copy academic session data (classes, sections, subjects, etc.) from previous session via background worker',
   })
   @Permission(ResourceEnum.ACADEMIC_SESSIONS, ActionEnum.CREATE)
   @Post('sessions/copy-data')
@@ -363,7 +363,24 @@ export class AcademicController {
     @CurrentUser() user: AuthContext,
     @Body() dto: CopyAcademicSessionDataDto,
   ) {
-    return this.academicService.copyAcademicSessionData(schoolId, dto, user.id);
+    const job = await this.queueProducerService.addJob({
+      queueName: QueueNames.SESSION_COPY,
+      jobType: JobTypeEnum.SESSION_COPY,
+      payload: {
+        schoolId,
+        callerId: user.id,
+        dto,
+      },
+      tenantId: schoolId,
+      createdBy: user.id,
+    });
+
+    return {
+      success: true,
+      message: 'Session data copy job successfully queued in background worker.',
+      jobId: job.jobId,
+      status: job.status,
+    };
   }
 
   @ApiOperation({ summary: 'Get all academic sessions for a school' })

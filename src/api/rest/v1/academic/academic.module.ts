@@ -12,5 +12,6 @@ import { QueueModule } from '../../../worker/queues/queue.module';
   imports: [RBACModule, QueueModule],
   controllers: [AcademicController, AcademicYearsController, HolidayController],
   providers: [AcademicService, HolidayService, EntitlementService],
+  exports: [AcademicService],
 })
 export class AcademicModule {}

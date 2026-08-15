@@ -12,10 +12,12 @@ import { StaffExportProcessor } from './processors/import-export/staff-export.pr
 import { ClassExportProcessor } from './processors/import-export/class-export.processor';
 import { PaymentReconciliationProcessor } from './processors/payment-reconciliation.processor';
 import { StudentProgressionProcessor } from './processors/student-progression.processor';
+import { SessionCopyProcessor } from './processors/academic/session-copy.processor';
 import { BackgroundJobService } from './background-job.service';
 import { SubscriptionModule } from '../rest/v1/subscription/subscription.module';
 import { StudentModule } from '../rest/v1/student/student.module';
 import { StorageModule } from '../../modules/storage/storage.module';
+import { AcademicModule } from '../rest/v1/academic/academic.module';
 
 @Module({
   imports: [
@@ -26,6 +28,7 @@ import { StorageModule } from '../../modules/storage/storage.module';
     QueueModule,
     StudentModule,
     StorageModule,
+    AcademicModule,
   ],
   providers: [
     PgPubSubService,
@@ -38,6 +41,7 @@ import { StorageModule } from '../../modules/storage/storage.module';
     ClassExportProcessor,
     PaymentReconciliationProcessor,
     StudentProgressionProcessor,
+    SessionCopyProcessor,
     BackgroundJobService,
   ],
   exports: [BackgroundJobService, PgPubSubService],

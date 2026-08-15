@@ -18,6 +18,7 @@ import { NotificationProcessor } from '../processors/notification.processor';
 import { ImportExportProcessor } from '../processors/import-export/import-export.processor';
 import { PaymentReconciliationProcessor } from '../processors/payment-reconciliation.processor';
 import { StudentProgressionProcessor } from '../processors/student-progression.processor';
+import { SessionCopyProcessor } from '../processors/academic/session-copy.processor';
 import { QueueProducerService } from './queue-producer.service';
 
 @Injectable()
@@ -33,6 +34,7 @@ export class QueueConsumerService implements OnModuleInit, OnModuleDestroy {
     private readonly importExportProcessor: ImportExportProcessor,
     private readonly paymentReconciliationProcessor: PaymentReconciliationProcessor,
     private readonly studentProgressionProcessor: StudentProgressionProcessor,
+    private readonly sessionCopyProcessor: SessionCopyProcessor,
     private readonly queueProducerService: QueueProducerService,
   ) {}
 
@@ -184,6 +186,8 @@ export class QueueConsumerService implements OnModuleInit, OnModuleDestroy {
         result = await this.paymentReconciliationProcessor.process(jobContext);
       } else if (job.queueName === QueueNames.STUDENT_PROGRESSION) {
         result = await this.studentProgressionProcessor.process(jobContext);
+      } else if (job.queueName === QueueNames.SESSION_COPY) {
+        result = await this.sessionCopyProcessor.process(jobContext);
       } else {
         throw new Error(`Unregistered worker queue: ${job.queueName}`);
       }
