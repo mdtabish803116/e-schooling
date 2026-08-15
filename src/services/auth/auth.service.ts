@@ -678,6 +678,9 @@ export class AuthService implements OnModuleInit {
         id: owner.id,
         fullName: owner.fullName,
         email: owner.email,
+        profilePicUrl: owner.profilePicUrl || null,
+        avatarUrl: owner.profilePicUrl || null,
+        photoUrl: owner.profilePicUrl || null,
       },
     };
   }
@@ -1477,6 +1480,9 @@ export class AuthService implements OnModuleInit {
           fullName: owner.fullName,
           email: owner.email,
           phone: owner.phone,
+          profilePicUrl: owner.profilePicUrl || null,
+          avatarUrl: owner.profilePicUrl || null,
+          photoUrl: owner.profilePicUrl || null,
           isActive: owner.isActive,
           userType: 'owner',
         },
@@ -1522,8 +1528,16 @@ export class AuthService implements OnModuleInit {
               .find({ where: { id: In(roleIds) } })
           : [];
 
+      const photoUrl =
+        profile.profilePicUrl || (user as any).avatar || (user as any).profilePicUrl || null;
+
       return {
-        user,
+        user: {
+          ...user,
+          profilePicUrl: photoUrl,
+          avatarUrl: photoUrl,
+          photoUrl: photoUrl,
+        },
         profile,
         roles,
       };
@@ -1545,13 +1559,33 @@ export class AuthService implements OnModuleInit {
       if (typeof body['fullName'] === 'string')
         owner.fullName = body['fullName'];
       if (typeof body['phone'] === 'string') owner.phone = body['phone'];
+
+      if (typeof body['profilePicUrl'] === 'string' || body['profilePicUrl'] === null) {
+        owner.profilePicUrl = body['profilePicUrl'] as string;
+      } else if (typeof body['avatarUrl'] === 'string' || body['avatarUrl'] === null) {
+        owner.profilePicUrl = body['avatarUrl'] as string;
+      } else if (typeof body['photoUrl'] === 'string' || body['photoUrl'] === null) {
+        owner.profilePicUrl = body['photoUrl'] as string;
+      }
+
       const saved = await this.dataSource
         .getRepository(SchoolOwner)
         .save(owner);
 
       return {
         message: 'Owner profile updated successfully',
-        user: saved,
+        user: {
+          id: saved.id,
+          name: saved.fullName,
+          fullName: saved.fullName,
+          email: saved.email,
+          phone: saved.phone,
+          profilePicUrl: saved.profilePicUrl || null,
+          avatarUrl: saved.profilePicUrl || null,
+          photoUrl: saved.profilePicUrl || null,
+          isActive: saved.isActive,
+          userType: 'owner',
+        },
       };
     } else if (caller.actorType === 'school_user') {
       const user = await this.dataSource.getRepository(SchoolUser).findOne({
@@ -2095,3 +2129,5 @@ export class AuthService implements OnModuleInit {
     };
   }
 }
+
+

@@ -6,10 +6,13 @@ export class AddSchoolUserProfileAndAvatarFields1786200000000
   name = 'AddSchoolUserProfileAndAvatarFields1786200000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
-    // 1. Ensure school_users has avatar/profile_pic_url columns if not present
+    // 1. Ensure school_users and school_owners have profile_pic_url columns if not present
     await queryRunner.query(`
       ALTER TABLE "e_schooling"."school_users"
       ADD COLUMN IF NOT EXISTS "avatar" character varying,
+      ADD COLUMN IF NOT EXISTS "profile_pic_url" character varying;
+
+      ALTER TABLE "e_schooling"."school_owners"
       ADD COLUMN IF NOT EXISTS "profile_pic_url" character varying;
     `);
 
