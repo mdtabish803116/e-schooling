@@ -66,12 +66,28 @@ export class Student {
   firstName: string;
 
   @Column({
+    name: 'middle_name',
+    type: 'varchar',
+    nullable: true,
+    comment: 'Middle name',
+  })
+  middleName: string;
+
+  @Column({
     name: 'last_name',
     type: 'varchar',
     nullable: true,
     comment: 'Last name',
   })
   lastName: string;
+
+  @Column({
+    name: 'full_name',
+    type: 'varchar',
+    nullable: true,
+    comment: 'Computed full display name',
+  })
+  fullName: string;
 
   @Column({
     name: 'gender',
@@ -106,12 +122,28 @@ export class Student {
   religion: string;
 
   @Column({
+    name: 'religion_id',
+    type: 'bigint',
+    nullable: true,
+    comment: 'Lookup ID for Religion',
+  })
+  religionId: string;
+
+  @Column({
     name: 'category',
     type: 'varchar',
     nullable: true,
     comment: 'Caste category e.g. General, OBC, SC, ST',
   })
   category: string;
+
+  @Column({
+    name: 'caste_category_id',
+    type: 'bigint',
+    nullable: true,
+    comment: 'Lookup ID for Caste Category',
+  })
+  casteCategoryId: string;
 
   @Column({
     name: 'nationality',
@@ -129,6 +161,24 @@ export class Student {
     comment: '12-digit Aadhaar number',
   })
   aadhaarNumber: string;
+
+  @Column({
+    name: 'identity_document_type_id',
+    type: 'bigint',
+    nullable: true,
+    comment:
+      'Lookup ID for identity document type (Aadhaar, PAN, DL, Passport, etc.)',
+  })
+  identityDocumentTypeId: string;
+
+  @Column({
+    name: 'identity_document_number',
+    type: 'varchar',
+    nullable: true,
+    comment:
+      'Identity document number corresponding to identity_document_type_id',
+  })
+  identityDocumentNumber: string;
 
   /* ── Contact ── */
   @Column({

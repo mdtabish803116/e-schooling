@@ -42,6 +42,14 @@ export class SchoolOwner {
   phone: string;
 
   @Column({
+    name: 'profile_pic_url',
+    type: 'varchar',
+    nullable: true,
+    comment: 'Profile picture URL of the owner',
+  })
+  profilePicUrl: string;
+
+  @Column({
     name: 'terms_accepted',
     type: 'boolean',
     default: false,

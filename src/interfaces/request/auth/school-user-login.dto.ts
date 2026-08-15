@@ -30,4 +30,20 @@ export class SchoolUserLoginDto {
   @IsOptional()
   @IsBoolean()
   forceLogoutPrevious?: boolean;
+
+  @ApiPropertyOptional({
+    example: 'cap_123456789',
+    description: 'Backend generated Captcha ID',
+  })
+  @IsOptional()
+  @IsString()
+  captchaId?: string;
+
+  @ApiPropertyOptional({
+    example: 'X7K2P9',
+    description: 'User entered captcha code',
+  })
+  @IsOptional()
+  @IsString()
+  captchaInput?: string;
 }

@@ -2,6 +2,7 @@ import {
   Controller,
   Post,
   Patch,
+  Put,
   Get,
   Body,
   Param,
@@ -224,5 +225,22 @@ export class AttendanceController {
       sessionId,
       dto,
     );
+  }
+
+  @ApiOperation({ summary: 'Get attendance settings for a school' })
+  @Permission(ResourceEnum.ATTENDANCE, ActionEnum.VIEW)
+  @Get('settings')
+  async getAttendanceSettings(@Param('schoolId') schoolId: string) {
+    return this.attendanceService.getAttendanceSettings(schoolId);
+  }
+
+  @ApiOperation({ summary: 'Update attendance settings for a school' })
+  @Permission(ResourceEnum.ATTENDANCE, ActionEnum.UPDATE)
+  @Put('settings')
+  async updateAttendanceSettings(
+    @Param('schoolId') schoolId: string,
+    @Body() settings: any,
+  ) {
+    return this.attendanceService.updateAttendanceSettings(schoolId, settings);
   }
 }

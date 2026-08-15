@@ -31,6 +31,42 @@ import { ResetPasswordDto } from 'src/interfaces/request/auth/reset-password.dto
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
+  @ApiOperation({
+    summary: 'Generate a new captcha code (valid for 3 minutes)',
+  })
+  @Get('captcha/generate')
+  async generateCaptcha() {
+    return this.authService.generateCaptcha();
+  }
+
+  @ApiOperation({ summary: 'Verify a captcha code against database' })
+  @Post('captcha/verify')
+  async verifyCaptcha(
+    @Body() body: { captchaId?: string; captchaInput?: string },
+  ) {
+    const isSuccess = await this.authService.verifyCaptcha(
+      body.captchaId,
+      body.captchaInput,
+    );
+    return { success: isSuccess, message: 'Captcha verified successfully' };
+  }
+
+  @ApiOperation({ summary: 'Send OTP for verification' })
+  @Post('otp/send')
+  async sendOtp(
+    @Body() body: { recipient: string; channel?: string; purpose?: string },
+  ) {
+    return this.authService.sendOtp(body);
+  }
+
+  @ApiOperation({ summary: 'Verify OTP code' })
+  @Post('otp/verify')
+  async verifyOtp(
+    @Body() body: { recipient: string; otpCode: string; channel?: string },
+  ) {
+    return this.authService.verifyOtp(body);
+  }
+
   @ApiOperation({ summary: 'Register a school owner account' })
   @ApiResponse({
     status: 201,

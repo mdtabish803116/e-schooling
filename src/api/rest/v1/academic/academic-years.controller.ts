@@ -12,13 +12,16 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../../../shared/guards/jwt-auth.guard';
+import { PermissionGuard } from '../../../../shared/guards/permission.guard';
+import { Permission } from '../../../../shared/decorators/permission.decorator';
 import { CurrentUser } from '../../../../shared/decorators/current-user.decorator';
 import { AcademicService } from '../../../../services/academic/academic.service';
+import { ResourceEnum, ActionEnum } from '../../../../models/enums/enums';
 import type { AuthContext } from '../../../../interfaces/auth-context.interface';
 
 @ApiTags('Academic Years')
 @ApiBearerAuth('JWT-auth')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, PermissionGuard)
 @Controller()
 export class AcademicYearsController {
   constructor(private readonly academicService: AcademicService) {}
@@ -71,7 +74,12 @@ export class AcademicYearsController {
   }
 
   @ApiOperation({ summary: 'Get all academic years' })
-  @Get(['academic-years', 'schools/:schoolId/academic-years'])
+  @Permission(ResourceEnum.ACADEMIC_SESSIONS, ActionEnum.VIEW)
+  @Get([
+    'academic-years',
+    'schools/:schoolId/academic-years',
+    'schools/:schoolId/academic/sessions',
+  ])
   async getAcademicYears(
     @Req() req: any,
     @CurrentUser() user: AuthContext,
@@ -83,7 +91,11 @@ export class AcademicYearsController {
   }
 
   @ApiOperation({ summary: 'Get current active academic year' })
-  @Get(['academic-years/current', 'schools/:schoolId/academic-years/current'])
+  @Get([
+    'academic-years/current',
+    'schools/:schoolId/academic-years/current',
+    'schools/:schoolId/academic/sessions/current',
+  ])
   async getCurrentAcademicYear(
     @Req() req: any,
     @CurrentUser() user: AuthContext,
@@ -96,7 +108,12 @@ export class AcademicYearsController {
   }
 
   @ApiOperation({ summary: 'Get academic year by ID' })
-  @Get(['academic-years/:id', 'schools/:schoolId/academic-years/:id'])
+  @Permission(ResourceEnum.ACADEMIC_SESSIONS, ActionEnum.VIEW)
+  @Get([
+    'academic-years/:id',
+    'schools/:schoolId/academic-years/:id',
+    'schools/:schoolId/academic/sessions/:id',
+  ])
   async getAcademicYearById(
     @Req() req: any,
     @CurrentUser() user: AuthContext,
@@ -112,7 +129,12 @@ export class AcademicYearsController {
   }
 
   @ApiOperation({ summary: 'Create a new academic year' })
-  @Post(['academic-years', 'schools/:schoolId/academic-years'])
+  @Permission(ResourceEnum.ACADEMIC_SESSIONS, ActionEnum.CREATE)
+  @Post([
+    'academic-years',
+    'schools/:schoolId/academic-years',
+    'schools/:schoolId/academic/sessions',
+  ])
   async createAcademicYear(
     @Req() req: any,
     @CurrentUser() user: AuthContext,
@@ -138,7 +160,12 @@ export class AcademicYearsController {
   }
 
   @ApiOperation({ summary: 'Update an academic year' })
-  @Put(['academic-years/:id', 'schools/:schoolId/academic-years/:id'])
+  @Permission(ResourceEnum.ACADEMIC_SESSIONS, ActionEnum.UPDATE)
+  @Put([
+    'academic-years/:id',
+    'schools/:schoolId/academic-years/:id',
+    'schools/:schoolId/academic/sessions/:id',
+  ])
   async updateAcademicYear(
     @Req() req: any,
     @CurrentUser() user: AuthContext,
@@ -170,7 +197,12 @@ export class AcademicYearsController {
   }
 
   @ApiOperation({ summary: 'Patch update an academic year' })
-  @Patch(['academic-years/:id', 'schools/:schoolId/academic-years/:id'])
+  @Permission(ResourceEnum.ACADEMIC_SESSIONS, ActionEnum.UPDATE)
+  @Patch([
+    'academic-years/:id',
+    'schools/:schoolId/academic-years/:id',
+    'schools/:schoolId/academic/sessions/:id',
+  ])
   async patchAcademicYear(
     @Req() req: any,
     @CurrentUser() user: AuthContext,
@@ -182,7 +214,12 @@ export class AcademicYearsController {
   }
 
   @ApiOperation({ summary: 'Delete an academic year' })
-  @Delete(['academic-years/:id', 'schools/:schoolId/academic-years/:id'])
+  @Permission(ResourceEnum.ACADEMIC_SESSIONS, ActionEnum.DELETE)
+  @Delete([
+    'academic-years/:id',
+    'schools/:schoolId/academic-years/:id',
+    'schools/:schoolId/academic/sessions/:id',
+  ])
   async deleteAcademicYear(
     @Req() req: any,
     @CurrentUser() user: AuthContext,
@@ -198,10 +235,13 @@ export class AcademicYearsController {
   }
 
   @ApiOperation({ summary: 'Activate / set as current active academic year' })
+  @Permission(ResourceEnum.ACADEMIC_SESSIONS, ActionEnum.UPDATE)
   @Patch([
     'academic-years/:id/activate',
     'academic-years/:id/set-current',
     'schools/:schoolId/academic-years/:id/activate',
+    'schools/:schoolId/academic/sessions/:id/activate',
+    'schools/:schoolId/academic/sessions/:id/set-current',
   ])
   async activateAcademicYear(
     @Req() req: any,
@@ -219,9 +259,11 @@ export class AcademicYearsController {
   }
 
   @ApiOperation({ summary: 'Close an academic year' })
+  @Permission(ResourceEnum.ACADEMIC_SESSIONS, ActionEnum.UPDATE)
   @Patch([
     'academic-years/:id/close',
     'schools/:schoolId/academic-years/:id/close',
+    'schools/:schoolId/academic/sessions/:id/close',
   ])
   async closeAcademicYear(
     @Req() req: any,

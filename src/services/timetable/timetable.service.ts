@@ -9,6 +9,7 @@ import { TimetablePeriod } from '../../models/entities/timetable/timetable-perio
 import { TimetableSlot } from '../../models/entities/timetable/timetable-slot.entity';
 import { TimetableSubstitution } from '../../models/entities/timetable/timetable-substitution.entity';
 import { TimetableEvent } from '../../models/entities/timetable/timetable-event.entity';
+import { TimetableSettings } from '../../models/entities/timetable/timetable-settings.entity';
 import { Class } from '../../models/entities/academic/class.entity';
 import { Section } from '../../models/entities/academic/section.entity';
 import { Subject } from '../../models/entities/academic/subject.entity';
@@ -70,6 +71,7 @@ export class TimetableService {
   private sectionRepo: Repository<Section>;
   private subjectRepo: Repository<Subject>;
   private userRepo: Repository<SchoolUser>;
+  private settingsRepo: Repository<TimetableSettings>;
 
   constructor(private dataSource: DataSource) {
     this.timetableRepo = this.dataSource.getRepository(Timetable);
@@ -83,6 +85,7 @@ export class TimetableService {
     this.sectionRepo = this.dataSource.getRepository(Section);
     this.subjectRepo = this.dataSource.getRepository(Subject);
     this.userRepo = this.dataSource.getRepository(SchoolUser);
+    this.settingsRepo = this.dataSource.getRepository(TimetableSettings);
   }
 
   // 1. Get Timetables
@@ -791,5 +794,90 @@ export class TimetableService {
     await this.eventRepo.save(existing);
 
     return { success: true, message: 'Event deleted successfully' };
+  }
+
+  // 19. Get Timetable Settings
+  async getTimetableSettings(
+    schoolId: string,
+    academicSessionId?: string,
+  ): Promise<TimetableSettings> {
+    const whereClause: any = { schoolId, isDeleted: false, isActive: true };
+    if (academicSessionId) {
+      whereClause.academicSessionId = academicSessionId;
+    }
+    const existing = await this.settingsRepo.findOne({ where: whereClause });
+    if (existing) return existing;
+
+    // Default settings if not configured in DB yet
+    return this.settingsRepo.create({
+      schoolId,
+      academicSessionId: academicSessionId || null,
+      maxPeriodsPerDay: 8,
+      periodDurationMinutes: 45,
+      breakDurationMinutes: 15,
+      workingDays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
+      startTime: '08:00 AM',
+      endTime: '03:30 PM',
+      allowTeacherCollisions: false,
+      allowRoomCollisions: false,
+      autoSubstitutionAlerts: true,
+      isActive: true,
+      isDeleted: false,
+    });
+  }
+
+  // 20. Upsert Timetable Settings
+  async upsertTimetableSettings(
+    schoolId: string,
+    payload: any,
+  ): Promise<TimetableSettings> {
+    const whereClause: any = { schoolId, isDeleted: false, isActive: true };
+    if (payload?.academicSessionId) {
+      whereClause.academicSessionId = payload.academicSessionId;
+    }
+    let settings = await this.settingsRepo.findOne({ where: whereClause });
+    if (!settings) {
+      settings = this.settingsRepo.create({
+        schoolId,
+        academicSessionId: payload?.academicSessionId || null,
+        maxPeriodsPerDay: payload?.maxPeriodsPerDay ?? 8,
+        periodDurationMinutes: payload?.periodDurationMinutes ?? 45,
+        breakDurationMinutes: payload?.breakDurationMinutes ?? 15,
+        workingDays: payload?.workingDays ?? [
+          'Monday',
+          'Tuesday',
+          'Wednesday',
+          'Thursday',
+          'Friday',
+        ],
+        startTime: payload?.startTime ?? '08:00 AM',
+        endTime: payload?.endTime ?? '03:30 PM',
+        allowTeacherCollisions: payload?.allowTeacherCollisions ?? false,
+        allowRoomCollisions: payload?.allowRoomCollisions ?? false,
+        autoSubstitutionAlerts: payload?.autoSubstitutionAlerts ?? true,
+        isActive: true,
+        isDeleted: false,
+      });
+    } else {
+      if (payload?.maxPeriodsPerDay !== undefined)
+        settings.maxPeriodsPerDay = payload.maxPeriodsPerDay;
+      if (payload?.periodDurationMinutes !== undefined)
+        settings.periodDurationMinutes = payload.periodDurationMinutes;
+      if (payload?.breakDurationMinutes !== undefined)
+        settings.breakDurationMinutes = payload.breakDurationMinutes;
+      if (payload?.workingDays !== undefined)
+        settings.workingDays = payload.workingDays;
+      if (payload?.startTime !== undefined)
+        settings.startTime = payload.startTime;
+      if (payload?.endTime !== undefined) settings.endTime = payload.endTime;
+      if (payload?.allowTeacherCollisions !== undefined)
+        settings.allowTeacherCollisions = payload.allowTeacherCollisions;
+      if (payload?.allowRoomCollisions !== undefined)
+        settings.allowRoomCollisions = payload.allowRoomCollisions;
+      if (payload?.autoSubstitutionAlerts !== undefined)
+        settings.autoSubstitutionAlerts = payload.autoSubstitutionAlerts;
+    }
+
+    return await this.settingsRepo.save(settings);
   }
 }

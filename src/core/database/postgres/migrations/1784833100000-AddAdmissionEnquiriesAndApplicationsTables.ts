@@ -10,7 +10,7 @@ export class AddAdmissionEnquiriesAndApplicationsTables1784833100000 implements 
     // 2. Create admission_enquiries table
     await queryRunner.query(`
       CREATE TABLE IF NOT EXISTS "e_schooling"."admission_enquiries" (
-        "id" uuid NOT NULL DEFAULT gen_random_uuid(),
+        "id" bigserial NOT NULL,
         "school_id" character varying NOT NULL,
         "enquiry_no" character varying NOT NULL,
         "student_name" character varying NOT NULL,
@@ -40,7 +40,7 @@ export class AddAdmissionEnquiriesAndApplicationsTables1784833100000 implements 
     // 3. Create admission_applications table
     await queryRunner.query(`
       CREATE TABLE IF NOT EXISTS "e_schooling"."admission_applications" (
-        "id" uuid NOT NULL DEFAULT gen_random_uuid(),
+        "id" bigserial NOT NULL,
         "school_id" character varying NOT NULL,
         "application_no" character varying NOT NULL,
         "enquiry_id" character varying,

@@ -36,6 +36,8 @@ import { StudentEnrollment } from '../../models/entities/student/student-enrollm
 import { Class } from '../../models/entities/academic/class.entity';
 import { Section } from '../../models/entities/academic/section.entity';
 
+import { AcademicSession } from '../../models/entities/academic/academic-session.entity';
+
 @Injectable()
 export class SchoolsService {
   constructor(private dataSource: DataSource) {}
@@ -85,22 +87,14 @@ export class SchoolsService {
       );
 
     const schoolName = dto.schoolName
-      ? dto.schoolName.trim().replace(/[<>]/g, '')
+      ? dto.schoolName.trim().replace(/\s{2,}/g, ' ')
       : '';
-    const email = dto.email
-      ? dto.email.trim().toLowerCase().replace(/[<>]/g, '')
-      : '';
-    const phone = dto.phone ? dto.phone.trim().replace(/[<>]/g, '') : '';
+    const email = dto.email ? dto.email.trim().toLowerCase() : '';
+    const phone = dto.phone ? dto.phone.trim() : '';
 
-    if (!schoolName || schoolName.length < 3 || schoolName.length > 100) {
+    if (!schoolName || schoolName.length < 3 || schoolName.length > 150) {
       throw new BadRequestException(
-        'School name must be between 3 and 100 characters long.',
-      );
-    }
-
-    if (/\s{2,}/.test(dto.schoolName)) {
-      throw new BadRequestException(
-        'Multiple consecutive spaces are not allowed in school name.',
+        'School name must be between 3 and 150 characters long.',
       );
     }
 
@@ -117,7 +111,7 @@ export class SchoolsService {
     const existingSchoolEmail = await this.dataSource
       .getRepository(School)
       .findOne({
-        where: { email },
+        where: { email, isDeleted: false },
       });
     if (existingSchoolEmail) {
       throw new BadRequestException(
@@ -130,10 +124,31 @@ export class SchoolsService {
     await queryRunner.startTransaction();
 
     try {
+      // Check duplicate school for this owner
+      const ownerMemberships = await queryRunner.manager.find(
+        SchoolOwnerMember,
+        {
+          where: { schoolOwnerId: caller.id, isDeleted: false },
+        },
+      );
+      if (ownerMemberships.length > 0) {
+        const schoolIds = ownerMemberships.map((m) => m.schoolId);
+        const existingSchools = await queryRunner.manager.find(School, {
+          where: { id: In(schoolIds), isDeleted: false },
+        });
+        const hasDuplicate = existingSchools.some(
+          (s) => s.schoolName.trim().toLowerCase() === schoolName.toLowerCase(),
+        );
+        if (hasDuplicate) {
+          throw new BadRequestException(
+            'You already have an active school registered with this name.',
+          );
+        }
+      }
+
       const internalCode = await this.generateUniqueSchoolCode(schoolName);
 
       const school = new School();
-      Object.assign(school, dto);
       school.schoolName = schoolName;
       school.email = email;
       school.phone = phone;
@@ -141,11 +156,30 @@ export class SchoolsService {
       school.externalSchoolCode = dto.externalSchoolCode
         ? dto.externalSchoolCode.trim()
         : null;
+      school.logoUrl = dto.logoUrl ? dto.logoUrl.trim() : '';
+      school.totalClasses = Number(dto.totalClasses) || 0;
+      school.totalSections = Number(dto.totalSections) || 0;
+      school.totalStudents = Number(dto.totalStudents) || 0;
+      school.totalTeachers = Number(dto.totalTeachers) || 0;
+      school.addressArea = dto.addressArea ? dto.addressArea.trim() : '';
+      school.addressLandmark = dto.addressLandmark
+        ? dto.addressLandmark.trim()
+        : '';
+      school.addressCity = dto.addressCity ? dto.addressCity.trim() : '';
+      school.addressDistrict = dto.addressDistrict
+        ? dto.addressDistrict.trim()
+        : '';
+      school.addressState = dto.addressState ? dto.addressState.trim() : '';
+      school.addressPincode = dto.addressPincode
+        ? dto.addressPincode.trim()
+        : '';
       school.isActive = true;
+      school.isDeleted = false;
       school.createdById = caller.id;
 
       const savedSchool = await queryRunner.manager.save(school);
 
+      // Create owner membership
       const member = new SchoolOwnerMember();
       member.schoolId = savedSchool.id;
       member.schoolOwnerId = caller.id;
@@ -153,14 +187,27 @@ export class SchoolsService {
       member.isPrimaryOwner = true;
       member.isActive = true;
       member.createdById = caller.id;
-
       await queryRunner.manager.save(member);
+
+      // Auto-create initial active academic session (e.g. 2026-2027)
+      const currentYear = new Date().getFullYear();
+      const initialSession = new AcademicSession();
+      initialSession.schoolId = savedSchool.id;
+      initialSession.name = `${currentYear}-${currentYear + 1}`;
+      initialSession.startDate = `${currentYear}-04-01`;
+      initialSession.endDate = `${currentYear + 1}-03-31`;
+      initialSession.isCurrent = true;
+      initialSession.isActive = true;
+      initialSession.isDeleted = false;
+      initialSession.createdById = caller.id;
+      await queryRunner.manager.save(initialSession);
+
       await queryRunner.commitTransaction();
 
       return {
-        message:
-          'School registered successfully. Please select a subscription plan to continue.',
+        message: 'School registered successfully.',
         school: savedSchool,
+        initialSession,
       };
     } catch (error) {
       await queryRunner.rollbackTransaction();

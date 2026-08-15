@@ -3,6 +3,7 @@ import { DataSource } from 'typeorm';
 import { PlatformService } from '../../services/platform/platform.service';
 import AppDataSource from '../database/postgres/data-source';
 import { seedLoginHistoryTable } from './seed-login-history';
+import { seedSchoolUserProfiles } from './seed-school-user-profiles';
 
 async function runSeed() {
   console.log('🚀 Initializing Database Connection for Seeding...');
@@ -24,6 +25,9 @@ async function runSeed() {
 
     console.log('🛡️ Running Login History Table & Data Seed...');
     await seedLoginHistoryTable(dataSource);
+
+    console.log('👤 Running School User Profiles Seed...');
+    await seedSchoolUserProfiles(dataSource);
 
     console.log('🎉 Seeding completed successfully!');
     console.log(result);

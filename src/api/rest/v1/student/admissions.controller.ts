@@ -5,15 +5,22 @@ import {
   Patch,
   Body,
   Param,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
-import { StudentAdmissionsService } from '../../../../services/student/student-admissions.service';
+import {
+  StudentAdmissionsService,
+  type CreateEnquiryDto,
+} from '../../../../services/student/student-admissions.service';
+import { StudentAdmissionDto } from '../../../../interfaces/request/student/student-admission.dto';
 import { JwtAuthGuard } from '../../../../shared/guards/jwt-auth.guard';
 import { FeatureGuard } from '../../../../shared/guards/feature.guard';
 import { PermissionGuard } from '../../../../shared/guards/permission.guard';
 import { Permission } from '../../../../shared/decorators/permission.decorator';
 import { Feature } from '../../../../shared/decorators/feature.decorator';
+import { CurrentUser } from '../../../../shared/decorators/current-user.decorator';
+import type { AuthContext } from '../../../../interfaces/auth-context.interface';
 import { ResourceEnum, ActionEnum } from '../../../../models/enums/enums';
 
 @ApiTags('Student Admissions Pipeline & Enquiries')
@@ -35,7 +42,10 @@ export class AdmissionsController {
   @Post('enquiries')
   @Permission(ResourceEnum.STUDENTS, ActionEnum.CREATE)
   @Feature('STUDENT_MANAGEMENT')
-  async createEnquiry(@Param('schoolId') schoolId: string, @Body() dto: any) {
+  async createEnquiry(
+    @Param('schoolId') schoolId: string,
+    @Body() dto: CreateEnquiryDto,
+  ) {
     return this.admissionsService.createEnquiry(schoolId, dto);
   }
 
@@ -77,6 +87,28 @@ export class AdmissionsController {
       applicationId,
       body.stage,
       body.remarks,
+    );
+  }
+
+  @ApiOperation({
+    summary: 'Convert admission application candidate to enrolled student',
+  })
+  @Post('applications/:applicationId/convert')
+  @Permission(ResourceEnum.STUDENTS, ActionEnum.CREATE)
+  @Feature('STUDENT_MANAGEMENT')
+  async convertApplicationToStudent(
+    @CurrentUser() caller: AuthContext,
+    @Param('schoolId') schoolId: string,
+    @Param('applicationId') applicationId: string,
+    @Query('academicSessionId') queryAcademicSessionId: string,
+    @Body() body: Partial<StudentAdmissionDto>,
+  ) {
+    return this.admissionsService.convertApplicationToStudent(
+      caller,
+      schoolId,
+      applicationId,
+      body,
+      queryAcademicSessionId,
     );
   }
 }

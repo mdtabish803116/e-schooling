@@ -1,4 +1,12 @@
-import { IsString, IsOptional, IsObject } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsObject,
+  MinLength,
+  MaxLength,
+  Matches,
+  IsEmail,
+} from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 /**
@@ -7,21 +15,36 @@ import { ApiProperty } from '@nestjs/swagger';
  */
 export class UpdateStudentDto {
   /* ── Personal ── */
-  @IsString() @IsOptional() firstName?: string;
-  @IsString() @IsOptional() lastName?: string;
+  @IsString() @IsOptional() @MinLength(2) @MaxLength(50) firstName?: string;
+  @IsString() @IsOptional() @MaxLength(50) middleName?: string;
+  @IsString() @IsOptional() @MaxLength(50) lastName?: string;
   @IsString() @IsOptional() gender?: string;
   @IsOptional() dob?: string;
   @IsString() @IsOptional() bloodGroup?: string;
   @IsString() @IsOptional() religion?: string;
+  @IsString() @IsOptional() religionId?: string;
   @IsString() @IsOptional() category?: string;
+  @IsString() @IsOptional() casteCategoryId?: string;
   @IsString() @IsOptional() nationality?: string;
-  @IsString() @IsOptional() aadhaarNumber?: string;
+  @IsString()
+  @IsOptional()
+  @Matches(/^[0-9]{12}$/, {
+    message: 'Aadhaar number must contain exactly 12 digits',
+  })
+  aadhaarNumber?: string;
+  @IsString() @IsOptional() identityDocumentTypeId?: string;
+  @IsString() @IsOptional() identityDocumentNumber?: string;
 
   /* ── Contact ── */
   @IsString() @IsOptional() phone?: string;
-  @IsString() @IsOptional() mobile?: string;
+  @IsString()
+  @IsOptional()
+  @Matches(/^[6-9][0-9]{9}$/, {
+    message: 'Mobile number must be a valid 10-digit Indian phone number',
+  })
+  mobile?: string;
   @IsString() @IsOptional() alternateMobile?: string;
-  @IsString() @IsOptional() email?: string;
+  @IsString() @IsOptional() @IsEmail() @MaxLength(50) email?: string;
 
   /* ── Address ── */
   @IsString() @IsOptional() address?: string;
@@ -60,7 +83,8 @@ export class UpdateStudentDto {
   @IsString() @IsOptional() doctorName?: string;
   @IsString() @IsOptional() doctorPhone?: string;
 
-  /* ── Admission ── */
+  /* ── Admission & Codes ── */
+  @IsString() @IsOptional() studentCode?: string;
   @IsString() @IsOptional() admissionNumber?: string;
   @IsString() @IsOptional() rollNumber?: string;
   @IsOptional() admissionDate?: string;

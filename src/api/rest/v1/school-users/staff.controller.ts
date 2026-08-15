@@ -13,7 +13,7 @@ import {
   HttpCode,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
-import { DataSource } from 'typeorm';
+import { DataSource, In } from 'typeorm';
 import { JwtAuthGuard } from '../../../../shared/guards/jwt-auth.guard';
 import { CurrentUser } from '../../../../shared/decorators/current-user.decorator';
 import { SchoolUser } from '../../../../models/entities/school/school-user.entity';
@@ -24,15 +24,20 @@ import type { AuthContext } from '../../../../interfaces/auth-context.interface'
 @ApiTags('Staff Management')
 @ApiBearerAuth('JWT-auth')
 @UseGuards(JwtAuthGuard)
-@Controller('staff')
+@Controller(['staff', 'schools/:schoolId/staff'])
 export class StaffController {
   constructor(private dataSource: DataSource) {}
 
-  private getSchoolId(headers: any, caller: AuthContext): string {
-    const schoolId = headers['x-school-id'] || caller.schoolId;
+  private getSchoolId(
+    headers: any,
+    caller: AuthContext,
+    paramSchoolId?: string,
+  ): string {
+    const schoolId =
+      paramSchoolId || headers?.['x-school-id'] || caller?.schoolId;
     if (!schoolId) {
       throw new BadRequestException(
-        'schoolId must be specified in headers or token',
+        'schoolId must be specified in route parameters, headers or token',
       );
     }
     return String(schoolId);
@@ -40,22 +45,23 @@ export class StaffController {
 
   @ApiOperation({ summary: 'List all staff in the school context' })
   @Get()
-  async listStaff(@Headers() headers: any, @CurrentUser() caller: AuthContext) {
-    const schoolId = this.getSchoolId(headers, caller);
+  async listStaff(
+    @Headers() headers: any,
+    @CurrentUser() caller: AuthContext,
+    @Param('schoolId') paramSchoolId?: string,
+  ) {
+    const schoolId = this.getSchoolId(headers, caller, paramSchoolId);
     const users = await this.dataSource.getRepository(SchoolUser).find({
       where: { schoolId, isDeleted: false },
       order: { createdAt: 'DESC' },
     });
 
-    const userIds = users.map((u) => u.id);
+    const userIds = users.map((u) => u.id).filter(Boolean);
     const profiles =
       userIds.length > 0
         ? await this.dataSource.getRepository(SchoolUserProfile).find({
             where: {
-              schoolUserId:
-                typeof userIds[0] === 'string'
-                  ? (users.map((u) => u.id) as any)
-                  : (users.map((u) => u.id) as any),
+              schoolUserId: In(userIds),
             },
           })
         : [];
@@ -99,8 +105,9 @@ export class StaffController {
     @Param('staffId') staffId: string,
     @Headers() headers: any,
     @CurrentUser() caller: AuthContext,
+    @Param('schoolId') paramSchoolId?: string,
   ) {
-    const schoolId = this.getSchoolId(headers, caller);
+    const schoolId = this.getSchoolId(headers, caller, paramSchoolId);
     const user = await this.dataSource.getRepository(SchoolUser).findOne({
       where: { id: staffId, schoolId, isDeleted: false },
     });
@@ -157,8 +164,9 @@ export class StaffController {
     @Headers() headers: any,
     @CurrentUser() caller: AuthContext,
     @Body() body: any,
+    @Param('schoolId') paramSchoolId?: string,
   ) {
-    const schoolId = this.getSchoolId(headers, caller);
+    const schoolId = this.getSchoolId(headers, caller, paramSchoolId);
 
     const user = new SchoolUser();
     user.schoolId = schoolId;
@@ -223,8 +231,9 @@ export class StaffController {
     @Headers() headers: any,
     @CurrentUser() caller: AuthContext,
     @Body() body: any,
+    @Param('schoolId') paramSchoolId?: string,
   ) {
-    const schoolId = this.getSchoolId(headers, caller);
+    const schoolId = this.getSchoolId(headers, caller, paramSchoolId);
     const user = await this.dataSource.getRepository(SchoolUser).findOne({
       where: { id: staffId, schoolId, isDeleted: false },
     });
@@ -310,8 +319,9 @@ export class StaffController {
     @Param('staffId') staffId: string,
     @Headers() headers: any,
     @CurrentUser() caller: AuthContext,
+    @Param('schoolId') paramSchoolId?: string,
   ) {
-    const schoolId = this.getSchoolId(headers, caller);
+    const schoolId = this.getSchoolId(headers, caller, paramSchoolId);
     const user = await this.dataSource.getRepository(SchoolUser).findOne({
       where: { id: staffId, schoolId, isDeleted: false },
     });
@@ -328,8 +338,9 @@ export class StaffController {
     @Headers() headers: any,
     @CurrentUser() caller: AuthContext,
     @Body() body: any,
+    @Param('schoolId') paramSchoolId?: string,
   ) {
-    const schoolId = this.getSchoolId(headers, caller);
+    const schoolId = this.getSchoolId(headers, caller, paramSchoolId);
     const user = await this.dataSource.getRepository(SchoolUser).findOne({
       where: { id: staffId, schoolId, isDeleted: false },
     });
@@ -345,7 +356,7 @@ export class StaffController {
     profile.qualifications = qualifications;
     await this.dataSource.getRepository(SchoolUserProfile).save(profile);
 
-    return this.getStaffById(staffId, headers, caller);
+    return this.getStaffById(staffId, headers, caller, paramSchoolId);
   }
 
   @ApiOperation({ summary: 'Add experience record to staff profile' })
@@ -355,8 +366,9 @@ export class StaffController {
     @Headers() headers: any,
     @CurrentUser() caller: AuthContext,
     @Body() body: any,
+    @Param('schoolId') paramSchoolId?: string,
   ) {
-    const schoolId = this.getSchoolId(headers, caller);
+    const schoolId = this.getSchoolId(headers, caller, paramSchoolId);
     const user = await this.dataSource.getRepository(SchoolUser).findOne({
       where: { id: staffId, schoolId, isDeleted: false },
     });
@@ -372,7 +384,7 @@ export class StaffController {
     profile.experience = experience;
     await this.dataSource.getRepository(SchoolUserProfile).save(profile);
 
-    return this.getStaffById(staffId, headers, caller);
+    return this.getStaffById(staffId, headers, caller, paramSchoolId);
   }
 
   @ApiOperation({ summary: 'Assign class to staff' })
@@ -382,8 +394,9 @@ export class StaffController {
     @Headers() headers: any,
     @CurrentUser() caller: AuthContext,
     @Body() body: any,
+    @Param('schoolId') paramSchoolId?: string,
   ) {
-    const schoolId = this.getSchoolId(headers, caller);
+    const schoolId = this.getSchoolId(headers, caller, paramSchoolId);
     const user = await this.dataSource.getRepository(SchoolUser).findOne({
       where: { id: staffId, schoolId, isDeleted: false },
     });
@@ -399,7 +412,7 @@ export class StaffController {
     profile.assignedClasses = assignedClasses;
     await this.dataSource.getRepository(SchoolUserProfile).save(profile);
 
-    return this.getStaffById(staffId, headers, caller);
+    return this.getStaffById(staffId, headers, caller, paramSchoolId);
   }
 
   @ApiOperation({ summary: 'Assign subject to staff' })
@@ -409,8 +422,9 @@ export class StaffController {
     @Headers() headers: any,
     @CurrentUser() caller: AuthContext,
     @Body() body: any,
+    @Param('schoolId') paramSchoolId?: string,
   ) {
-    const schoolId = this.getSchoolId(headers, caller);
+    const schoolId = this.getSchoolId(headers, caller, paramSchoolId);
     const user = await this.dataSource.getRepository(SchoolUser).findOne({
       where: { id: staffId, schoolId, isDeleted: false },
     });
@@ -426,7 +440,7 @@ export class StaffController {
     profile.assignedSubjects = assignedSubjects;
     await this.dataSource.getRepository(SchoolUserProfile).save(profile);
 
-    return this.getStaffById(staffId, headers, caller);
+    return this.getStaffById(staffId, headers, caller, paramSchoolId);
   }
 
   @ApiOperation({ summary: 'Upload document for staff' })
@@ -436,8 +450,9 @@ export class StaffController {
     @Headers() headers: any,
     @CurrentUser() caller: AuthContext,
     @Body() body: { file: string; type: string },
+    @Param('schoolId') paramSchoolId?: string,
   ) {
-    const schoolId = this.getSchoolId(headers, caller);
+    const schoolId = this.getSchoolId(headers, caller, paramSchoolId);
     const user = await this.dataSource.getRepository(SchoolUser).findOne({
       where: { id: staffId, schoolId, isDeleted: false },
     });
@@ -472,8 +487,9 @@ export class StaffController {
     @Param('documentId') documentId: string,
     @Headers() headers: any,
     @CurrentUser() caller: AuthContext,
+    @Param('schoolId') paramSchoolId?: string,
   ) {
-    const schoolId = this.getSchoolId(headers, caller);
+    const schoolId = this.getSchoolId(headers, caller, paramSchoolId);
     const user = await this.dataSource.getRepository(SchoolUser).findOne({
       where: { id: staffId, schoolId, isDeleted: false },
     });

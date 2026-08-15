@@ -1,9 +1,9 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
-  OnModuleInit,
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { DataSource, In } from 'typeorm';
@@ -20,11 +20,11 @@ import { SchoolRole } from '../../models/entities/rbac/school-role.entity';
 import { SchoolUserRole } from '../../models/entities/rbac/school-user-role.entity';
 import { SchoolOwnerMember } from '../../models/entities/school/school-owner-member.entity';
 import { School } from '../../models/entities/school/school.entity';
+import { AdmissionApplication } from '../../models/entities/student/admission-application.entity';
+import { AdmissionEnquiry } from '../../models/entities/student/admission-enquiry.entity';
 import { PromotionLog } from '../../models/entities/student/promotion-log.entity';
 import { StudentEnrollment } from '../../models/entities/student/student-enrollment.entity';
 import { Student } from '../../models/entities/student/student.entity';
-import { AdmissionEnquiry } from '../../models/entities/student/admission-enquiry.entity';
-import { AdmissionApplication } from '../../models/entities/student/admission-application.entity';
 import { SchoolSubscription } from '../../models/entities/subscription/school-subscription.entity';
 import {
   ActionTypeEnum,
@@ -33,6 +33,20 @@ import {
   OverrideTypeEnum,
 } from '../../models/enums/enums';
 import { processInBatches } from '../../shared/utils/batch-processor.util';
+
+export interface CreateEnquiryDto {
+  studentName?: string;
+  parentName?: string;
+  contactNumber?: string;
+  email?: string;
+  targetClassId?: string;
+  targetClassName?: string;
+  gender?: string;
+  previousSchool?: string;
+  source?: string;
+  notes?: string;
+  assignedToStaffName?: string;
+}
 
 @Injectable()
 export class StudentAdmissionsService {
@@ -59,14 +73,156 @@ export class StudentAdmissionsService {
     return school;
   }
 
-  private async generateStudentCode(schoolCode: string): Promise<string> {
-    const randomSuffix = Math.floor(1000 + Math.random() * 9000);
-    const code = `${schoolCode}-${randomSuffix}`;
-    const existing = await this.dataSource
-      .getRepository(Student)
-      .findOne({ where: { studentCode: code } });
-    if (existing) return this.generateStudentCode(schoolCode);
-    return code;
+  private normalizeNameParts(
+    firstName?: string,
+    middleName?: string,
+    lastName?: string,
+  ) {
+    const clean = (val?: string) =>
+      val ? val.trim().replace(/\s+/g, ' ') : '';
+    const f = clean(firstName);
+    const m = clean(middleName);
+    const l = clean(lastName);
+    const fullName = [f, m, l].filter(Boolean).join(' ');
+    return {
+      firstName: f,
+      middleName: m || null,
+      lastName: l || null,
+      fullName,
+    };
+  }
+
+  private async generateStudentCode(
+    schoolId: string,
+    customCode?: string,
+    queryRunner?: any,
+  ): Promise<string> {
+    const manager = queryRunner ? queryRunner.manager : this.dataSource.manager;
+    if (customCode && customCode.trim()) {
+      const cleanCode = customCode.trim().toUpperCase();
+      const existing = await manager.getRepository(Student).findOne({
+        where: { schoolId, studentCode: cleanCode, isDeleted: false },
+      });
+      if (existing) {
+        throw new ConflictException(
+          `Student Code "${cleanCode}" is already assigned to another student in this school.`,
+        );
+      }
+      return cleanCode;
+    }
+
+    try {
+      const res = await manager.query(
+        `SELECT NEXTVAL('e_schooling.student_code_seq') as seq;`,
+      );
+      const seqNum =
+        res && res[0] ? res[0].seq : Date.now().toString().slice(-4);
+      const code = `STU-${String(seqNum).padStart(4, '0')}`;
+
+      const existing = await manager.getRepository(Student).findOne({
+        where: { schoolId, studentCode: code, isDeleted: false },
+      });
+      if (existing) {
+        return `STU-${String(Number(seqNum) + 100).padStart(4, '0')}`;
+      }
+      return code;
+    } catch {
+      const count = await manager
+        .getRepository(Student)
+        .count({ where: { schoolId } });
+      return `STU-${String(count + 1).padStart(4, '0')}`;
+    }
+  }
+
+  private async generateAdmissionNumber(
+    schoolId: string,
+    academicSessionId: string,
+    customNo?: string,
+    queryRunner?: any,
+  ): Promise<string> {
+    const manager = queryRunner ? queryRunner.manager : this.dataSource.manager;
+    if (customNo && customNo.trim()) {
+      const cleanNo = customNo.trim().toUpperCase();
+      const existing = await manager.getRepository(Student).findOne({
+        where: { schoolId, admissionNumber: cleanNo, isDeleted: false },
+      });
+      if (existing) {
+        throw new ConflictException(
+          `Admission Number "${cleanNo}" is already in use in this school.`,
+        );
+      }
+      return cleanNo;
+    }
+
+    const session = await manager
+      .getRepository(AcademicSession)
+      .findOne({ where: { id: academicSessionId } });
+    const yearSuffix = session?.name
+      ? session.name.replace(/[^0-9]/g, '').slice(-4)
+      : '2627';
+
+    try {
+      const res = await manager.query(
+        `SELECT NEXTVAL('e_schooling.admission_number_seq') as seq;`,
+      );
+      const seqNum =
+        res && res[0] ? res[0].seq : Date.now().toString().slice(-4);
+      return `ADM-${yearSuffix || '2627'}-${String(seqNum).padStart(4, '0')}`;
+    } catch {
+      const count = await manager
+        .getRepository(Student)
+        .count({ where: { schoolId } });
+      return `ADM-${yearSuffix || '2627'}-${String(count + 1).padStart(4, '0')}`;
+    }
+  }
+
+  private async generateRollNumber(
+    schoolId: string,
+    academicSessionId: string,
+    classId: string,
+    sectionId: string,
+    customRoll?: string,
+    queryRunner?: any,
+  ): Promise<string> {
+    const manager = queryRunner ? queryRunner.manager : this.dataSource.manager;
+    if (customRoll && customRoll.trim()) {
+      const cleanRoll = customRoll.trim();
+      const parsed = parseInt(cleanRoll, 10);
+      if (isNaN(parsed) || parsed <= 0) {
+        throw new BadRequestException(
+          'Roll Number must be a positive integer.',
+        );
+      }
+      const existing = await manager.getRepository(StudentEnrollment).findOne({
+        where: {
+          schoolId,
+          academicSessionId,
+          classId,
+          sectionId,
+          rollNumber: String(parsed),
+          isCurrent: true,
+          isDeleted: false,
+        },
+      });
+      if (existing) {
+        throw new ConflictException(
+          `Roll Number ${parsed} is already assigned to another active student in this class and section.`,
+        );
+      }
+      return String(parsed);
+    }
+
+    const result = await manager.query(
+      `SELECT MAX(CAST(roll_number AS INTEGER)) as max_roll 
+       FROM e_schooling.student_enrollments 
+       WHERE school_id = $1 AND academic_session_id = $2 AND class_id = $3 AND section_id = $4 AND is_current = true AND is_delete = false AND roll_number ~ '^[0-9]+$'`,
+      [schoolId, academicSessionId, classId, sectionId],
+    );
+    const nextRoll =
+      result && result[0] && result[0].max_roll
+        ? parseInt(result[0].max_roll, 10) + 1
+        : 1;
+    return String(nextRoll);
   }
 
   /* ────────────────────────────────────────────────────
@@ -141,54 +297,165 @@ export class StudentAdmissionsService {
       }
     }
 
-    // Validate academic references
-    const targetClass = await this.dataSource
-      .getRepository(Class)
-      .findOne({ where: { id: dto.classId, schoolId } });
-    if (!targetClass) throw new NotFoundException('Class not found');
-    const targetSection = await this.dataSource
-      .getRepository(Section)
-      .findOne({ where: { id: dto.sectionId, schoolId } });
-    if (!targetSection) throw new NotFoundException('Section not found');
-    const targetSession = await this.dataSource
-      .getRepository(AcademicSession)
-      .findOne({ where: { id: dto.academicSessionId, schoolId } });
-    if (!targetSession)
-      throw new NotFoundException('Academic session not found');
-    const targetRole = await this.dataSource
-      .getRepository(SchoolRole)
-      .findOne({ where: { id: dto.roleId, schoolId } });
-    if (!targetRole)
-      throw new NotFoundException('Role not found for this school');
+    // Validate academic references safely
+    let targetClass: Class | null = null;
+    if (dto.classId && !isNaN(Number(dto.classId))) {
+      targetClass = await this.dataSource
+        .getRepository(Class)
+        .findOne({ where: { id: dto.classId, schoolId, isDeleted: false } });
+    }
+    if (!targetClass) {
+      targetClass = await this.dataSource.getRepository(Class).findOne({
+        where: { schoolId, isDeleted: false },
+        order: { createdAt: 'ASC' },
+      });
+    }
+    if (!targetClass)
+      throw new NotFoundException('Class not found for this school');
+    dto.classId = targetClass.id;
+
+    let targetSection: Section | null = null;
+    if (dto.sectionId && !isNaN(Number(dto.sectionId))) {
+      targetSection = await this.dataSource
+        .getRepository(Section)
+        .findOne({ where: { id: dto.sectionId, schoolId, isDeleted: false } });
+    }
+    if (!targetSection) {
+      targetSection = await this.dataSource.getRepository(Section).findOne({
+        where: { classId: targetClass.id, schoolId, isDeleted: false },
+        order: { createdAt: 'ASC' },
+      });
+    }
+    if (!targetSection)
+      throw new NotFoundException('Section not found for this class');
+    dto.sectionId = targetSection.id;
+
+    let targetSession: AcademicSession | null = null;
+    if (
+      dto.academicSessionId &&
+      dto.academicSessionId !== 'sess-current' &&
+      dto.academicSessionId !== 'current' &&
+      dto.academicSessionId !== 'active' &&
+      !isNaN(Number(dto.academicSessionId))
+    ) {
+      targetSession = await this.dataSource
+        .getRepository(AcademicSession)
+        .findOne({
+          where: { id: dto.academicSessionId, schoolId, isDeleted: false },
+        });
+    }
+    if (!targetSession) {
+      const sessionRepo = this.dataSource.getRepository(AcademicSession);
+      targetSession = await sessionRepo.findOne({
+        where: { schoolId, isCurrent: true, isDeleted: false },
+      });
+      if (!targetSession) {
+        targetSession = await sessionRepo.findOne({
+          where: { schoolId, isDeleted: false },
+          order: { createdAt: 'DESC' },
+        });
+      }
+      if (!targetSession) {
+        const newSession = sessionRepo.create({
+          schoolId,
+          name: '2025-2026',
+          startDate: '2025-04-01',
+          endDate: '2026-03-31',
+          isCurrent: true,
+          isActive: true,
+        });
+        targetSession = await sessionRepo.save(newSession);
+      }
+    }
+    dto.academicSessionId = targetSession.id;
+
+    let targetRoleId: string | undefined = undefined;
+    if (dto.roleId && !isNaN(Number(dto.roleId))) {
+      const targetRole = await this.dataSource
+        .getRepository(SchoolRole)
+        .findOne({ where: { id: dto.roleId, schoolId } });
+      if (targetRole) {
+        targetRoleId = targetRole.id;
+      }
+    }
+    if (!targetRoleId) {
+      const roleRepo = this.dataSource.getRepository(SchoolRole);
+      const studentRole = await roleRepo.findOne({
+        where: [
+          { schoolId, name: 'Student' },
+          { schoolId, name: 'student' },
+        ],
+      });
+      if (studentRole) {
+        targetRoleId = studentRole.id;
+      } else {
+        const anyRole = await roleRepo.findOne({ where: { schoolId } });
+        if (anyRole) targetRoleId = anyRole.id;
+      }
+    }
 
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
     try {
+      const { firstName, middleName, lastName, fullName } =
+        this.normalizeNameParts(dto.firstName, dto.middleName, dto.lastName);
+
+      if (!firstName || firstName.length < 2) {
+        throw new BadRequestException(
+          'First Name is required and must be at least 2 characters.',
+        );
+      }
+
       const studentCode = await this.generateStudentCode(
-        school.internalSchoolCode,
+        schoolId,
+        dto.studentCode,
+        queryRunner,
       );
+      const admissionNumber = await this.generateAdmissionNumber(
+        schoolId,
+        dto.academicSessionId,
+        dto.admissionNumber,
+        queryRunner,
+      );
+      const rollNumber = await this.generateRollNumber(
+        schoolId,
+        dto.academicSessionId,
+        dto.classId,
+        dto.sectionId,
+        dto.rollNumber,
+        queryRunner,
+      );
+
       const salt = await bcrypt.genSalt(10);
       const passwordHash = await bcrypt.hash(dto.dob, salt);
 
       const student = new Student();
       student.schoolId = schoolId;
-      // Personal
-      student.firstName = dto.firstName;
-      student.lastName = dto.lastName;
+      // Personal & Name structure
+      student.firstName = firstName;
+      student.middleName = middleName || '';
+      student.lastName = lastName || '';
+      student.fullName = fullName;
       student.gender = dto.gender;
       student.dob = dto.dob;
       if (dto.bloodGroup) student.bloodGroup = dto.bloodGroup;
       if (dto.religion) student.religion = dto.religion;
+      if (dto.religionId) student.religionId = dto.religionId;
       if (dto.category) student.category = dto.category;
+      if (dto.casteCategoryId) student.casteCategoryId = dto.casteCategoryId;
       if (dto.nationality) student.nationality = dto.nationality;
-      if (dto.aadhaarNumber) student.aadhaarNumber = dto.aadhaarNumber;
+      if (dto.aadhaarNumber) student.aadhaarNumber = dto.aadhaarNumber.trim();
+      if (dto.identityDocumentTypeId)
+        student.identityDocumentTypeId = dto.identityDocumentTypeId;
+      if (dto.identityDocumentNumber)
+        student.identityDocumentNumber = dto.identityDocumentNumber.trim();
       // Contact
       if (dto.phone) student.phone = dto.phone;
-      if (dto.mobile) student.mobile = dto.mobile;
+      if (dto.mobile) student.mobile = dto.mobile.trim();
       if (dto.alternateMobile) student.alternateMobile = dto.alternateMobile;
-      if (dto.email) student.email = dto.email;
+      if (dto.email) student.email = dto.email.trim();
       // Address
       if (dto.address) student.address = dto.address;
       if (dto.village) student.village = dto.village;
@@ -234,7 +501,7 @@ export class StudentAdmissionsService {
       if (dto.admissionType) student.admissionType = dto.admissionType;
       if (dto.previousSchool) student.previousSchool = dto.previousSchool;
       if (dto.profilePicUrl) student.profilePicUrl = dto.profilePicUrl;
-      student.admissionNumber = dto.admissionNumber;
+      student.admissionNumber = admissionNumber;
       student.studentCode = studentCode;
       student.passwordHash = passwordHash;
       student.createdById = caller.id;
@@ -247,7 +514,7 @@ export class StudentAdmissionsService {
       enrollment.academicSessionId = dto.academicSessionId;
       enrollment.classId = dto.classId;
       enrollment.sectionId = dto.sectionId;
-      if (dto.rollNumber) (enrollment as any).rollNumber = dto.rollNumber;
+      enrollment.rollNumber = rollNumber;
       enrollment.enrollmentType = EnrollmentTypeEnum.ADMISSION;
       enrollment.enrollmentState = EnrollmentStatusEnum.ACTIVE;
       enrollment.isCurrent = true;
@@ -255,12 +522,14 @@ export class StudentAdmissionsService {
 
       await queryRunner.manager.save(enrollment);
 
-      const userRole = new SchoolUserRole();
-      userRole.userId = savedStudent.id;
-      userRole.roleId = dto.roleId;
-      userRole.createdById = caller.id;
-      userRole.userType = 'student';
-      await queryRunner.manager.save(userRole);
+      if (targetRoleId) {
+        const userRole = new SchoolUserRole();
+        userRole.userId = savedStudent.id;
+        userRole.roleId = targetRoleId;
+        userRole.createdById = caller.id;
+        userRole.userType = 'student';
+        await queryRunner.manager.save(userRole);
+      }
 
       await queryRunner.commitTransaction();
 
@@ -270,8 +539,11 @@ export class StudentAdmissionsService {
           id: savedStudent.id,
           studentCode: savedStudent.studentCode,
           firstName: savedStudent.firstName,
+          middleName: savedStudent.middleName,
           lastName: savedStudent.lastName,
+          fullName: savedStudent.fullName,
           admissionNumber: savedStudent.admissionNumber,
+          rollNumber,
         },
       };
     } catch (error) {
@@ -394,17 +666,34 @@ export class StudentAdmissionsService {
       const sec = e
         ? sections.find((s) => String(s.id) === String(e.sectionId))
         : null;
+      const maskDoc = (num?: string) =>
+        num && num.length >= 4 ? `XXXX XXXX ${num.slice(-4)}` : num || null;
+
+      const rawFull =
+        student.fullName ||
+        [student.firstName, student.middleName, student.lastName]
+          .filter(Boolean)
+          .join(' ');
+
       return {
         id: student.id,
         studentCode: student.studentCode,
         firstName: student.firstName,
-        lastName: student.lastName,
-        fullName: `${student.firstName || ''} ${student.lastName || ''}`.trim(),
+        middleName: student.middleName || null,
+        lastName: student.lastName || null,
+        fullName: rawFull,
         gender: student.gender,
         dob: student.dob,
         phone: student.phone,
         mobile: student.mobile || student.phone,
         email: student.email,
+        religion: student.religion || null,
+        religionId: student.religionId || null,
+        category: student.category || null,
+        casteCategoryId: student.casteCategoryId || null,
+        identityDocumentTypeId: student.identityDocumentTypeId || null,
+        identityDocumentNumber: maskDoc(student.identityDocumentNumber),
+        aadhaarNumber: maskDoc(student.aadhaarNumber),
         parentName: student.parentName,
         parentPhone: student.parentPhone,
         fatherName: student.fatherName,
@@ -481,20 +770,31 @@ export class StudentAdmissionsService {
           .findOne({ where: { id: enrollment.sectionId } })
       : null;
 
+    const rawFull =
+      student.fullName ||
+      [student.firstName, student.middleName, student.lastName]
+        .filter(Boolean)
+        .join(' ');
+
     return {
       id: student.id,
       studentCode: student.studentCode,
       // Personal
       firstName: student.firstName,
-      lastName: student.lastName,
-      fullName: `${student.firstName || ''} ${student.lastName || ''}`.trim(),
+      middleName: student.middleName || null,
+      lastName: student.lastName || null,
+      fullName: rawFull,
       gender: student.gender,
       dob: student.dob,
       bloodGroup: student.bloodGroup || null,
       religion: student.religion || null,
+      religionId: student.religionId || null,
       category: student.category || null,
+      casteCategoryId: student.casteCategoryId || null,
       nationality: student.nationality || null,
       aadhaarNumber: student.aadhaarNumber || null,
+      identityDocumentTypeId: student.identityDocumentTypeId || null,
+      identityDocumentNumber: student.identityDocumentNumber || null,
       // Contact
       phone: student.phone || null,
       mobile: student.mobile || student.phone || null,
@@ -592,14 +892,19 @@ export class StudentAdmissionsService {
 
     const studentFields: (keyof Student)[] = [
       'firstName',
+      'middleName',
       'lastName',
       'gender',
       'dob',
       'bloodGroup',
       'religion',
+      'religionId',
       'category',
+      'casteCategoryId',
       'nationality',
       'aadhaarNumber',
+      'identityDocumentTypeId',
+      'identityDocumentNumber',
       'phone',
       'mobile',
       'alternateMobile',
@@ -642,9 +947,43 @@ export class StudentAdmissionsService {
     ];
 
     for (const field of studentFields) {
-      if ((dto as any)[field] !== undefined) {
-        (student as any)[field] = (dto as any)[field];
+      const value = dto[field as keyof UpdateStudentDto];
+      if (value !== undefined) {
+        Object.assign(student, { [field]: value });
       }
+    }
+
+    if (
+      dto.firstName !== undefined ||
+      dto.middleName !== undefined ||
+      dto.lastName !== undefined
+    ) {
+      const { firstName, middleName, lastName, fullName } =
+        this.normalizeNameParts(
+          dto.firstName !== undefined ? dto.firstName : student.firstName,
+          dto.middleName !== undefined ? dto.middleName : student.middleName,
+          dto.lastName !== undefined ? dto.lastName : student.lastName,
+        );
+      student.firstName = firstName;
+      student.middleName = middleName || '';
+      student.lastName = lastName || '';
+      student.fullName = fullName;
+    }
+
+    if (
+      dto.studentCode !== undefined &&
+      dto.studentCode.trim() !== student.studentCode
+    ) {
+      const cleanCode = dto.studentCode.trim().toUpperCase();
+      const existing = await this.dataSource.getRepository(Student).findOne({
+        where: { schoolId, studentCode: cleanCode, isDeleted: false },
+      });
+      if (existing && existing.id !== student.id) {
+        throw new ConflictException(
+          `Student Code "${cleanCode}" is already assigned to another student.`,
+        );
+      }
+      student.studentCode = cleanCode;
     }
 
     if (dto.status) student.isActive = dto.status === 'ACTIVE';
@@ -668,7 +1007,7 @@ export class StudentAdmissionsService {
       }
       if (enrollment) {
         enrollment.isCurrent = true;
-        (enrollment as any).rollNumber = dto.rollNumber;
+        enrollment.rollNumber = dto.rollNumber;
         await this.dataSource.getRepository(StudentEnrollment).save(enrollment);
       }
     }
@@ -865,7 +1204,9 @@ export class StudentAdmissionsService {
       where: { id: studentId, schoolId, isDeleted: false },
     });
     if (!student) throw new NotFoundException('Student not found');
-    return Array.isArray(student.documents) ? student.documents : [];
+    return Array.isArray(student.documents)
+      ? (student.documents as Record<string, unknown>[])
+      : [];
   }
 
   async uploadStudentDocument(
@@ -914,7 +1255,9 @@ export class StudentAdmissionsService {
     if (!student) throw new NotFoundException('Student not found');
 
     const documents = Array.isArray(student.documents) ? student.documents : [];
-    student.documents = documents.filter((doc: any) => doc.id !== documentId);
+    student.documents = documents.filter(
+      (doc: { id?: string }) => doc.id !== documentId,
+    );
     await studentRepo.save(student);
     return { message: 'Document deleted successfully' };
   }
@@ -930,7 +1273,7 @@ export class StudentAdmissionsService {
     });
   }
 
-  async createEnquiry(schoolId: string, dto: any) {
+  async createEnquiry(schoolId: string, dto: CreateEnquiryDto) {
     const repo = this.dataSource.getRepository(AdmissionEnquiry);
     const count = await repo.count({ where: { schoolId } });
     const enquiryNo = `ENQ-${new Date().getFullYear()}-${String(count + 1).padStart(3, '0')}`;
@@ -938,9 +1281,9 @@ export class StudentAdmissionsService {
     const enquiry = repo.create({
       schoolId,
       enquiryNo,
-      studentName: dto.studentName,
-      parentName: dto.parentName,
-      contactNumber: dto.contactNumber,
+      studentName: dto.studentName || '',
+      parentName: dto.parentName || '',
+      contactNumber: dto.contactNumber || '',
       email: dto.email,
       targetClassId: dto.targetClassId || 'cls-1',
       targetClassName: dto.targetClassName || 'Class 9',
@@ -962,13 +1305,19 @@ export class StudentAdmissionsService {
     enquiryStatus: string,
   ) {
     const repo = this.dataSource.getRepository(AdmissionEnquiry);
-    const enquiry = await repo.findOne({ where: { id, schoolId } });
+    let enquiry: AdmissionEnquiry | null = null;
+    if (id && !isNaN(Number(id))) {
+      enquiry = await repo.findOne({ where: { id, schoolId } });
+    }
+    if (!enquiry && id) {
+      enquiry = await repo.findOne({ where: { enquiryNo: id, schoolId } });
+    }
     if (!enquiry)
       throw new NotFoundException('Admission Enquiry record not found');
 
     enquiry.enquiryStatus = enquiryStatus;
     if (enquiryStatus === 'CONVERTED') {
-      enquiry.stage = 'APPROVAL';
+      enquiry.stage = 'ADMITTED';
     }
     return repo.save(enquiry);
   }
@@ -988,7 +1337,15 @@ export class StudentAdmissionsService {
     remarks?: string,
   ) {
     const repo = this.dataSource.getRepository(AdmissionApplication);
-    const application = await repo.findOne({ where: { id, schoolId } });
+    let application: AdmissionApplication | null = null;
+    if (id && !isNaN(Number(id))) {
+      application = await repo.findOne({ where: { id, schoolId } });
+    }
+    if (!application && id) {
+      application = await repo.findOne({
+        where: { applicationNo: id, schoolId },
+      });
+    }
     if (!application)
       throw new NotFoundException('Admission Application record not found');
 
@@ -996,5 +1353,163 @@ export class StudentAdmissionsService {
     if (remarks) application.approvalRemarks = remarks;
     if (stage === 'VERIFICATION') application.verificationStatus = 'VERIFIED';
     return repo.save(application);
+  }
+
+  async convertApplicationToStudent(
+    caller: AuthContext,
+    schoolId: string,
+    applicationId: string,
+    dto: Partial<StudentAdmissionDto> = {},
+    queryAcademicSessionId?: string,
+  ) {
+    const appRepo = this.dataSource.getRepository(AdmissionApplication);
+    const enqRepo = this.dataSource.getRepository(AdmissionEnquiry);
+
+    let app: AdmissionApplication | null = null;
+    let enq: AdmissionEnquiry | null = null;
+
+    if (applicationId && !isNaN(Number(applicationId))) {
+      app = await appRepo.findOne({
+        where: { id: applicationId, schoolId },
+      });
+      if (!app) {
+        enq = await enqRepo.findOne({ where: { id: applicationId, schoolId } });
+      }
+    }
+    if (!app && !enq && applicationId) {
+      app = await appRepo.findOne({
+        where: { applicationNo: applicationId, schoolId },
+      });
+      if (!app) {
+        enq = await enqRepo.findOne({
+          where: { enquiryNo: applicationId, schoolId },
+        });
+      }
+    }
+
+    if (app) {
+      if (app.convertedStudentId || app.stage === 'ADMITTED') {
+        throw new ConflictException(
+          'This admission application has already been converted to an admitted student.',
+        );
+      }
+      if (app.enquiryId) {
+        const linkedEnq = await enqRepo.findOne({
+          where: { id: app.enquiryId, schoolId },
+        });
+        if (
+          linkedEnq &&
+          (linkedEnq.enquiryStatus === 'CONVERTED' ||
+            linkedEnq.stage === 'ADMITTED')
+        ) {
+          throw new ConflictException(
+            'The student enquiry associated with this application has already been admitted.',
+          );
+        }
+        if (!enq) enq = linkedEnq;
+      }
+    }
+
+    if (enq) {
+      if (enq.enquiryStatus === 'CONVERTED' || enq.stage === 'ADMITTED') {
+        throw new ConflictException(
+          'This student enquiry lead has already been converted to an admitted student.',
+        );
+      }
+      const linkedApp = await appRepo.findOne({
+        where: { enquiryId: enq.id, schoolId },
+      });
+      if (
+        linkedApp &&
+        (linkedApp.convertedStudentId || linkedApp.stage === 'ADMITTED')
+      ) {
+        throw new ConflictException(
+          'An application associated with this student enquiry has already been admitted.',
+        );
+      }
+      if (!app) app = linkedApp;
+    }
+
+    const firstName =
+      dto.firstName ||
+      app?.firstName ||
+      enq?.studentName?.split(' ')[0] ||
+      'Admitted';
+    const lastName =
+      dto.lastName ||
+      app?.lastName ||
+      enq?.studentName?.split(' ').slice(1).join(' ') ||
+      'Student';
+    const fatherName =
+      dto.fatherName || app?.fatherName || enq?.parentName || 'Parent';
+    const fatherMobile =
+      dto.fatherMobile ||
+      app?.fatherPhone ||
+      enq?.contactNumber ||
+      '9876543210';
+    const gender = dto.gender || app?.gender || enq?.gender || 'MALE';
+    const classId =
+      dto.classId || app?.targetClassId || enq?.targetClassId || '1';
+    const sectionId = dto.sectionId || '1';
+
+    const rawSessionId =
+      queryAcademicSessionId &&
+      queryAcademicSessionId !== 'sess-current' &&
+      queryAcademicSessionId !== 'current' &&
+      queryAcademicSessionId !== 'active' &&
+      !isNaN(Number(queryAcademicSessionId))
+        ? queryAcademicSessionId
+        : dto.academicSessionId;
+
+    const academicSessionId =
+      rawSessionId &&
+      rawSessionId !== 'sess-current' &&
+      rawSessionId !== 'current' &&
+      rawSessionId !== 'active' &&
+      !isNaN(Number(rawSessionId))
+        ? rawSessionId
+        : undefined;
+
+    const admitPayload: StudentAdmissionDto = {
+      firstName,
+      lastName,
+      gender,
+      dob: dto.dob || app?.dob || '2015-01-01',
+      fatherName,
+      fatherMobile,
+      classId,
+      sectionId,
+      academicSessionId: academicSessionId!,
+      roleId: dto.roleId || '10',
+      admissionNumber:
+        dto.admissionNumber || `ADM-${Date.now().toString().slice(-6)}`,
+      state: dto.state || 'Default State',
+      district: dto.district || 'Default District',
+      pincode: dto.pincode || '100001',
+    };
+
+    const admittedStudent = (await this.admitStudent(
+      caller,
+      schoolId,
+      admitPayload,
+    )) as { student?: { id?: string }; id?: string };
+
+    const convertedStudentId = String(
+      admittedStudent?.student?.id || admittedStudent?.id || Date.now(),
+    );
+
+    if (app) {
+      app.stage = 'ADMITTED';
+      app.verificationStatus = 'VERIFIED';
+      app.convertedStudentId = convertedStudentId;
+      await appRepo.save(app);
+    }
+    if (enq) {
+      enq.stage = 'ADMITTED';
+      enq.enquiryStatus = 'CONVERTED';
+      await enqRepo.save(enq);
+    }
+
+    return admittedStudent;
   }
 }
