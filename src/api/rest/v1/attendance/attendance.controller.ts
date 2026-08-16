@@ -18,6 +18,13 @@ import { Permission } from '../../../../shared/decorators/permission.decorator';
 import { CurrentUser } from '../../../../shared/decorators/current-user.decorator';
 import { CurrentAcademicSession } from '../../../../shared/decorators/current-academic-session.decorator';
 import { AttendanceService } from '../../../../services/attendance/attendance.service';
+import type {
+  AttendanceSettingsDto,
+  MarkStaffAttendanceDto,
+  MobileGeoAttendanceDto,
+  SyncBiometricPunchesDto,
+  TakeSubjectAttendanceDto,
+} from '../../../../services/attendance/attendance.service';
 import type { AuthContext } from '../../../../interfaces/auth-context.interface';
 import { TakeAttendanceDto } from '../../../../interfaces/request/attendance/take-attendance.dto';
 import { UpdateAttendanceDto } from '../../../../interfaces/request/attendance/update-attendance.dto';
@@ -170,7 +177,9 @@ export class AttendanceController {
     );
   }
 
-  @ApiOperation({ summary: 'Get optimized attendance dashboard summary counts' })
+  @ApiOperation({
+    summary: 'Get optimized attendance dashboard summary counts',
+  })
   @Permission(ResourceEnum.ATTENDANCE, ActionEnum.VIEW)
   @Get('dashboard-summary')
   async getAttendanceDashboardSummary(
@@ -187,6 +196,99 @@ export class AttendanceController {
       date,
       academicSessionId,
     );
+  }
+
+  @ApiOperation({ summary: 'Get attendance summary metrics' })
+  @Permission(ResourceEnum.ATTENDANCE, ActionEnum.VIEW)
+  @Get('summary')
+  async getAttendanceSummary(
+    @Param('schoolId') schoolId: string,
+    @CurrentUser() caller: AuthContext,
+    @CurrentAcademicSession() sessionFromHeader: string | null,
+    @Query('date') date?: string,
+    @Query('academicSessionId') querySessionId?: string,
+  ) {
+    const academicSessionId = querySessionId || sessionFromHeader || undefined;
+    return this.attendanceService.getAttendanceDashboardSummary(
+      caller,
+      schoolId,
+      date,
+      academicSessionId,
+    );
+  }
+
+  @ApiOperation({ summary: 'Get staff attendance list for date' })
+  @Permission(ResourceEnum.ATTENDANCE, ActionEnum.VIEW)
+  @Get('staff')
+  async getStaffAttendanceList(
+    @Param('schoolId') schoolId: string,
+    @CurrentUser() caller: AuthContext,
+    @Query('date') date?: string,
+  ) {
+    return this.attendanceService.getStaffAttendanceList(
+      caller,
+      schoolId,
+      date,
+    );
+  }
+
+  @ApiOperation({ summary: 'Mark staff attendance record' })
+  @Permission(ResourceEnum.ATTENDANCE, ActionEnum.CREATE)
+  @Post('staff')
+  async markStaffAttendance(
+    @Param('schoolId') schoolId: string,
+    @CurrentUser() caller: AuthContext,
+    @Body() dto: MarkStaffAttendanceDto,
+  ) {
+    return this.attendanceService.markStaffAttendance(caller, schoolId, dto);
+  }
+
+  @ApiOperation({ summary: 'Get staff attendance history' })
+  @Permission(ResourceEnum.ATTENDANCE, ActionEnum.VIEW)
+  @Get('staff/:staffId/history')
+  async getStaffAttendanceHistory(
+    @Param('schoolId') schoolId: string,
+    @Param('staffId') staffId: string,
+    @CurrentUser() caller: AuthContext,
+  ) {
+    return this.attendanceService.getStaffAttendanceHistory(
+      caller,
+      schoolId,
+      staffId,
+    );
+  }
+
+  @ApiOperation({ summary: 'Sync biometric punches' })
+  @Permission(ResourceEnum.ATTENDANCE, ActionEnum.CREATE)
+  @Post('biometric/sync')
+  async syncBiometricPunches(
+    @Param('schoolId') schoolId: string,
+    @CurrentUser() caller: AuthContext,
+    @Body() dto: SyncBiometricPunchesDto,
+  ) {
+    return this.attendanceService.syncBiometricPunches(caller, schoolId, dto);
+  }
+
+  @ApiOperation({ summary: 'Mobile check-in' })
+  @Permission(ResourceEnum.ATTENDANCE, ActionEnum.CREATE)
+  @Post('mobile/check-in')
+  async mobileCheckIn(
+    @Param('schoolId') schoolId: string,
+    @CurrentUser() caller: AuthContext,
+    @Body() dto: MobileGeoAttendanceDto,
+  ) {
+    return this.attendanceService.mobileCheckIn(caller, schoolId, dto);
+  }
+
+  @ApiOperation({ summary: 'Mobile check-out' })
+  @Permission(ResourceEnum.ATTENDANCE, ActionEnum.CREATE)
+  @Post('mobile/check-out')
+  async mobileCheckOut(
+    @Param('schoolId') schoolId: string,
+    @CurrentUser() caller: AuthContext,
+    @Body() dto: MobileGeoAttendanceDto,
+  ) {
+    return this.attendanceService.mobileCheckOut(caller, schoolId, dto);
   }
 
   @ApiOperation({ summary: 'Get centralized attendance status & overview' })
@@ -293,7 +395,7 @@ export class AttendanceController {
   @Put('settings')
   async updateAttendanceSettings(
     @Param('schoolId') schoolId: string,
-    @Body() settings: any,
+    @Body() settings: AttendanceSettingsDto,
   ) {
     return this.attendanceService.updateAttendanceSettings(schoolId, settings);
   }
@@ -308,12 +410,14 @@ export class AttendanceController {
   async takeSubjectAttendance(
     @Param('schoolId') schoolId: string,
     @CurrentUser() caller: AuthContext,
-    @Body() dto: any,
+    @Body() dto: TakeSubjectAttendanceDto,
   ) {
     return this.attendanceService.takeSubjectAttendance(caller, schoolId, dto);
   }
 
-  @ApiOperation({ summary: 'Get subject attendance sessions list and analytics' })
+  @ApiOperation({
+    summary: 'Get subject attendance sessions list and analytics',
+  })
   @Permission(ResourceEnum.ATTENDANCE, ActionEnum.VIEW)
   @Get('subject')
   async getSubjectAttendance(
@@ -344,7 +448,9 @@ export class AttendanceController {
     });
   }
 
-  @ApiOperation({ summary: 'Get timetable slots for subject attendance marking' })
+  @ApiOperation({
+    summary: 'Get timetable slots for subject attendance marking',
+  })
   @Permission(ResourceEnum.ATTENDANCE, ActionEnum.VIEW)
   @Get('subject/slots')
   async getSubjectTimetableSlots(
@@ -382,7 +488,9 @@ export class AttendanceController {
     );
   }
 
-  @ApiOperation({ summary: 'Get specific subject attendance session details & records' })
+  @ApiOperation({
+    summary: 'Get specific subject attendance session details & records',
+  })
   @Permission(ResourceEnum.ATTENDANCE, ActionEnum.VIEW)
   @Get('subject/:sessionId')
   async getSubjectAttendanceSession(
@@ -397,4 +505,3 @@ export class AttendanceController {
     );
   }
 }
-
