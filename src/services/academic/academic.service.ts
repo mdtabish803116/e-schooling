@@ -414,15 +414,12 @@ export class AcademicService implements OnModuleInit {
     });
 
     if (academicSessionId) {
-      const sessionMatched = classes.filter(
+      classes = classes.filter(
         (cls) =>
           cls.academicSessionId === String(academicSessionId) ||
           cls.academicSessionId === null ||
           cls.academicSessionId === undefined,
       );
-      if (sessionMatched.length > 0) {
-        classes = sessionMatched;
-      }
     }
 
     if (classes.length === 0) return [];
@@ -1248,15 +1245,12 @@ export class AcademicService implements OnModuleInit {
     });
 
     if (academicSessionId) {
-      const sessionMatched = sections.filter(
+      sections = sections.filter(
         (s) =>
           s.academicSessionId === String(academicSessionId) ||
           s.academicSessionId === null ||
           s.academicSessionId === undefined,
       );
-      if (sessionMatched.length > 0) {
-        sections = sessionMatched;
-      }
     }
 
     if (sections.length === 0) return [];
