@@ -133,6 +133,15 @@ export class SubjectAttendanceSession {
   sessionTitle: string | null;
 
   @Column({
+    name: 'taken_by_name',
+    type: 'varchar',
+    length: 255,
+    nullable: true,
+    comment: 'Name of the user who marked the attendance',
+  })
+  takenByName: string;
+
+  @Column({
     name: 'is_locked',
     type: 'boolean',
     nullable: false,

@@ -21,6 +21,8 @@ import { AttendanceLock } from '../../models/entities/attendance/attendance-lock
 import { AttendanceRecord } from '../../models/entities/attendance/attendance-record.entity';
 import { AttendanceSession } from '../../models/entities/attendance/attendance-session.entity';
 import { PlatformUser } from '../../models/entities/platform/platform-user.entity';
+import { SchoolOwner } from '../../models/entities/school/school-owner.entity';
+import { SchoolUser } from '../../models/entities/school/school-user.entity';
 import { SchoolOwnerMember } from '../../models/entities/school/school-owner-member.entity';
 import { StudentEnrollment } from '../../models/entities/student/student-enrollment.entity';
 import { Student } from '../../models/entities/student/student.entity';
@@ -243,11 +245,16 @@ interface RawDailyAttendanceSessionRow {
 
 interface RawDailyAttendanceCountRow {
   session_id: string | number;
-  total_records: string | number;
-  present_count: string | number;
-  absent_count: string | number;
-  late_count: string | number;
-  leave_count: string | number;
+  total?: string | number;
+  present?: string | number;
+  absent?: string | number;
+  late?: string | number;
+  leave?: string | number;
+  total_records?: string | number;
+  present_count?: string | number;
+  absent_count?: string | number;
+  late_count?: string | number;
+  leave_count?: string | number;
 }
 
 interface RawTimetableSlotOverviewRow {
@@ -453,16 +460,61 @@ export class AttendanceService implements OnModuleInit {
     return clean;
   }
 
-  async assertDateNotLocked(schoolId: string, date: string): Promise<void> {
+  private getLocalDateString(d: Date = new Date()): string {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+
+  async assertDateNotLocked(schoolId: string, rawDate: string): Promise<void> {
+    const formattedDate = this.parseDateFlexible(rawDate);
+    const settings = await this.getAttendanceSettings(schoolId);
+
+    // 1. Check future date policy
+    if (!settings.allowFutureAttendance) {
+      const today = this.getLocalDateString();
+      const utcToday = new Date().toISOString().split('T')[0];
+      const effectiveToday = today > utcToday ? today : utcToday;
+      if (formattedDate > effectiveToday) {
+        throw new HttpException(
+          {
+            statusCode: HttpStatus.FORBIDDEN,
+            error: 'Future Date Prohibited',
+            message: `Attendance marking for future date (${formattedDate}) is disabled in attendance settings.`,
+          },
+          HttpStatus.FORBIDDEN,
+        );
+      }
+    }
+
+    // 2. Check auto-lock past days policy (Grace Window)
+    if (settings.autoLockPastDays && settings.autoLockPastDays > 0) {
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - settings.autoLockPastDays);
+      const cutoffStr = this.getLocalDateString(cutoff);
+      if (formattedDate < cutoffStr) {
+        throw new HttpException(
+          {
+            statusCode: HttpStatus.LOCKED,
+            error: 'Locked Date',
+            message: `Attendance for date ${formattedDate} is auto-locked (exceeds ${settings.autoLockPastDays} days past grace window). Modifications disabled.`,
+          },
+          HttpStatus.LOCKED,
+        );
+      }
+    }
+
+    // 3. Check manual date lock record
     const lock = await this.dataSource.getRepository(AttendanceLock).findOne({
-      where: { schoolId, date, isLocked: true },
+      where: { schoolId, date: formattedDate, isLocked: true },
     });
     if (lock) {
       throw new HttpException(
         {
           statusCode: HttpStatus.LOCKED,
           error: 'Locked Date',
-          message: `Attendance for date ${date} is locked by ${lock.lockedBy || 'admin'}. Modifications disabled.`,
+          message: `Attendance for date ${formattedDate} is locked by ${lock.lockedBy || 'admin'}. Modifications disabled.`,
         },
         HttpStatus.LOCKED,
       );
@@ -485,15 +537,20 @@ export class AttendanceService implements OnModuleInit {
       caller.roles?.includes('SCHOOL_OWNER') ||
       caller.roles?.includes('owner')
     ) {
-      const isMember = await this.dataSource
-        .getRepository(SchoolOwnerMember)
-        .exist({
-          where: { schoolOwnerId: caller.id, schoolId, isDeleted: false },
-        });
-      if (!isMember) {
-        throw new ForbiddenException(
-          'Forbidden: You do not own or manage this school.',
+      const rows = await this.dataSource.query(
+        `SELECT id FROM "e_schooling"."school_owner_members" WHERE school_owner_id = $1 AND school_id = $2 AND is_delete = false LIMIT 1`,
+        [caller.id, schoolId],
+      );
+      if (!rows || rows.length === 0) {
+        const schRows = await this.dataSource.query(
+          `SELECT id FROM "e_schooling"."schools" WHERE id = $1 AND created_by_id = $2 AND is_delete = false LIMIT 1`,
+          [schoolId, caller.id],
         );
+        if (!schRows || schRows.length === 0) {
+          throw new ForbiddenException(
+            'Forbidden: You do not own or manage this school.',
+          );
+        }
       }
       return;
     }
@@ -558,6 +615,37 @@ export class AttendanceService implements OnModuleInit {
     };
   }
 
+  async resolveCallerName(caller: AuthContext): Promise<string> {
+    try {
+      if (caller.actorType === 'school_owner') {
+        const rows = await this.dataSource.query(
+          `SELECT full_name, email FROM "e_schooling"."school_owners" WHERE id = $1 LIMIT 1`,
+          [caller.id],
+        );
+        if (rows && rows.length > 0) {
+          return rows[0].full_name || rows[0].email || 'School Owner';
+        }
+      } else if (caller.actorType === 'school_user') {
+        const rows = await this.dataSource.query(
+          `SELECT name, username FROM "e_schooling"."school_users" WHERE id = $1 LIMIT 1`,
+          [caller.id],
+        );
+        if (rows && rows.length > 0) {
+          return rows[0].name || rows[0].username || 'Staff User';
+        }
+      } else if (caller.actorType === 'platform_user') {
+        const rows = await this.dataSource.query(
+          `SELECT name, email FROM "e_schooling"."platform_users" WHERE id = $1 LIMIT 1`,
+          [caller.id],
+        );
+        if (rows && rows.length > 0) {
+          return rows[0].name || rows[0].email || 'Admin';
+        }
+      }
+    } catch {}
+    return '';
+  }
+
   async takeAttendance(
     caller: AuthContext,
     schoolId: string,
@@ -566,6 +654,7 @@ export class AttendanceService implements OnModuleInit {
     await this.assertAccessToSchool(caller, schoolId);
     await this.assertDateNotLocked(schoolId, dto.date);
 
+    const callerName = await this.resolveCallerName(caller);
     const sessionRepo = this.dataSource.getRepository(AttendanceSession);
     const recordRepo = this.dataSource.getRepository(AttendanceRecord);
 
@@ -589,11 +678,13 @@ export class AttendanceService implements OnModuleInit {
         date: dto.date,
         sessionSlot: dto.sessionSlot || 1,
         takenBy: caller.id,
+        takenByName: callerName,
         createdById: caller.id,
       });
       session = await sessionRepo.save(session);
     } else {
       session.takenBy = caller.id;
+      session.takenByName = callerName;
       session.updatedById = caller.id;
       session = await sessionRepo.save(session);
     }
@@ -1592,6 +1683,7 @@ export class AttendanceService implements OnModuleInit {
       caller.id && /^\d+$/.test(String(caller.id)) ? String(caller.id) : null;
 
     // Use transaction for safe upsert
+    const callerName = await this.resolveCallerName(caller);
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -1627,9 +1719,9 @@ export class AttendanceService implements OnModuleInit {
         const insertRes = (await queryRunner.query(
           `
           INSERT INTO "e_schooling"."subject_attendance_sessions" (
-            school_id, academic_session_id, class_id, section_id, subject_id, teacher_id, timetable_slot_id, date, period_number, session_title, is_locked, created_by_id, updated_by_id, created_at, updated_at
+            school_id, academic_session_id, class_id, section_id, subject_id, teacher_id, timetable_slot_id, date, period_number, session_title, is_locked, taken_by_name, created_by_id, updated_by_id, created_at, updated_at
           ) VALUES (
-            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, false, $11, $11, NOW(), NOW()
+            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, false, $11, $12, $12, NOW(), NOW()
           ) RETURNING id;
           `,
           [
@@ -1643,6 +1735,7 @@ export class AttendanceService implements OnModuleInit {
             formattedDate,
             periodNumber,
             dto.sessionTitle || null,
+            callerName,
             safeTeacherId,
           ],
         )) as Array<{ id: string | number }>;
@@ -1660,11 +1753,18 @@ export class AttendanceService implements OnModuleInit {
           UPDATE "e_schooling"."subject_attendance_sessions"
           SET session_title = COALESCE($1, session_title),
               timetable_slot_id = COALESCE($2, timetable_slot_id),
-              updated_by_id = $3,
+              taken_by_name = $3,
+              updated_by_id = $4,
               updated_at = NOW()
-          WHERE id = $4;
+          WHERE id = $5;
           `,
-          [dto.sessionTitle || null, safeSlotId, safeTeacherId, sessionId],
+          [
+            dto.sessionTitle || null,
+            safeSlotId,
+            callerName,
+            safeTeacherId,
+            sessionId,
+          ],
         );
       }
 
@@ -2420,16 +2520,19 @@ export class AttendanceService implements OnModuleInit {
         att.date,
         att.session_slot,
         att.taken_by,
+        att.taken_by_name,
         att.created_by_id,
         att.created_at,
         att.updated_at,
         c.name as class_name,
         sec.name as section_name,
-        COALESCE(su.name, pu.name, 'Staff') as marked_by_name
+        COALESCE(NULLIF(TRIM(att.taken_by_name), ''), so.full_name, su.name, pu.name, '') as marked_by_name
       FROM "e_schooling"."attendance_sessions" att
       LEFT JOIN "e_schooling"."classes" c ON c.id = att.class_id
       LEFT JOIN "e_schooling"."sections" sec ON sec.id = att.section_id
-      LEFT JOIN "e_schooling"."school_users" su ON su.id = COALESCE(att.taken_by, att.created_by_id)
+      LEFT JOIN "e_schooling"."schools" sch ON sch.id = att.school_id
+      LEFT JOIN "e_schooling"."school_owners" so ON so.id = sch.created_by_id AND (att.taken_by = sch.created_by_id OR att.created_by_id = sch.created_by_id)
+      LEFT JOIN "e_schooling"."school_users" su ON su.id = COALESCE(att.taken_by, att.created_by_id) AND su.school_id = att.school_id
       LEFT JOIN "e_schooling"."platform_users" pu ON pu.id = COALESCE(att.taken_by, att.created_by_id)
       WHERE att.school_id = $1 
         AND att.date = $2 
@@ -2462,41 +2565,33 @@ export class AttendanceService implements OnModuleInit {
       >(
         `
         SELECT 
-          "session_id",
-          COUNT(*) as total_records,
-          SUM(CASE WHEN LOWER("attendance_mark") = 'present' THEN 1 ELSE 0 END) as present_count,
-          SUM(CASE WHEN LOWER("attendance_mark") = 'absent' THEN 1 ELSE 0 END) as absent_count,
-          SUM(CASE WHEN LOWER("attendance_mark") = 'late' THEN 1 ELSE 0 END) as late_count,
-          SUM(CASE WHEN LOWER("attendance_mark") IN ('leave', 'half_day') THEN 1 ELSE 0 END) as leave_count
+          session_id,
+          COUNT(id) as total,
+          COUNT(CASE WHEN UPPER(attendance_mark) = 'PRESENT' THEN 1 END) as present,
+          COUNT(CASE WHEN UPPER(attendance_mark) = 'ABSENT' THEN 1 END) as absent,
+          COUNT(CASE WHEN UPPER(attendance_mark) = 'LATE' THEN 1 END) as late,
+          COUNT(CASE WHEN UPPER(attendance_mark) = 'LEAVE' THEN 1 END) as leave
         FROM "e_schooling"."attendance_records"
-        WHERE "session_id" = ANY($1) AND "is_delete" = false
-        GROUP BY "session_id";
+        WHERE session_id IN (${sessionIds.map((id) => `'${id}'`).join(',')})
+          AND is_delete = false
+        GROUP BY session_id;
         `,
-        [sessionIds],
       );
 
       for (const row of dailyCounts) {
         dailyRecordsStats[String(row.session_id)] = {
-          total: Number(row.total_records) || 0,
-          present: Number(row.present_count) || 0,
-          absent: Number(row.absent_count) || 0,
-          late: Number(row.late_count) || 0,
-          leave: Number(row.leave_count) || 0,
+          total: Number(row.total) || 0,
+          present: Number(row.present) || 0,
+          absent: Number(row.absent) || 0,
+          late: Number(row.late) || 0,
+          leave: Number(row.leave) || 0,
         };
       }
     }
 
-    // Build Daily Completed List (Only sessions with recorded attendance)
-    const validDailySessions = dailySessionsRaw.filter((s) => {
-      const stats = dailyRecordsStats[String(s.session_id)];
-      return stats && stats.total > 0;
-    });
-
-    for (const s of validDailySessions) {
+    // Build Daily Completed List
+    const dailyCompletedList = dailySessionsRaw.map((s) => {
       markedDailySectionIds.add(String(s.section_id));
-    }
-
-    const dailyCompletedList = validDailySessions.map((s) => {
       const stats = dailyRecordsStats[String(s.session_id)] || {
         total: 0,
         present: 0,
@@ -2505,10 +2600,13 @@ export class AttendanceService implements OnModuleInit {
         leave: 0,
       };
       const rate =
-        stats.total > 0 ? Math.round((stats.present / stats.total) * 100) : 0;
+        stats.total > 0
+          ? Math.round((stats.present / stats.total) * 100 * 10) / 10
+          : 0;
+
       const teacherInfo = teacherMap.get(`sec-${s.section_id}`) ||
         teacherMap.get(`cls-${s.class_id}`) || {
-          id: '',
+          id: null,
           name: 'Not Assigned',
           phone: '',
           email: '',
@@ -2541,7 +2639,7 @@ export class AttendanceService implements OnModuleInit {
         leave: stats.leave,
         attendancePercentage: rate,
         markedById: String(s.taken_by || s.created_by_id || ''),
-        markedBy: s.marked_by_name || 'Staff User',
+        markedBy: s.marked_by_name || '',
         markedAt: markedAtFormatted,
         markedAtIso: s.created_at,
         updatedAtIso: s.updated_at,
@@ -2654,6 +2752,7 @@ export class AttendanceService implements OnModuleInit {
         sas.period_number,
         sas.session_title,
         sas.is_locked,
+        sas.taken_by_name,
         sas.created_by_id,
         sas.created_at,
         sas.updated_at,
@@ -2662,13 +2761,15 @@ export class AttendanceService implements OnModuleInit {
         s.name as subject_name,
         s.subject_code,
         su.name as teacher_name,
-        COALESCE(su.name, marker.name, pu.name, 'Subject Teacher') as marked_by_name
+        COALESCE(NULLIF(TRIM(sas.taken_by_name), ''), so.full_name, su.name, marker.name, pu.name, '') as marked_by_name
       FROM "e_schooling"."subject_attendance_sessions" sas
       LEFT JOIN "e_schooling"."classes" c ON c.id = sas.class_id
       LEFT JOIN "e_schooling"."sections" sec ON sec.id = sas.section_id
       LEFT JOIN "e_schooling"."subjects" s ON s.id = sas.subject_id
-      LEFT JOIN "e_schooling"."school_users" su ON su.id = sas.teacher_id
-      LEFT JOIN "e_schooling"."school_users" marker ON marker.id = sas.created_by_id
+      LEFT JOIN "e_schooling"."schools" sch ON sch.id = sas.school_id
+      LEFT JOIN "e_schooling"."school_owners" so ON so.id = sch.created_by_id AND (sas.teacher_id = sch.created_by_id OR sas.created_by_id = sch.created_by_id)
+      LEFT JOIN "e_schooling"."school_users" su ON su.id = sas.teacher_id AND su.school_id = sas.school_id
+      LEFT JOIN "e_schooling"."school_users" marker ON marker.id = sas.created_by_id AND marker.school_id = sas.school_id
       LEFT JOIN "e_schooling"."platform_users" pu ON pu.id = sas.created_by_id
       WHERE sas.school_id = $1 
         AND sas.date = $2 
@@ -2771,7 +2872,7 @@ export class AttendanceService implements OnModuleInit {
         late: stats.late,
         attendancePercentage: rate,
         markedById: String(s.teacher_id || s.created_by_id || ''),
-        markedBy: s.marked_by_name || 'Subject Teacher',
+        markedBy: s.marked_by_name || '',
         markedAt: markedAtFormatted,
         markedAtIso: s.created_at,
         updatedAtIso: s.updated_at,
