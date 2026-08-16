@@ -22,6 +22,9 @@ import { SchoolOwnerMember } from '../../models/entities/school/school-owner-mem
 import { StudentEnrollment } from '../../models/entities/student/student-enrollment.entity';
 import { Student } from '../../models/entities/student/student.entity';
 import { PlatformUser } from '../../models/entities/platform/platform-user.entity';
+import { Subject } from '../../models/entities/academic/subject.entity';
+import { SubjectAttendanceSession } from '../../models/entities/attendance/subject-attendance-session.entity';
+import { SubjectAttendanceRecord } from '../../models/entities/attendance/subject-attendance-record.entity';
 import { AttendanceStatusEnum } from '../../models/enums/enums';
 
 @Injectable()
@@ -57,6 +60,44 @@ export class AttendanceService implements OnModuleInit {
           "half_day_time_cutoff" varchar DEFAULT '11:30 AM',
           "created_at" TIMESTAMP NOT NULL DEFAULT now(),
           "updated_at" TIMESTAMP NOT NULL DEFAULT now()
+        );
+      `);
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS "e_schooling"."subject_attendance_sessions" (
+          "id"                   BIGSERIAL PRIMARY KEY,
+          "school_id"            BIGINT NOT NULL,
+          "academic_session_id"  BIGINT NULL,
+          "class_id"             BIGINT NOT NULL,
+          "section_id"           BIGINT NOT NULL,
+          "subject_id"           BIGINT NOT NULL,
+          "teacher_id"           BIGINT NULL,
+          "timetable_slot_id"    BIGINT NULL,
+          "date"                 DATE NOT NULL,
+          "period_number"        INTEGER NOT NULL DEFAULT 1,
+          "session_title"        VARCHAR(255) NULL,
+          "is_locked"            BOOLEAN NOT NULL DEFAULT false,
+          "locked_by"            VARCHAR(150) NULL,
+          "locked_at"            TIMESTAMP NULL,
+          "is_active"            BOOLEAN NOT NULL DEFAULT true,
+          "is_delete"            BOOLEAN NOT NULL DEFAULT false,
+          "created_by_id"        BIGINT NULL,
+          "updated_by_id"        BIGINT NULL,
+          "created_at"           TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          "updated_at"           TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE IF NOT EXISTS "e_schooling"."subject_attendance_records" (
+          "id"                    BIGSERIAL PRIMARY KEY,
+          "session_id"            BIGINT NOT NULL REFERENCES "e_schooling"."subject_attendance_sessions"("id") ON DELETE CASCADE,
+          "student_enrollment_id" BIGINT NULL,
+          "student_id"            BIGINT NULL,
+          "attendance_mark"       VARCHAR(50) NOT NULL DEFAULT 'present',
+          "remarks"               TEXT NULL,
+          "is_active"             BOOLEAN NOT NULL DEFAULT true,
+          "is_delete"             BOOLEAN NOT NULL DEFAULT false,
+          "created_by_id"         BIGINT NULL,
+          "updated_by_id"         BIGINT NULL,
+          "created_at"            TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          "updated_at"            TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
         );
       `);
     } catch (e) {
@@ -1163,4 +1204,1253 @@ export class AttendanceService implements OnModuleInit {
 
     return this.getAttendanceSettings(schoolId);
   }
+
+  // ======================================================
+  // SUBJECT-WISE ATTENDANCE (MODE B - INDEPENDENT FROM DAILY)
+  // ======================================================
+
+  /**
+   * Take or Upsert Subject-Wise Attendance
+   */
+  async takeSubjectAttendance(
+    caller: AuthContext,
+    schoolId: string,
+    dto: {
+      classId: string;
+      sectionId: string;
+      subjectId: string;
+      date: string;
+      periodNumber?: number;
+      sessionTitle?: string;
+      timetableSlotId?: string;
+      academicSessionId?: string;
+      records: Array<{
+        studentEnrollmentId?: string;
+        studentId?: string;
+        attendanceMark: string;
+        remarks?: string;
+      }>;
+    },
+  ) {
+    await this.assertAccessToSchool(caller, schoolId);
+
+    const formattedDate = this.parseDateFlexible(dto.date);
+    await this.assertDateNotLocked(schoolId, formattedDate);
+
+    // Validate settings: allow future attendance
+    const settings = await this.getAttendanceSettings(schoolId);
+    if (!settings.allowFutureAttendance) {
+      const today = new Date().toISOString().split('T')[0];
+      if (formattedDate > today) {
+        throw new ForbiddenException(
+          'Future subject attendance marking is disabled for this school.',
+        );
+      }
+    }
+
+    const periodNumber = Number(dto.periodNumber) || 1;
+    const safeAcadId = dto.academicSessionId && /^\d+$/.test(String(dto.academicSessionId)) ? String(dto.academicSessionId) : null;
+    const safeSlotId = dto.timetableSlotId && /^\d+$/.test(String(dto.timetableSlotId)) ? String(dto.timetableSlotId) : null;
+    const safeTeacherId = caller.id && /^\d+$/.test(String(caller.id)) ? String(caller.id) : null;
+
+    // Use transaction for safe upsert
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      // 1. Find existing SubjectAttendanceSession
+      const existingSessions = await queryRunner.query(
+        `
+        SELECT id, is_locked, locked_by 
+        FROM "e_schooling"."subject_attendance_sessions"
+        WHERE school_id = $1 
+          AND class_id = $2 
+          AND section_id = $3 
+          AND subject_id = $4 
+          AND date = $5 
+          AND period_number = $6 
+          AND is_delete = false
+        LIMIT 1;
+        `,
+        [schoolId, dto.classId, dto.sectionId, dto.subjectId, formattedDate, periodNumber],
+      );
+
+      let sessionId: string;
+
+      if (existingSessions.length === 0) {
+        const insertRes = await queryRunner.query(
+          `
+          INSERT INTO "e_schooling"."subject_attendance_sessions" (
+            school_id, academic_session_id, class_id, section_id, subject_id, teacher_id, timetable_slot_id, date, period_number, session_title, is_locked, created_by_id, updated_by_id, created_at, updated_at
+          ) VALUES (
+            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, false, $11, $11, NOW(), NOW()
+          ) RETURNING id;
+          `,
+          [
+            schoolId,
+            safeAcadId,
+            dto.classId,
+            dto.sectionId,
+            dto.subjectId,
+            safeTeacherId,
+            safeSlotId,
+            formattedDate,
+            periodNumber,
+            dto.sessionTitle || null,
+            safeTeacherId,
+          ],
+        );
+        sessionId = String(insertRes[0].id);
+      } else {
+        const session = existingSessions[0];
+        if (session.is_locked) {
+          throw new ForbiddenException(
+            `This subject attendance session is locked (${session.locked_by || 'Admin'}). Modifications are disabled.`,
+          );
+        }
+        sessionId = String(session.id);
+        await queryRunner.query(
+          `
+          UPDATE "e_schooling"."subject_attendance_sessions"
+          SET session_title = COALESCE($1, session_title),
+              timetable_slot_id = COALESCE($2, timetable_slot_id),
+              updated_by_id = $3,
+              updated_at = NOW()
+          WHERE id = $4;
+          `,
+          [dto.sessionTitle || null, safeSlotId, safeTeacherId, sessionId],
+        );
+      }
+
+      // 2. Process Records (Delete old and insert updated student records for this session)
+      await queryRunner.query(
+        `DELETE FROM "e_schooling"."subject_attendance_records" WHERE session_id = $1;`,
+        [sessionId],
+      );
+
+      let savedCount = 0;
+      for (const recDto of dto.records || []) {
+        const mark = (recDto.attendanceMark || 'present').toLowerCase();
+        const safeEnrollmentId = recDto.studentEnrollmentId && /^\d+$/.test(String(recDto.studentEnrollmentId)) ? String(recDto.studentEnrollmentId) : null;
+        const safeStudentId = recDto.studentId && /^\d+$/.test(String(recDto.studentId)) ? String(recDto.studentId) : null;
+
+        await queryRunner.query(
+          `
+          INSERT INTO "e_schooling"."subject_attendance_records" (
+            session_id, student_enrollment_id, student_id, attendance_mark, remarks, created_by_id, updated_by_id, created_at, updated_at
+          ) VALUES (
+            $1, $2, $3, $4, $5, $6, $6, NOW(), NOW()
+          );
+          `,
+          [sessionId, safeEnrollmentId, safeStudentId, mark, recDto.remarks || null, safeTeacherId],
+        );
+        savedCount++;
+      }
+
+      await queryRunner.commitTransaction();
+
+      return {
+        success: true,
+        message: 'Subject attendance recorded successfully.',
+        sessionId,
+        savedCount,
+      };
+    } catch (err) {
+      await queryRunner.rollbackTransaction();
+      throw err;
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  /**
+   * Get Subject Attendance Sessions & Records
+   */
+  async getSubjectAttendance(
+    caller: AuthContext,
+    schoolId: string,
+    query: {
+      classId?: string;
+      sectionId?: string;
+      subjectId?: string;
+      date?: string;
+      startDate?: string;
+      endDate?: string;
+      academicSessionId?: string;
+      page?: number;
+      limit?: number;
+    },
+  ) {
+    await this.assertAccessToSchool(caller, schoolId);
+
+    const conditions: string[] = ['sas.school_id = $1', 'sas.is_delete = false'];
+    const params: any[] = [schoolId];
+    let paramIdx = 2;
+
+    if (query.academicSessionId) {
+      conditions.push(`(sas.academic_session_id = $${paramIdx} OR sas.academic_session_id IS NULL)`);
+      params.push(query.academicSessionId);
+      paramIdx++;
+    }
+    if (query.classId) {
+      conditions.push(`sas.class_id = $${paramIdx}`);
+      params.push(query.classId);
+      paramIdx++;
+    }
+    if (query.sectionId) {
+      conditions.push(`sas.section_id = $${paramIdx}`);
+      params.push(query.sectionId);
+      paramIdx++;
+    }
+    if (query.subjectId) {
+      conditions.push(`sas.subject_id = $${paramIdx}`);
+      params.push(query.subjectId);
+      paramIdx++;
+    }
+    if (query.date) {
+      const parsed = this.parseDateFlexible(query.date);
+      conditions.push(`sas.date = $${paramIdx}`);
+      params.push(parsed);
+      paramIdx++;
+    }
+    if (query.startDate && query.endDate) {
+      const s = this.parseDateFlexible(query.startDate);
+      const e = this.parseDateFlexible(query.endDate);
+      conditions.push(`sas.date BETWEEN $${paramIdx} AND $${paramIdx + 1}`);
+      params.push(s, e);
+      paramIdx += 2;
+    }
+
+    const whereClause = conditions.join(' AND ');
+
+    const countRes = await this.dataSource.query(
+      `SELECT COUNT(*) as count FROM "e_schooling"."subject_attendance_sessions" sas WHERE ${whereClause}`,
+      params,
+    );
+    const total = Number(countRes[0]?.count) || 0;
+
+    const page = Math.max(1, Number(query.page) || 1);
+    const limit = Math.min(100, Math.max(1, Number(query.limit) || 20));
+    const offset = (page - 1) * limit;
+
+    const sessionsRaw = await this.dataSource.query(
+      `
+      SELECT 
+        sas.id,
+        sas.school_id,
+        sas.academic_session_id,
+        sas.class_id,
+        sas.section_id,
+        sas.subject_id,
+        sas.teacher_id,
+        sas.timetable_slot_id,
+        sas.date,
+        sas.period_number,
+        sas.session_title,
+        sas.is_locked,
+        sas.created_at,
+        sas.updated_at,
+        c.name as class_name,
+        sec.name as section_name,
+        s.name as subject_name,
+        s.subject_code,
+        su.name as teacher_name
+      FROM "e_schooling"."subject_attendance_sessions" sas
+      LEFT JOIN "e_schooling"."classes" c ON c.id = sas.class_id
+      LEFT JOIN "e_schooling"."sections" sec ON sec.id = sas.section_id
+      LEFT JOIN "e_schooling"."subjects" s ON s.id = sas.subject_id
+      LEFT JOIN "e_schooling"."school_users" su ON su.id = sas.teacher_id
+      WHERE ${whereClause}
+      ORDER BY sas.date DESC, sas.period_number ASC
+      LIMIT $${paramIdx} OFFSET $${paramIdx + 1};
+      `,
+      [...params, limit, offset],
+    );
+
+    const sessionIds = sessionsRaw.map((s: any) => s.id);
+    let recordStats: Record<string, { total: number; present: number; absent: number; late: number }> = {};
+
+    if (sessionIds.length > 0) {
+      const rawCounts = await this.dataSource.query(
+        `
+        SELECT 
+          "session_id",
+          COUNT(*) as total_records,
+          SUM(CASE WHEN LOWER("attendance_mark") = 'present' THEN 1 ELSE 0 END) as present_count,
+          SUM(CASE WHEN LOWER("attendance_mark") = 'absent' THEN 1 ELSE 0 END) as absent_count,
+          SUM(CASE WHEN LOWER("attendance_mark") = 'late' THEN 1 ELSE 0 END) as late_count
+        FROM "e_schooling"."subject_attendance_records"
+        WHERE "session_id" = ANY($1) AND "is_delete" = false
+        GROUP BY "session_id";
+        `,
+        [sessionIds],
+      );
+
+      for (const row of rawCounts) {
+        recordStats[String(row.session_id)] = {
+          total: Number(row.total_records) || 0,
+          present: Number(row.present_count) || 0,
+          absent: Number(row.absent_count) || 0,
+          late: Number(row.late_count) || 0,
+        };
+      }
+    }
+
+    const data = sessionsRaw.map((s: any) => {
+      const stats = recordStats[String(s.id)] || { total: 0, present: 0, absent: 0, late: 0 };
+      const percentage = stats.total > 0 ? Math.round((stats.present / stats.total) * 100) : 0;
+      return {
+        id: String(s.id),
+        schoolId: String(s.school_id),
+        academicSessionId: s.academic_session_id ? String(s.academic_session_id) : null,
+        classId: String(s.class_id),
+        className: s.class_name || 'Class',
+        sectionId: String(s.section_id),
+        sectionName: s.section_name || 'Section',
+        subjectId: String(s.subject_id),
+        subjectName: s.subject_name || 'Subject',
+        subjectCode: s.subject_code || '',
+        teacherId: s.teacher_id ? String(s.teacher_id) : null,
+        teacherName: s.teacher_name || 'Teacher',
+        date: typeof s.date === 'string' ? s.date.split('T')[0] : new Date(s.date).toISOString().split('T')[0],
+        periodNumber: Number(s.period_number) || 1,
+        sessionTitle: s.session_title,
+        isLocked: Boolean(s.is_locked),
+        stats: {
+          totalStudents: stats.total,
+          presentCount: stats.present,
+          absentCount: stats.absent,
+          lateCount: stats.late,
+          attendanceRate: percentage,
+        },
+        createdAt: s.created_at,
+        updatedAt: s.updated_at,
+      };
+    });
+
+    return {
+      data,
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit) || 1,
+      },
+    };
+  }
+
+  /**
+   * Get Specific Subject Attendance Session and Student Records
+   */
+  async getSubjectAttendanceSession(
+    caller: AuthContext,
+    schoolId: string,
+    sessionId: string,
+  ) {
+    await this.assertAccessToSchool(caller, schoolId);
+
+    if (!sessionId || !/^\d+$/.test(String(sessionId))) {
+      throw new NotFoundException('Subject attendance session not found');
+    }
+
+    const sessionRows = await this.dataSource.query(
+      `
+      SELECT 
+        sas.id,
+        sas.school_id,
+        sas.academic_session_id,
+        sas.class_id,
+        sas.section_id,
+        sas.subject_id,
+        sas.teacher_id,
+        sas.timetable_slot_id,
+        sas.date,
+        sas.period_number,
+        sas.session_title,
+        sas.is_locked,
+        c.name as class_name,
+        sec.name as section_name,
+        s.name as subject_name,
+        s.subject_code,
+        su.name as teacher_name
+      FROM "e_schooling"."subject_attendance_sessions" sas
+      LEFT JOIN "e_schooling"."classes" c ON c.id = sas.class_id
+      LEFT JOIN "e_schooling"."sections" sec ON sec.id = sas.section_id
+      LEFT JOIN "e_schooling"."subjects" s ON s.id = sas.subject_id
+      LEFT JOIN "e_schooling"."school_users" su ON su.id = sas.teacher_id
+      WHERE sas.id = $1 AND sas.school_id = $2 AND sas.is_delete = false;
+      `,
+      [sessionId, schoolId],
+    );
+
+    if (!sessionRows || sessionRows.length === 0) {
+      throw new NotFoundException('Subject attendance session not found');
+    }
+
+    const session = sessionRows[0];
+
+    const recordsRaw = await this.dataSource.query(
+      `
+      SELECT 
+        sar.id,
+        sar.session_id,
+        sar.student_enrollment_id,
+        sar.student_id,
+        sar.attendance_mark,
+        sar.remarks,
+        se.roll_number,
+        COALESCE(st.full_name, st.first_name || ' ' || COALESCE(st.last_name, ''), 'Student') as student_name,
+        COALESCE(st.student_code, st.admission_number, '') as student_code
+      FROM "e_schooling"."subject_attendance_records" sar
+      LEFT JOIN "e_schooling"."student_enrollments" se ON se.id = sar.student_enrollment_id
+      LEFT JOIN "e_schooling"."students" st ON st.id = COALESCE(sar.student_id, se.student_id)
+      WHERE sar.session_id = $1 AND sar.is_delete = false;
+      `,
+      [sessionId],
+    );
+
+    const formattedRecords = recordsRaw.map((r: any) => ({
+      id: String(r.id),
+      sessionId: String(r.session_id),
+      studentEnrollmentId: r.student_enrollment_id ? String(r.student_enrollment_id) : null,
+      studentId: String(r.student_id),
+      studentName: r.student_name || 'Student',
+      studentCode: r.student_code || '',
+      rollNumber: r.roll_number || null,
+      attendanceMark: r.attendance_mark,
+      status: String(r.attendance_mark).toUpperCase(),
+      remarks: r.remarks || '',
+    }));
+
+    return {
+      session: {
+        id: String(session.id),
+        schoolId: String(session.school_id),
+        academicSessionId: session.academic_session_id ? String(session.academic_session_id) : null,
+        classId: String(session.class_id),
+        className: session.class_name || 'Class',
+        sectionId: String(session.section_id),
+        sectionName: session.section_name || 'Section',
+        subjectId: String(session.subject_id),
+        subjectName: session.subject_name || 'Subject',
+        subjectCode: session.subject_code || '',
+        teacherId: session.teacher_id ? String(session.teacher_id) : null,
+        teacherName: session.teacher_name || 'Teacher',
+        date: typeof session.date === 'string' ? session.date.split('T')[0] : new Date(session.date).toISOString().split('T')[0],
+        periodNumber: Number(session.period_number) || 1,
+        sessionTitle: session.session_title,
+        isLocked: Boolean(session.is_locked),
+      },
+      records: formattedRecords,
+    };
+  }
+
+  /**
+   * Timetable Slots for Subject Attendance
+   */
+  async getSubjectTimetableSlots(
+    caller: AuthContext,
+    schoolId: string,
+    query: {
+      classId: string;
+      sectionId: string;
+      subjectId?: string;
+      date: string;
+    },
+  ) {
+    await this.assertAccessToSchool(caller, schoolId);
+
+    const formattedDate = this.parseDateFlexible(query.date);
+    const parts = formattedDate.split('-');
+    const dateObj = parts.length === 3 ? new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2])) : new Date(formattedDate);
+    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const dayOfWeek = dayNames[dateObj.getDay()];
+
+    const rawSlots = await this.dataSource.query(
+      `
+      SELECT 
+        ts.id as slot_id,
+        ts.day,
+        ts.period_id,
+        ts.class_id,
+        ts.section_id,
+        ts.subject_id,
+        ts.teacher_id,
+        ts.room_no,
+        COALESCE(tp.display_order, 1) as period_number,
+        COALESCE(tp.name, 'Period ' || COALESCE(tp.display_order, 1)) as period_name,
+        tp.start_time,
+        tp.end_time,
+        s.name as subject_name,
+        s.subject_code,
+        su.name as teacher_name
+      FROM "e_schooling"."academic_timetable_slots" ts
+      LEFT JOIN "e_schooling"."academic_timetable_periods" tp ON tp.id = ts.period_id
+      LEFT JOIN "e_schooling"."subjects" s ON s.id = ts.subject_id
+      LEFT JOIN "e_schooling"."school_users" su ON su.id = ts.teacher_id
+      WHERE ts.school_id = $1 
+        AND ts.class_id = $2 
+        AND ts.section_id = $3 
+        AND LOWER(ts.day) = LOWER($4)
+        AND ts.is_delete = false
+        ${query.subjectId ? `AND ts.subject_id = ${Number(query.subjectId)}` : ''}
+      ORDER BY COALESCE(tp.display_order, 1) ASC;
+      `,
+      [schoolId, query.classId, query.sectionId, dayOfWeek],
+    );
+
+    return rawSlots.map((row: any) => ({
+      slotId: String(row.slot_id),
+      day: row.day,
+      periodId: String(row.period_id),
+      periodNumber: Number(row.period_number) || 1,
+      periodName: row.period_name || `Period ${row.period_number || 1}`,
+      startTime: row.start_time,
+      endTime: row.end_time,
+      classId: String(row.class_id),
+      sectionId: String(row.section_id),
+      subjectId: String(row.subject_id),
+      subjectName: row.subject_name || 'Subject',
+      subjectCode: row.subject_code || '',
+      teacherId: row.teacher_id ? String(row.teacher_id) : null,
+      teacherName: row.teacher_name || 'Teacher',
+      roomNo: row.room_no || '',
+    }));
+  }
+
+  /**
+   * Subject Attendance Summary per student / subject
+   */
+  async getSubjectAttendanceSummary(
+    caller: AuthContext,
+    schoolId: string,
+    studentId: string,
+    academicSessionId?: string,
+  ) {
+    await this.assertAccessToSchool(caller, schoolId);
+
+    const rawRows = await this.dataSource.query(
+      `
+      SELECT 
+        s.id as subject_id,
+        s.name as subject_name,
+        s.subject_code,
+        COUNT(sar.id) as total_conducted,
+        SUM(CASE WHEN LOWER(sar.attendance_mark) = 'present' THEN 1 ELSE 0 END) as present_count,
+        SUM(CASE WHEN LOWER(sar.attendance_mark) = 'absent' THEN 1 ELSE 0 END) as absent_count,
+        SUM(CASE WHEN LOWER(sar.attendance_mark) = 'late' THEN 1 ELSE 0 END) as late_count
+      FROM "e_schooling"."subject_attendance_records" sar
+      INNER JOIN "e_schooling"."subject_attendance_sessions" sas ON sas.id = sar.session_id
+      INNER JOIN "e_schooling"."subjects" s ON s.id = sas.subject_id
+      WHERE sas.school_id = $1 
+        AND (sar.student_id = $2 OR sar.student_enrollment_id IN (
+          SELECT id FROM "e_schooling"."student_enrollments" WHERE student_id = $2
+        ))
+        AND sar.is_delete = false
+        AND sas.is_delete = false
+        ${academicSessionId ? `AND (sas.academic_session_id = ${Number(academicSessionId)} OR sas.academic_session_id IS NULL)` : ''}
+      GROUP BY s.id, s.name, s.subject_code
+      ORDER BY s.name ASC;
+      `,
+      [schoolId, studentId],
+    );
+
+    return rawRows.map((r: any) => {
+      const total = Number(r.total_conducted) || 0;
+      const present = Number(r.present_count) || 0;
+      const late = Number(r.late_count) || 0;
+      const percentage = total > 0 ? Math.round(((present + 0.5 * late) / total) * 100) : 100;
+
+      return {
+        subjectId: String(r.subject_id),
+        subjectName: r.subject_name,
+        subjectCode: r.subject_code,
+        totalSessions: total,
+        presentSessions: present,
+        absentSessions: Number(r.absent_count) || 0,
+        lateSessions: late,
+        attendancePercentage: percentage,
+      };
+    });
+  }
+
+  /**
+   * Optimized Attendance Dashboard Summary API (DB Aggregation)
+   */
+  async getAttendanceDashboardSummary(
+    caller: AuthContext,
+    schoolId: string,
+    date?: string,
+    academicSessionId?: string,
+  ) {
+    await this.assertAccessToSchool(caller, schoolId);
+
+    const targetDate = this.parseDateFlexible(date);
+    const parsedDate = targetDate.split('-');
+    const dateObj =
+      parsedDate.length === 3
+        ? new Date(
+            Number(parsedDate[0]),
+            Number(parsedDate[1]) - 1,
+            Number(parsedDate[2]),
+          )
+        : new Date(targetDate);
+    const dayNames = [
+      'Sunday',
+      'Monday',
+      'Tuesday',
+      'Wednesday',
+      'Thursday',
+      'Friday',
+      'Saturday',
+    ];
+    const dayOfWeek = dayNames[dateObj.getDay()];
+
+    // 1. Total Active Classes & Sections
+    const classesCountRes = await this.dataSource.query(
+      `SELECT COUNT(*) as count FROM "e_schooling"."classes" WHERE "school_id" = $1 AND "is_delete" = false AND "is_active" = true;`,
+      [schoolId],
+    );
+    const totalClasses = Number(classesCountRes[0]?.count) || 0;
+
+    const sectionsCountRes = await this.dataSource.query(
+      `SELECT COUNT(*) as count FROM "e_schooling"."sections" WHERE "school_id" = $1 AND "is_delete" = false AND "is_active" = true;`,
+      [schoolId],
+    );
+    const totalSections = Number(sectionsCountRes[0]?.count) || 0;
+
+    // 2. Daily Attendance Completed Sections Count
+    const dailyCompletedRes = await this.dataSource.query(
+      `
+      SELECT COUNT(DISTINCT section_id) as count 
+      FROM "e_schooling"."attendance_sessions" 
+      WHERE "school_id" = $1 
+        AND "date" = $2 
+        AND "is_delete" = false
+        ${academicSessionId ? `AND ("academic_session_id" = ${Number(academicSessionId)} OR "academic_session_id" IS NULL)` : ''};
+      `,
+      [schoolId, targetDate],
+    );
+    const dailyCompleted = Number(dailyCompletedRes[0]?.count) || 0;
+    const dailyPending = Math.max(0, totalSections - dailyCompleted);
+
+    // 3. Expected Subject Attendance Slots from Timetable
+    const expectedSlotsRes = await this.dataSource.query(
+      `
+      SELECT COUNT(*) as count 
+      FROM "e_schooling"."academic_timetable_slots" 
+      WHERE "school_id" = $1 
+        AND LOWER("day") = LOWER($2) 
+        AND "is_delete" = false;
+      `,
+      [schoolId, dayOfWeek],
+    );
+    let subjectExpected = Number(expectedSlotsRes[0]?.count) || 0;
+
+    // Fallback if timetable slots not scheduled: use classes with subjects assigned
+    if (subjectExpected === 0) {
+      const fallbackCount = await this.dataSource.query(
+        `SELECT COUNT(*) as count FROM "e_schooling"."subjects" WHERE "school_id" = $1 AND "is_delete" = false AND "is_active" = true;`,
+        [schoolId],
+      );
+      subjectExpected = Number(fallbackCount[0]?.count) || 0;
+    }
+
+    // 4. Completed Subject Attendance Sessions
+    const subjectCompletedRes = await this.dataSource.query(
+      `
+      SELECT COUNT(DISTINCT id) as count 
+      FROM "e_schooling"."subject_attendance_sessions" 
+      WHERE "school_id" = $1 
+        AND "date" = $2 
+        AND "is_delete" = false
+        ${academicSessionId ? `AND ("academic_session_id" = ${Number(academicSessionId)} OR "academic_session_id" IS NULL)` : ''};
+      `,
+      [schoolId, targetDate],
+    );
+    const subjectCompleted = Number(subjectCompletedRes[0]?.count) || 0;
+    const subjectPending = Math.max(0, subjectExpected - subjectCompleted);
+
+    const totalExpectedTransactions = totalSections + subjectExpected;
+    const totalCompletedTransactions = dailyCompleted + subjectCompleted;
+    const overallCompletionPercentage =
+      totalExpectedTransactions > 0
+        ? Math.round(
+            (totalCompletedTransactions / totalExpectedTransactions) * 100,
+          )
+        : 100;
+
+    return {
+      totalClasses,
+      totalSections,
+      sectionsRequiringAttendance: totalSections,
+      daily: {
+        completed: dailyCompleted,
+        pending: dailyPending,
+      },
+      subject: {
+        expected: subjectExpected,
+        completed: subjectCompleted,
+        pending: subjectPending,
+      },
+      overallCompletionPercentage,
+      date: targetDate,
+    };
+  }
+
+  /**
+   * Centralized Attendance Status & Overview API
+   */
+  async getAttendanceStatus(
+    caller: AuthContext,
+    schoolId: string,
+    query: {
+      date?: string;
+      academicSessionId?: string;
+      classId?: string;
+      sectionId?: string;
+      subjectId?: string;
+      teacherId?: string;
+      attendanceType?: string;
+      status?: string;
+      page?: number;
+      limit?: number;
+      search?: string;
+    },
+  ) {
+    await this.assertAccessToSchool(caller, schoolId);
+
+    const targetDate = this.parseDateFlexible(query.date);
+    const parsedDate = targetDate.split('-');
+    const dateObj =
+      parsedDate.length === 3
+        ? new Date(
+            Number(parsedDate[0]),
+            Number(parsedDate[1]) - 1,
+            Number(parsedDate[2]),
+          )
+        : new Date(targetDate);
+    const dayNames = [
+      'Sunday',
+      'Monday',
+      'Tuesday',
+      'Wednesday',
+      'Thursday',
+      'Friday',
+      'Saturday',
+    ];
+    const dayOfWeek = dayNames[dateObj.getDay()];
+
+    const searchLower = (query.search || '').trim().toLowerCase();
+    const statusFilter = (query.status || 'ALL').toUpperCase();
+    const typeFilter = (query.attendanceType || 'ALL').toLowerCase();
+
+    // ── 1. Fetch All Active Classes & Sections ─────────────────────────────
+    const sectionsRaw = await this.dataSource.query(
+      `
+      SELECT 
+        sec.id as section_id,
+        sec.name as section_name,
+        c.id as class_id,
+        c.name as class_name,
+        c.display_order as class_order,
+        COUNT(se.id) as student_count
+      FROM "e_schooling"."sections" sec
+      INNER JOIN "e_schooling"."classes" c ON c.id = sec.class_id
+      LEFT JOIN "e_schooling"."student_enrollments" se 
+        ON se.section_id = sec.id 
+        AND se.class_id = c.id 
+        AND se.is_delete = false 
+        AND se.is_current = true
+        ${query.academicSessionId ? `AND (se.academic_session_id = ${Number(query.academicSessionId)} OR se.academic_session_id IS NULL)` : ''}
+      WHERE sec.school_id = $1 
+        AND sec.is_delete = false 
+        AND sec.is_active = true
+        AND c.is_delete = false 
+        AND c.is_active = true
+        ${query.classId ? `AND c.id = ${Number(query.classId)}` : ''}
+        ${query.sectionId ? `AND sec.id = ${Number(query.sectionId)}` : ''}
+      GROUP BY sec.id, sec.name, c.id, c.name, c.display_order
+      ORDER BY c.display_order ASC, c.name ASC, sec.name ASC;
+      `,
+      [schoolId],
+    );
+
+    // Fetch Teacher Section Assignments
+    const teacherAssignmentsRaw = await this.dataSource.query(
+      `
+      SELECT 
+        ta.class_id,
+        ta.section_id,
+        ta.teacher_id,
+        su.name as teacher_name,
+        su.phone as teacher_phone,
+        su.email as teacher_email
+      FROM "e_schooling"."teacher_section_assignments" ta
+      LEFT JOIN "e_schooling"."school_users" su ON su.id = ta.teacher_id
+      WHERE ta.school_id = $1 AND ta.is_delete = false AND ta.is_active = true;
+      `,
+      [schoolId],
+    );
+
+    const teacherMap = new Map<string, { id: string; name: string; phone: string; email: string }>();
+    for (const ta of teacherAssignmentsRaw) {
+      if (ta.section_id) {
+        teacherMap.set(`sec-${ta.section_id}`, {
+          id: String(ta.teacher_id || ''),
+          name: ta.teacher_name || 'Not Assigned',
+          phone: ta.teacher_phone || '',
+          email: ta.teacher_email || '',
+        });
+      } else if (ta.class_id) {
+        teacherMap.set(`cls-${ta.class_id}`, {
+          id: String(ta.teacher_id || ''),
+          name: ta.teacher_name || 'Not Assigned',
+          phone: ta.teacher_phone || '',
+          email: ta.teacher_email || '',
+        });
+      }
+    }
+
+    // ── 2. Daily Attendance Sessions for Today ─────────────────────────────
+    const dailySessionsRaw = await this.dataSource.query(
+      `
+      SELECT 
+        att.id as session_id,
+        att.school_id,
+        att.academic_session_id,
+        att.class_id,
+        att.section_id,
+        att.date,
+        att.session_slot,
+        att.taken_by,
+        att.created_by_id,
+        att.created_at,
+        att.updated_at,
+        c.name as class_name,
+        sec.name as section_name,
+        COALESCE(su.name, pu.name, 'Staff') as marked_by_name,
+        su.email as marked_by_email
+      FROM "e_schooling"."attendance_sessions" att
+      LEFT JOIN "e_schooling"."classes" c ON c.id = att.class_id
+      LEFT JOIN "e_schooling"."sections" sec ON sec.id = att.section_id
+      LEFT JOIN "e_schooling"."school_users" su ON su.id = COALESCE(att.taken_by, att.created_by_id)
+      LEFT JOIN "e_schooling"."platform_users" pu ON pu.id = COALESCE(att.taken_by, att.created_by_id)
+      WHERE att.school_id = $1 
+        AND att.date = $2 
+        AND att.is_delete = false
+        ${query.academicSessionId ? `AND (att.academic_session_id = ${Number(query.academicSessionId)} OR att.academic_session_id IS NULL)` : ''}
+        ${query.classId ? `AND att.class_id = ${Number(query.classId)}` : ''}
+        ${query.sectionId ? `AND att.section_id = ${Number(query.sectionId)}` : ''};
+      `,
+      [schoolId, targetDate],
+    );
+
+    const markedDailySectionIds = new Set<string>();
+    const sessionIds = dailySessionsRaw.map((s: any) => s.session_id);
+
+    // Fetch Daily Attendance Records Counts
+    let dailyRecordsStats: Record<
+      string,
+      { total: number; present: number; absent: number; late: number; leave: number }
+    > = {};
+
+    if (sessionIds.length > 0) {
+      const dailyCounts = await this.dataSource.query(
+        `
+        SELECT 
+          "session_id",
+          COUNT(*) as total_records,
+          SUM(CASE WHEN LOWER("attendance_mark") = 'present' THEN 1 ELSE 0 END) as present_count,
+          SUM(CASE WHEN LOWER("attendance_mark") = 'absent' THEN 1 ELSE 0 END) as absent_count,
+          SUM(CASE WHEN LOWER("attendance_mark") = 'late' THEN 1 ELSE 0 END) as late_count,
+          SUM(CASE WHEN LOWER("attendance_mark") IN ('leave', 'half_day') THEN 1 ELSE 0 END) as leave_count
+        FROM "e_schooling"."attendance_records"
+        WHERE "session_id" = ANY($1) AND "is_delete" = false
+        GROUP BY "session_id";
+        `,
+        [sessionIds],
+      );
+
+      for (const row of dailyCounts) {
+        dailyRecordsStats[String(row.session_id)] = {
+          total: Number(row.total_records) || 0,
+          present: Number(row.present_count) || 0,
+          absent: Number(row.absent_count) || 0,
+          late: Number(row.late_count) || 0,
+          leave: Number(row.leave_count) || 0,
+        };
+      }
+    }
+
+    // Build Daily Completed List
+    const dailyCompletedList = dailySessionsRaw.map((s: any) => {
+      markedDailySectionIds.add(String(s.section_id));
+      const stats = dailyRecordsStats[String(s.session_id)] || {
+        total: 0,
+        present: 0,
+        absent: 0,
+        late: 0,
+        leave: 0,
+      };
+      const rate =
+        stats.total > 0 ? Math.round((stats.present / stats.total) * 100) : 0;
+      const teacherInfo =
+        teacherMap.get(`sec-${s.section_id}`) ||
+        teacherMap.get(`cls-${s.class_id}`) || {
+          id: '',
+          name: 'Not Assigned',
+          phone: '',
+          email: '',
+        };
+
+      const markedDate = s.created_at ? new Date(s.created_at) : new Date();
+      const markedAtFormatted = markedDate.toLocaleTimeString([], {
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+
+      return {
+        id: String(s.session_id),
+        sessionId: String(s.session_id),
+        schoolId: String(s.school_id),
+        academicSessionId: s.academic_session_id ? String(s.academic_session_id) : null,
+        classId: String(s.class_id),
+        className: s.class_name || `Class ${s.class_id}`,
+        sectionId: String(s.section_id),
+        sectionName: s.section_name || `Section ${s.section_id}`,
+        classTeacherId: teacherInfo.id || null,
+        classTeacherName: teacherInfo.name,
+        attendanceResponsibleTeacher: teacherInfo.name,
+        totalStudents: stats.total,
+        present: stats.present,
+        absent: stats.absent,
+        late: stats.late,
+        leave: stats.leave,
+        attendancePercentage: rate,
+        markedById: String(s.taken_by || s.created_by_id || ''),
+        markedBy: s.marked_by_name || 'Staff User',
+        markedAt: markedAtFormatted,
+        markedAtIso: s.created_at,
+        updatedAtIso: s.updated_at,
+        status: 'COMPLETED',
+        date: targetDate,
+      };
+    });
+
+    // Build Daily Pending List
+    const dailyPendingList = sectionsRaw
+      .filter((sec: any) => !markedDailySectionIds.has(String(sec.section_id)))
+      .map((sec: any) => {
+        const teacherInfo =
+          teacherMap.get(`sec-${sec.section_id}`) ||
+          teacherMap.get(`cls-${sec.class_id}`) || {
+            id: '',
+            name: 'Not Assigned',
+            phone: '',
+            email: '',
+          };
+
+        return {
+          id: `pending-daily-${sec.section_id}`,
+          schoolId: String(schoolId),
+          academicSessionId: query.academicSessionId || null,
+          classId: String(sec.class_id),
+          className: sec.class_name || `Class ${sec.class_id}`,
+          sectionId: String(sec.section_id),
+          sectionName: sec.name || `Section ${sec.section_id}`,
+          classTeacherId: teacherInfo.id || null,
+          classTeacherName: teacherInfo.name,
+          attendanceResponsibleTeacher: teacherInfo.name,
+          totalStudents: Number(sec.student_count) || 0,
+          date: targetDate,
+          status: 'PENDING',
+          action: 'Mark Attendance',
+        };
+      });
+
+    // ── 3. Subject-Wise Attendance (Timetable slots & Sessions) ────────────
+    const timetableSlotsRaw = await this.dataSource.query(
+      `
+      SELECT 
+        ts.id as slot_id,
+        ts.school_id,
+        ts.class_id,
+        ts.section_id,
+        ts.subject_id,
+        ts.teacher_id,
+        ts.day,
+        ts.period_id,
+        c.name as class_name,
+        sec.name as section_name,
+        s.name as subject_name,
+        s.subject_code,
+        su.name as teacher_name,
+        COALESCE(tp.display_order, 1) as period_number,
+        COALESCE(tp.name, 'Period ' || COALESCE(tp.display_order, 1)) as period_name,
+        COUNT(se.id) as student_count
+      FROM "e_schooling"."academic_timetable_slots" ts
+      INNER JOIN "e_schooling"."classes" c ON c.id = ts.class_id
+      INNER JOIN "e_schooling"."sections" sec ON sec.id = ts.section_id
+      INNER JOIN "e_schooling"."subjects" s ON s.id = ts.subject_id
+      LEFT JOIN "e_schooling"."school_users" su ON su.id = ts.teacher_id
+      LEFT JOIN "e_schooling"."academic_timetable_periods" tp ON tp.id = ts.period_id
+      LEFT JOIN "e_schooling"."student_enrollments" se 
+        ON se.section_id = sec.id 
+        AND se.class_id = c.id 
+        AND se.is_delete = false 
+        AND se.is_current = true
+      WHERE ts.school_id = $1 
+        AND LOWER(ts.day) = LOWER($2) 
+        AND ts.is_delete = false
+        AND c.is_delete = false AND c.is_active = true
+        AND sec.is_delete = false AND sec.is_active = true
+        AND s.is_delete = false AND s.is_active = true
+        ${query.classId ? `AND c.id = ${Number(query.classId)}` : ''}
+        ${query.sectionId ? `AND sec.id = ${Number(query.sectionId)}` : ''}
+        ${query.subjectId ? `AND s.id = ${Number(query.subjectId)}` : ''}
+        ${query.teacherId ? `AND ts.teacher_id = ${Number(query.teacherId)}` : ''}
+      GROUP BY ts.id, ts.school_id, ts.class_id, ts.section_id, ts.subject_id, ts.teacher_id, ts.day, ts.period_id, c.name, sec.name, s.name, s.subject_code, su.name, tp.display_order, tp.name
+      ORDER BY c.name ASC, sec.name ASC, COALESCE(tp.display_order, 1) ASC;
+      `,
+      [schoolId, dayOfWeek],
+    );
+
+    // Completed Subject Sessions
+    const subjectSessionsRaw = await this.dataSource.query(
+      `
+      SELECT 
+        sas.id as session_id,
+        sas.school_id,
+        sas.academic_session_id,
+        sas.class_id,
+        sas.section_id,
+        sas.subject_id,
+        sas.teacher_id,
+        sas.timetable_slot_id,
+        sas.date,
+        sas.period_number,
+        sas.session_title,
+        sas.is_locked,
+        sas.created_by_id,
+        sas.created_at,
+        sas.updated_at,
+        c.name as class_name,
+        sec.name as section_name,
+        s.name as subject_name,
+        s.subject_code,
+        su.name as teacher_name,
+        COALESCE(marker.name, 'Teacher') as marked_by_name
+      FROM "e_schooling"."subject_attendance_sessions" sas
+      LEFT JOIN "e_schooling"."classes" c ON c.id = sas.class_id
+      LEFT JOIN "e_schooling"."sections" sec ON sec.id = sas.section_id
+      LEFT JOIN "e_schooling"."subjects" s ON s.id = sas.subject_id
+      LEFT JOIN "e_schooling"."school_users" su ON su.id = sas.teacher_id
+      LEFT JOIN "e_schooling"."school_users" marker ON marker.id = COALESCE(sas.teacher_id, sas.created_by_id)
+      WHERE sas.school_id = $1 
+        AND sas.date = $2 
+        AND sas.is_delete = false
+        ${query.academicSessionId ? `AND (sas.academic_session_id = ${Number(query.academicSessionId)} OR sas.academic_session_id IS NULL)` : ''}
+        ${query.classId ? `AND sas.class_id = ${Number(query.classId)}` : ''}
+        ${query.sectionId ? `AND sas.section_id = ${Number(query.sectionId)}` : ''}
+        ${query.subjectId ? `AND sas.subject_id = ${Number(query.subjectId)}` : ''};
+      `,
+      [schoolId, targetDate],
+    );
+
+    const subjectSessionIds = subjectSessionsRaw.map((s: any) => s.session_id);
+    let subjectRecordsStats: Record<
+      string,
+      { total: number; present: number; absent: number; late: number }
+    > = {};
+
+    if (subjectSessionIds.length > 0) {
+      const subjCounts = await this.dataSource.query(
+        `
+        SELECT 
+          "session_id",
+          COUNT(*) as total_records,
+          SUM(CASE WHEN LOWER("attendance_mark") = 'present' THEN 1 ELSE 0 END) as present_count,
+          SUM(CASE WHEN LOWER("attendance_mark") = 'absent' THEN 1 ELSE 0 END) as absent_count,
+          SUM(CASE WHEN LOWER("attendance_mark") = 'late' THEN 1 ELSE 0 END) as late_count
+        FROM "e_schooling"."subject_attendance_records"
+        WHERE "session_id" = ANY($1) AND "is_delete" = false
+        GROUP BY "session_id";
+        `,
+        [subjectSessionIds],
+      );
+
+      for (const row of subjCounts) {
+        subjectRecordsStats[String(row.session_id)] = {
+          total: Number(row.total_records) || 0,
+          present: Number(row.present_count) || 0,
+          absent: Number(row.absent_count) || 0,
+          late: Number(row.late_count) || 0,
+        };
+      }
+    }
+
+    const markedSubjectSlotKeys = new Set<string>();
+
+    // Build Subject Completed List
+    const subjectCompletedList = subjectSessionsRaw.map((s: any) => {
+      const slotKey = `${s.class_id}-${s.section_id}-${s.subject_id}-${s.period_number}`;
+      markedSubjectSlotKeys.add(slotKey);
+      if (s.timetable_slot_id) {
+        markedSubjectSlotKeys.add(`slot-${s.timetable_slot_id}`);
+      }
+
+      const stats = subjectRecordsStats[String(s.session_id)] || {
+        total: 0,
+        present: 0,
+        absent: 0,
+        late: 0,
+      };
+      const rate =
+        stats.total > 0 ? Math.round((stats.present / stats.total) * 100) : 0;
+
+      const markedDate = s.created_at ? new Date(s.created_at) : new Date();
+      const markedAtFormatted = markedDate.toLocaleTimeString([], {
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+
+      return {
+        id: String(s.session_id),
+        sessionId: String(s.session_id),
+        schoolId: String(s.school_id),
+        academicSessionId: s.academic_session_id ? String(s.academic_session_id) : null,
+        classId: String(s.class_id),
+        className: s.class_name || `Class ${s.class_id}`,
+        sectionId: String(s.section_id),
+        sectionName: s.section_name || `Section ${s.section_id}`,
+        subjectId: String(s.subject_id),
+        subjectName: s.subject_name || 'Subject',
+        subjectCode: s.subject_code || '',
+        subjectTeacherId: s.teacher_id ? String(s.teacher_id) : null,
+        subjectTeacherName: s.teacher_name || 'Not Assigned',
+        period: s.period_number ? `Period ${s.period_number}` : 'Slot',
+        periodNumber: Number(s.period_number) || 1,
+        totalStudents: stats.total,
+        present: stats.present,
+        absent: stats.absent,
+        late: stats.late,
+        attendancePercentage: rate,
+        markedById: String(s.teacher_id || s.created_by_id || ''),
+        markedBy: s.marked_by_name || 'Subject Teacher',
+        markedAt: markedAtFormatted,
+        markedAtIso: s.created_at,
+        updatedAtIso: s.updated_at,
+        status: 'COMPLETED',
+        date: targetDate,
+      };
+    });
+
+    // Build Subject Pending List from Expected Timetable Slots
+    const subjectPendingList = timetableSlotsRaw
+      .filter((slot: any) => {
+        const slotKey = `${slot.class_id}-${slot.section_id}-${slot.subject_id}-${slot.period_number}`;
+        const slotIdKey = `slot-${slot.slot_id}`;
+        return !markedSubjectSlotKeys.has(slotKey) && !markedSubjectSlotKeys.has(slotIdKey);
+      })
+      .map((slot: any) => {
+        return {
+          id: `pending-subject-${slot.slot_id}`,
+          timetableSlotId: String(slot.slot_id),
+          schoolId: String(schoolId),
+          academicSessionId: query.academicSessionId || null,
+          classId: String(slot.class_id),
+          className: slot.class_name || `Class ${slot.class_id}`,
+          sectionId: String(slot.section_id),
+          sectionName: slot.section_name || `Section ${slot.section_id}`,
+          subjectId: String(slot.subject_id),
+          subjectName: slot.subject_name || 'Subject',
+          subjectCode: slot.subject_code || '',
+          subjectTeacherId: slot.teacher_id ? String(slot.teacher_id) : null,
+          subjectTeacherName: slot.teacher_name || 'Not Assigned',
+          period: slot.period_name || `Period ${slot.period_number || 1}`,
+          periodNumber: Number(slot.period_number) || 1,
+          totalStudents: Number(slot.student_count) || 0,
+          date: targetDate,
+          status: 'PENDING',
+          action: 'Mark Subject Attendance',
+        };
+      });
+
+    // ── 4. Apply Search & Pagination Filters ───────────────────────────────
+    const filterRow = (row: any) => {
+      if (!searchLower) return true;
+      const cName = (row.className || '').toLowerCase();
+      const sName = (row.sectionName || '').toLowerCase();
+      const subName = (row.subjectName || '').toLowerCase();
+      const tName = (row.classTeacherName || row.subjectTeacherName || '').toLowerCase();
+      const mBy = (row.markedBy || '').toLowerCase();
+      return (
+        cName.includes(searchLower) ||
+        sName.includes(searchLower) ||
+        subName.includes(searchLower) ||
+        tName.includes(searchLower) ||
+        mBy.includes(searchLower)
+      );
+    };
+
+    const filteredDailyPending = dailyPendingList.filter(filterRow);
+    const filteredDailyCompleted = dailyCompletedList.filter(filterRow);
+    const filteredSubjectPending = subjectPendingList.filter(filterRow);
+    const filteredSubjectCompleted = subjectCompletedList.filter(filterRow);
+
+    // Summary calculation
+    const totalClassesCount = new Set(sectionsRaw.map((s: any) => s.class_id)).size;
+    const totalSectionsCount = sectionsRaw.length;
+    const dailyCompletedCount = dailyCompletedList.length;
+    const dailyPendingCount = dailyPendingList.length;
+    const subjectExpectedCount = timetableSlotsRaw.length || subjectSessionsRaw.length;
+    const subjectCompletedCount = subjectCompletedList.length;
+    const subjectPendingCount = subjectPendingList.length;
+
+    const totalExp = totalSectionsCount + subjectExpectedCount;
+    const totalComp = dailyCompletedCount + subjectCompletedCount;
+    const completionPercentage =
+      totalExp > 0 ? Math.round((totalComp / totalExp) * 100) : 100;
+
+    const page = Math.max(1, Number(query.page) || 1);
+    const limit = Math.min(100, Math.max(1, Number(query.limit) || 20));
+    const offset = (page - 1) * limit;
+
+    return {
+      summary: {
+        totalClasses: totalClassesCount,
+        totalSections: totalSectionsCount,
+        dailyCompleted: dailyCompletedCount,
+        dailyPending: dailyPendingCount,
+        subjectExpected: subjectExpectedCount,
+        subjectCompleted: subjectCompletedCount,
+        subjectPending: subjectPendingCount,
+        completionPercentage,
+        date: targetDate,
+      },
+      daily: {
+        pending: filteredDailyPending.slice(offset, offset + limit),
+        completed: filteredDailyCompleted.slice(offset, offset + limit),
+        meta: {
+          pendingTotal: filteredDailyPending.length,
+          completedTotal: filteredDailyCompleted.length,
+          page,
+          limit,
+        },
+      },
+      subject: {
+        pending: filteredSubjectPending.slice(offset, offset + limit),
+        completed: filteredSubjectCompleted.slice(offset, offset + limit),
+        meta: {
+          pendingTotal: filteredSubjectPending.length,
+          completedTotal: filteredSubjectCompleted.length,
+          page,
+          limit,
+        },
+      },
+    };
+  }
 }
+
