@@ -287,12 +287,68 @@ export class SchoolsService {
       order: { createdAt: 'DESC' },
     });
 
+    const enrichedSchools = await Promise.all(
+      schools.map(async (s) => {
+        // 1. Fetch active academic session for current active academic year
+        const activeSession = await this.dataSource
+          .getRepository(AcademicSession)
+          .findOne({
+            where: [
+              { schoolId: s.id, isCurrent: true, isActive: true, isDeleted: false },
+              { schoolId: s.id, isActive: true, isDeleted: false },
+            ],
+            order: { startDate: 'DESC' },
+          });
+
+        // 2. Count live active students for current active academic year
+        let totalStudents = 0;
+        if (activeSession) {
+          totalStudents = await this.dataSource
+            .getRepository(StudentEnrollment)
+            .count({
+              where: {
+                schoolId: s.id,
+                academicSessionId: activeSession.id,
+                isActive: true,
+                isDeleted: false,
+              },
+            });
+        } else {
+          totalStudents = await this.dataSource
+            .getRepository(Student)
+            .count({
+              where: { schoolId: s.id, isActive: true, isDeleted: false },
+            });
+        }
+
+        // 3. Count live active staff (schoolUsers table)
+        const totalStaff = await this.dataSource
+          .getRepository(SchoolUser)
+          .count({
+            where: { schoolId: s.id, isActive: true, isDeleted: false },
+          });
+
+        // 4. Count live active classes (class table)
+        const totalClasses = await this.dataSource
+          .getRepository(Class)
+          .count({
+            where: { schoolId: s.id, isActive: true, isDeleted: false },
+          });
+
+        return {
+          ...s,
+          session: activeSession ? activeSession.name : undefined,
+          totalStudents: Number(totalStudents),
+          totalTeachers: Number(totalStaff),
+          totalClasses: Number(totalClasses),
+          isPrimaryOwner:
+            memberships.find((m) => m.schoolId === s.id)?.isPrimaryOwner ?? false,
+        };
+      }),
+    );
+
     return {
-      schools: schools.map((s) => ({
-        ...s,
-        isPrimaryOwner:
-          memberships.find((m) => m.schoolId === s.id)?.isPrimaryOwner ?? false,
-      })),
+      schools: enrichedSchools,
     };
   }
 
@@ -311,7 +367,71 @@ export class SchoolsService {
       .getRepository(School)
       .findOne({ where: { id: schoolId } });
     if (!school) throw new NotFoundException('School not found');
-    return { school };
+
+    // 1. Fetch active academic session for current active academic year
+    const activeSession = await this.dataSource
+      .getRepository(AcademicSession)
+      .findOne({
+        where: [
+          { schoolId: school.id, isCurrent: true, isActive: true, isDeleted: false },
+          { schoolId: school.id, isActive: true, isDeleted: false },
+        ],
+        order: { startDate: 'DESC' },
+      });
+
+    // 2. Count live active students for current active academic year
+    let totalStudents = 0;
+    if (activeSession) {
+      totalStudents = await this.dataSource
+        .getRepository(StudentEnrollment)
+        .count({
+          where: {
+            schoolId: school.id,
+            academicSessionId: activeSession.id,
+            isActive: true,
+            isDeleted: false,
+          },
+        });
+    } else {
+      totalStudents = await this.dataSource
+        .getRepository(Student)
+        .count({
+          where: { schoolId: school.id, isActive: true, isDeleted: false },
+        });
+    }
+
+    // 3. Count live active staff (schoolUsers table)
+    const totalStaff = await this.dataSource
+      .getRepository(SchoolUser)
+      .count({
+        where: { schoolId: school.id, isActive: true, isDeleted: false },
+      });
+
+    // 4. Count live active classes (class table)
+    const totalClasses = await this.dataSource
+      .getRepository(Class)
+      .count({
+        where: { schoolId: school.id, isActive: true, isDeleted: false },
+      });
+
+    // 5. Count live active sections (section table)
+    const totalSections = await this.dataSource
+      .getRepository(Section)
+      .count({
+        where: { schoolId: school.id, isActive: true, isDeleted: false },
+      });
+
+    return {
+      school: {
+        ...school,
+        session: activeSession ? activeSession.name : undefined,
+        academicSessionId: activeSession ? activeSession.id : undefined,
+        totalStudents: Number(totalStudents),
+        totalTeachers: Number(totalStaff),
+        totalClasses: Number(totalClasses),
+        totalSections: Number(totalSections),
+      },
+    };
   }
 
   /**

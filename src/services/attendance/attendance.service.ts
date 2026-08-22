@@ -2292,122 +2292,62 @@ export class AttendanceService implements OnModuleInit {
     await this.assertAccessToSchool(caller, schoolId);
 
     const targetDate = this.parseDateFlexible(date);
-    const parsedDate = targetDate.split('-');
-    const dateObj =
-      parsedDate.length === 3
-        ? new Date(
-            Number(parsedDate[0]),
-            Number(parsedDate[1]) - 1,
-            Number(parsedDate[2]),
-          )
-        : new Date(targetDate);
-    const dayNames = [
-      'Sunday',
-      'Monday',
-      'Tuesday',
-      'Wednesday',
-      'Thursday',
-      'Friday',
-      'Saturday',
-    ];
-    const dayOfWeek = dayNames[dateObj.getDay()];
+    
+    // Fetch full status breakdown for the target date
+    const statusData = await this.getAttendanceStatus(caller, schoolId, {
+      date: targetDate,
+      academicSessionId,
+      limit: 100,
+    });
 
-    // 1. Total Active Classes & Sections
-    const classesCountRes = await this.dataSource.query<RawCountResult[]>(
-      `SELECT COUNT(*) as count FROM "e_schooling"."classes" WHERE "school_id" = $1 AND "is_delete" = false AND "is_active" = true;`,
-      [schoolId],
-    );
-    const totalClasses = Number(classesCountRes[0]?.count) || 0;
+    // Calculate aggregated student stats for target date across all completed daily sessions
+    let presentStudents = 0;
+    let absentStudents = 0;
+    let lateStudents = 0;
+    let leaveStudents = 0;
+    let totalMarkedStudents = 0;
 
-    const sectionsCountRes = await this.dataSource.query<RawCountResult[]>(
-      `SELECT COUNT(*) as count FROM "e_schooling"."sections" WHERE "school_id" = $1 AND "is_delete" = false AND "is_active" = true;`,
-      [schoolId],
-    );
-    const totalSections = Number(sectionsCountRes[0]?.count) || 0;
-
-    // 2. Daily Attendance Completed Sections Count (Strictly requires submitted student records)
-    const dailyCompletedRes = await this.dataSource.query<RawCountResult[]>(
-      `
-      SELECT COUNT(DISTINCT att.section_id) as count 
-      FROM "e_schooling"."attendance_sessions" att
-      INNER JOIN "e_schooling"."attendance_records" rec 
-        ON rec.session_id = att.id 
-        AND rec.is_delete = false
-      WHERE att.school_id = $1 
-        AND att.date = $2 
-        AND att.is_delete = false
-        ${academicSessionId ? `AND (att.academic_session_id = ${Number(academicSessionId)} OR att.academic_session_id IS NULL)` : ''};
-      `,
-      [schoolId, targetDate],
-    );
-    const dailyCompleted = Number(dailyCompletedRes[0]?.count) || 0;
-    const dailyPending = Math.max(0, totalSections - dailyCompleted);
-
-    // 3. Expected Subject Attendance Slots from Timetable
-    const expectedSlotsRes = await this.dataSource.query<RawCountResult[]>(
-      `
-      SELECT COUNT(*) as count 
-      FROM "e_schooling"."academic_timetable_slots" 
-      WHERE "school_id" = $1 
-        AND LOWER("day") = LOWER($2) 
-        AND "is_delete" = false
-        AND "is_active" = true;
-      `,
-      [schoolId, dayOfWeek],
-    );
-    let subjectExpected = Number(expectedSlotsRes[0]?.count) || 0;
-
-    // Fallback if timetable slots not scheduled: use classes with subjects assigned
-    if (subjectExpected === 0) {
-      const fallbackCount = await this.dataSource.query<RawCountResult[]>(
-        `SELECT COUNT(*) as count FROM "e_schooling"."subjects" WHERE "school_id" = $1 AND "is_delete" = false AND "is_active" = true;`,
-        [schoolId],
-      );
-      subjectExpected = Number(fallbackCount[0]?.count) || 0;
+    if (statusData?.daily?.completed?.length) {
+      statusData.daily.completed.forEach((c: any) => {
+        presentStudents += Number(c.present) || 0;
+        absentStudents += Number(c.absent) || 0;
+        lateStudents += Number(c.late) || 0;
+        leaveStudents += Number(c.leave) || 0;
+        totalMarkedStudents += Number(c.totalStudents) || 0;
+      });
     }
 
-    // 4. Completed Subject Attendance Sessions (Strictly requires submitted student records)
-    const subjectCompletedRes = await this.dataSource.query<RawCountResult[]>(
-      `
-      SELECT COUNT(DISTINCT sas.id) as count 
-      FROM "e_schooling"."subject_attendance_sessions" sas
-      INNER JOIN "e_schooling"."subject_attendance_records" srec 
-        ON srec.session_id = sas.id 
-        AND srec.is_delete = false
-      WHERE sas.school_id = $1 
-        AND sas.date = $2 
-        AND sas.is_delete = false
-        ${academicSessionId ? `AND (sas.academic_session_id = ${Number(academicSessionId)} OR sas.academic_session_id IS NULL)` : ''};
-      `,
-      [schoolId, targetDate],
-    );
-    const subjectCompleted = Number(subjectCompletedRes[0]?.count) || 0;
-    const subjectPending = Math.max(0, subjectExpected - subjectCompleted);
-
-    const totalExpectedTransactions = totalSections + subjectExpected;
-    const totalCompletedTransactions = dailyCompleted + subjectCompleted;
-    const overallCompletionPercentage =
-      totalExpectedTransactions > 0
-        ? Math.round(
-            (totalCompletedTransactions / totalExpectedTransactions) * 100,
-          )
+    const attendanceRate =
+      totalMarkedStudents > 0
+        ? Math.round((presentStudents / totalMarkedStudents) * 100)
         : 100;
 
     return {
-      totalClasses,
-      totalSections,
-      sectionsRequiringAttendance: totalSections,
+      totalClasses: statusData.summary.totalClasses,
+      totalSections: statusData.summary.totalSections,
+      sectionsRequiringAttendance: statusData.summary.totalSections,
       daily: {
-        completed: dailyCompleted,
-        pending: dailyPending,
+        completed: statusData.summary.dailyCompleted,
+        pending: statusData.summary.dailyPending,
       },
       subject: {
-        expected: subjectExpected,
-        completed: subjectCompleted,
-        pending: subjectPending,
+        expected: statusData.summary.subjectExpected,
+        completed: statusData.summary.subjectCompleted,
+        pending: statusData.summary.subjectPending,
       },
-      overallCompletionPercentage,
+      overallCompletionPercentage: statusData.summary.completionPercentage,
       date: targetDate,
+      // Date specific counts for status card
+      presentStudents,
+      absentStudents,
+      lateStudents,
+      leaveStudents,
+      totalStudents: totalMarkedStudents,
+      attendanceRate,
+      // Lists for pending & completed tabs
+      pendingSections: statusData.daily.pending || [],
+      completedSections: statusData.daily.completed || [],
+      submittedSections: statusData.daily.completed || [],
     };
   }
 
