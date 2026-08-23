@@ -25,6 +25,8 @@ import { CurrentUser } from '../../../../shared/decorators/current-user.decorato
 import { ChangePasswordDto } from 'src/interfaces/request/auth/change-password.dto';
 import { ForgotPasswordDto } from 'src/interfaces/request/auth/forgot-password.dto';
 import { ResetPasswordDto } from 'src/interfaces/request/auth/reset-password.dto';
+import { SendOtpDto } from 'src/interfaces/request/auth/send-otp.dto';
+import { VerifyOtpDto } from 'src/interfaces/request/auth/verify-otp.dto';
 
 @ApiTags('Auth Management')
 @Controller('auth')
@@ -51,19 +53,38 @@ export class AuthController {
     return { success: isSuccess, message: 'Captcha verified successfully' };
   }
 
-  @ApiOperation({ summary: 'Send OTP for verification' })
+  @ApiOperation({ summary: 'Send OTP via SMS or Email' })
+  @ApiResponse({
+    status: 200,
+    description: 'OTP sent successfully',
+    schema: {
+      example: {
+        success: true,
+        message: 'SMS OTP sent successfully.',
+        recipient: '919876543210',
+        otpId: '102',
+      },
+    },
+  })
   @Post('otp/send')
-  async sendOtp(
-    @Body() body: { recipient: string; channel?: string; purpose?: string },
-  ) {
+  async sendOtp(@Body() body: SendOtpDto) {
     return this.authService.sendOtp(body);
   }
 
-  @ApiOperation({ summary: 'Verify OTP code' })
+  @ApiOperation({ summary: 'Verify OTP code against database' })
+  @ApiResponse({
+    status: 200,
+    description: 'OTP verified successfully',
+    schema: {
+      example: {
+        success: true,
+        verified: true,
+        message: 'OTP verified successfully',
+      },
+    },
+  })
   @Post('otp/verify')
-  async verifyOtp(
-    @Body() body: { recipient: string; otpCode: string; channel?: string },
-  ) {
+  async verifyOtp(@Body() body: VerifyOtpDto) {
     return this.authService.verifyOtp(body);
   }
 

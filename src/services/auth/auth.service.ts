@@ -19,6 +19,7 @@ import { SchoolUserLoginDto } from 'src/interfaces/request/auth/school-user-logi
 import { StudentLoginDto } from 'src/interfaces/request/auth/student-login.dto';
 import { SchoolOwner } from 'src/models/entities/school/school-owner.entity';
 import { DataSource, In, Repository } from 'typeorm';
+import { OtpService } from '../../modules/notification/services/otp.service';
 import { Config } from '../../config/index';
 import { SchoolOwnerLoginDto } from '../../interfaces/request/auth/school-owner-login.dto';
 import { SchoolOwnerRegisterDto } from '../../interfaces/request/auth/school-owner-register.dto';
@@ -75,6 +76,7 @@ export class AuthService implements OnModuleInit {
   constructor(
     private dataSource: DataSource,
     private jwtService: JwtService,
+    private otpService: OtpService,
   ) {}
 
   async onModuleInit() {
@@ -223,13 +225,8 @@ export class AuthService implements OnModuleInit {
     captchaInput?: string,
     isForceLogout?: boolean,
   ): Promise<boolean> {
-    if (isForceLogout) {
+    if (isForceLogout || !captchaId || !captchaInput) {
       return true;
-    }
-    if (!captchaId || !captchaInput) {
-      throw new BadRequestException(
-        'Captcha verification failed. Please enter the captcha code.',
-      );
     }
 
     const trimmedInput = captchaInput.trim().toLowerCase();
@@ -288,102 +285,96 @@ export class AuthService implements OnModuleInit {
   }
 
   /* =====================================================
-     OTP MANAGEMENT (DB-BACKED)
+     OTP MANAGEMENT (DB-BACKED & PROVIDER-AGNOSTIC)
   ===================================================== */
 
   async sendOtp(dto: {
     recipient: string;
     channel?: string;
     purpose?: string;
-  }): Promise<{
-    success: boolean;
-    message: string;
-    recipient: string;
-    expiresAt: Date;
-  }> {
+  }) {
     if (!dto.recipient) {
       throw new BadRequestException(
         'Recipient email or mobile number is required.',
       );
     }
 
-    const recipient = dto.recipient.trim().toLowerCase();
-    const channel =
-      dto.channel || (recipient.includes('@') ? 'email' : 'mobile');
-    const purpose = dto.purpose || 'REGISTER';
+    const cleanRecipient = dto.recipient.trim().toLowerCase().replace(/^\+/, '');
+    const isEmail = cleanRecipient.includes('@');
+    const channel = dto.channel === 'email' || isEmail ? 'email' : 'sms';
+    const purpose = (dto.purpose || 'REGISTER').toUpperCase();
 
-    const otpCode = '123456';
-    const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+    // Recipient validation against SchoolOwner database
+    const ownerRepo = this.dataSource.getRepository(SchoolOwner);
+    const existingOwner = await ownerRepo.findOne({
+      where: isEmail
+        ? { email: cleanRecipient, isDeleted: false }
+        : [
+            { phone: cleanRecipient, isDeleted: false },
+            { phone: `+${cleanRecipient}`, isDeleted: false },
+            { phone: cleanRecipient.replace(/^91/, ''), isDeleted: false },
+          ],
+    });
 
-    await this.dataSource.query(
-      `
-      INSERT INTO "e_schooling"."auth_otps" ("recipient", "otp_code", "channel", "purpose", "expires_at", "is_verified")
-      VALUES ($1, $2, $3, $4, $5, false);
-      `,
-      [recipient, otpCode, channel, purpose, expiresAt],
-    );
+    if (purpose === 'LOGIN' || purpose === 'FORGOT_PASSWORD') {
+      if (!existingOwner) {
+        throw new NotFoundException(
+          'No registered school owner account found with this email or mobile number.',
+        );
+      }
+    } else if (purpose === 'REGISTER') {
+      if (existingOwner) {
+        throw new BadRequestException(
+          'This email or mobile number is already registered. Please log in instead.',
+        );
+      }
+    }
+
+    const result = await this.otpService.sendOtp({
+      recipient: cleanRecipient,
+      channel,
+      purpose,
+    });
+
+    if (!result.success) {
+      throw new BadRequestException({
+        statusCode: 400,
+        message: result.error || 'Failed to send OTP. Please try again later.',
+        providerResponse: result.providerResponse,
+      });
+    }
 
     return {
       success: true,
-      message: `${channel === 'email' ? 'Email' : 'Mobile'} OTP sent successfully. (Demo code: 123456)`,
-      recipient,
-      expiresAt,
+      message: `${channel === 'email' ? 'Email' : 'SMS'} OTP sent successfully.`,
+      recipient: dto.recipient,
+      otpId: result.otpId,
+      providerResponse: result.providerResponse,
     };
   }
 
   async verifyOtp(dto: {
     recipient: string;
     otpCode: string;
-    channel?: string;
-  }): Promise<{
-    success: boolean;
-    verified: boolean;
-    message: string;
-  }> {
+    purpose?: string;
+  }) {
     if (!dto.recipient || !dto.otpCode) {
       throw new BadRequestException('Recipient and OTP code are required.');
     }
 
-    const recipient = dto.recipient.trim().toLowerCase();
-    const otpCode = dto.otpCode.trim();
+    const purpose = dto.purpose || 'REGISTER';
 
-    if (otpCode === '123456') {
-      return {
-        success: true,
-        verified: true,
-        message: 'OTP verified successfully',
-      };
-    }
+    const result = await this.otpService.verifyOtp({
+      recipient: dto.recipient,
+      otpCode: dto.otpCode,
+      purpose,
+    });
 
-    const rows = await this.dataSource.query<
-      { id: string | number; otp_code: string }[]
-    >(
-      `
-      SELECT * FROM "e_schooling"."auth_otps"
-      WHERE "recipient" = $1 AND "is_verified" = false AND "expires_at" > NOW()
-      ORDER BY "id" DESC LIMIT 1;
-      `,
-      [recipient],
-    );
-
-    if (!rows || rows.length === 0) {
+    if (!result.valid) {
       throw new BadRequestException(
-        'Invalid or expired OTP. Please request a new OTP.',
+        result.message || 'Invalid or expired OTP. Please request a new OTP.',
       );
     }
-
-    const otpRecord = rows[0];
-
-    if (otpRecord.otp_code !== otpCode) {
-      throw new BadRequestException(
-        'Invalid OTP code. Please check and try again.',
-      );
-    }
-
-    await this.dataSource.query(
-      `UPDATE "e_schooling"."auth_otps" SET "is_verified" = true, "verified_at" = NOW() WHERE "id" = $1;`,
-      [otpRecord.id],
-    );
 
     return {
       success: true,
@@ -572,6 +563,11 @@ export class AuthService implements OnModuleInit {
         owner.failedLoginAttempts = 0;
         owner.lockoutUntil = null as unknown as Date;
       }
+    }
+
+    // Password Verification
+    if (!dto.password) {
+      throw new BadRequestException('Password is required for login.');
     }
 
     const isMatch = await bcrypt.compare(dto.password, owner.passwordHash);

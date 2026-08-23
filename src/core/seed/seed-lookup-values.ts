@@ -5,7 +5,7 @@ import AppDataSource from '../database/postgres/data-source';
 // ======================================================
 // All 28 system-default lookup categories from the frontend seed
 // ======================================================
-const LOOKUP_VALUES = [
+export const LOOKUP_VALUES = [
   // ── PERIOD_TYPE ──────────────────────────────────────
   {
     category: 'PERIOD_TYPE',
@@ -1078,11 +1078,42 @@ const LOOKUP_VALUES = [
 ];
 
 async function seedLookupValues(dataSource: DataSource) {
-  // Detect schema
-  const schemas = await dataSource.query(
-    `SELECT schema_name FROM information_schema.schemata WHERE schema_name = 'e_schooling'`,
+  // Ensure schema, sequence, and table exist
+  await dataSource.query(`CREATE SCHEMA IF NOT EXISTS "e_schooling";`);
+  await dataSource.query(
+    `CREATE SEQUENCE IF NOT EXISTS "e_schooling"."lookup_values_id_seq";`,
   );
-  const schema = schemas.length > 0 ? 'e_schooling' : 'public';
+  await dataSource.query(`
+    CREATE TABLE IF NOT EXISTS "e_schooling"."lookup_values" (
+      "id"                BIGINT NOT NULL DEFAULT nextval('"e_schooling"."lookup_values_id_seq"'),
+      "school_id"         BIGINT NULL,
+      "category"          VARCHAR(60) NOT NULL,
+      "code"              VARCHAR(80) NOT NULL,
+      "lookup_key"        VARCHAR(100) NOT NULL,
+      "lookup_value"      VARCHAR(255) NOT NULL,
+      "description"       TEXT NULL,
+      "display_order"     INT NOT NULL DEFAULT 0,
+      "parent_id"         BIGINT NULL,
+      "is_system_default" BOOLEAN NOT NULL DEFAULT false,
+      "is_active"         BOOLEAN NOT NULL DEFAULT true,
+      "is_deleted"        BOOLEAN NOT NULL DEFAULT false,
+      "metadata"          JSONB NULL,
+      "created_by_id"     BIGINT NOT NULL DEFAULT 1,
+      "updated_by_id"     BIGINT NOT NULL DEFAULT 1,
+      "deleted_by_id"     BIGINT NULL,
+      "created_at"        TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "updated_at"        TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "deleted_at"        TIMESTAMPTZ NULL,
+      CONSTRAINT "PK_lookup_values_id" PRIMARY KEY ("id")
+    );
+  `);
+  await dataSource.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS "idx_lookup_values_global_code_unique"
+    ON "e_schooling"."lookup_values" (LOWER("code"))
+    WHERE "school_id" IS NULL AND "is_deleted" = false;
+  `);
+
+  const schema = 'e_schooling';
   const table = `"${schema}"."lookup_values"`;
 
   console.log(`📋 Using schema: ${schema}`);
@@ -1157,5 +1188,15 @@ async function runSeed() {
     }
   }
 }
+
+export const DEFAULT_LOOKUP_VALUES = LOOKUP_VALUES.map((item) => ({
+  category: item.category,
+  code: item.code,
+  lookupKey: item.lookup_key,
+  lookupValue: item.lookup_value,
+  description: (item as any).description || null,
+  displayOrder: item.display_order,
+  metadata: null,
+}));
 
 runSeed();

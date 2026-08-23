@@ -1,5 +1,4 @@
 import {
-  IsEmail,
   IsNotEmpty,
   IsString,
   IsOptional,
@@ -12,12 +11,15 @@ export class SchoolOwnerLoginDto {
     example: 'rahul@school.com',
     description: 'Registered email or mobile number',
   })
-  @IsNotEmpty()
+  @IsNotEmpty({ message: 'Registered email or mobile number is required' })
   @IsString()
   identifier: string;
 
-  @ApiProperty({ example: 'StrongPass@123', description: 'Account password' })
-  @IsNotEmpty()
+  @ApiProperty({
+    example: 'StrongPass@123',
+    description: 'Account password',
+  })
+  @IsNotEmpty({ message: 'Password is required' })
   @IsString()
   password: string;
 

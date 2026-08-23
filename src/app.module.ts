@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { createOrmConfig } from './core/database/postgres/create-typeorm';
 import { RestModule } from './api/rest/rest.module';
 import { WorkerModule } from './api/worker/worker.module';
+import { NotificationModule } from './modules/notification/notification.module';
 
 @Module({
   imports: [
@@ -11,6 +12,7 @@ import { WorkerModule } from './api/worker/worker.module';
     }),
     RestModule,
     WorkerModule,
+    NotificationModule,
   ],
   controllers: [],
   providers: [],

@@ -30,7 +30,13 @@
     "seed:attendance": "npx ts-node -r tsconfig-paths/register ./src/core/seed/seed-attendance-and-timetables.ts",
     "seed:transport": "npx ts-node -r tsconfig-paths/register ./src/core/seed/seed-transport.ts",
     "seed:admissions": "npx ts-node -r tsconfig-paths/register ./src/core/seed/seed-admissions.ts",
-    "seed:all": "npm run seed:platform-modules && npm run seed:students && npm run seed:fees && npm run seed:attendance && npm run seed:transport && npm run seed:admissions && npm run seed:login-history"
+
+    "seed:lookups": "npx tsx src/core/seed/seed-lookup-values.ts",
+    "seed:class-section": "npx tsx src/core/seed/seed-class-section.ts",
+    "seed:states": "npx tsx src/core/seed/seed-states.ts",
+    "seed:districts": "npx tsx src/core/seed/seed-districts.ts",
+    "seed:geo": "npm run seed:states && npm run seed:districts",
+    "seed:all": "npm run seed:platform-modules && npm run seed:students && npm run seed:fees && npm run seed:attendance && npm run seed:transport && npm run seed:admissions && npm run seed:login-history && npm run seed:lookups && npm run seed:class-section && npm run seed:geo"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",
