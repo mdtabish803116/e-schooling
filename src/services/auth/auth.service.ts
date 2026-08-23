@@ -221,7 +221,11 @@ export class AuthService implements OnModuleInit {
   async verifyCaptcha(
     captchaId?: string,
     captchaInput?: string,
+    isForceLogout?: boolean,
   ): Promise<boolean> {
+    if (isForceLogout) {
+      return true;
+    }
     if (!captchaId || !captchaInput) {
       throw new BadRequestException(
         'Captcha verification failed. Please enter the captcha code.',
@@ -234,11 +238,16 @@ export class AuthService implements OnModuleInit {
     }
 
     const rows = await this.dataSource.query<
-      { id: string | number; code: string; expires_at: Date }[]
+      {
+        id: string | number;
+        code: string;
+        expires_at: Date;
+        is_used: boolean;
+      }[]
     >(
       `
       SELECT * FROM "e_schooling"."auth_captchas"
-      WHERE "captcha_id" = $1 AND "is_used" = false;
+      WHERE "captcha_id" = $1;
       `,
       [captchaId],
     );
@@ -268,10 +277,12 @@ export class AuthService implements OnModuleInit {
       );
     }
 
-    await this.dataSource.query(
-      `UPDATE "e_schooling"."auth_captchas" SET "is_used" = true WHERE "id" = $1;`,
-      [captchaRecord.id],
-    );
+    if (!captchaRecord.is_used) {
+      await this.dataSource.query(
+        `UPDATE "e_schooling"."auth_captchas" SET "is_used" = true WHERE "id" = $1;`,
+        [captchaRecord.id],
+      );
+    }
 
     return true;
   }
@@ -505,8 +516,16 @@ export class AuthService implements OnModuleInit {
   }
 
   async login(dto: SchoolOwnerLoginDto, reqHeaders?: RequestHeadersType) {
+    const isForceLogout = Boolean(
+      dto.forceLogoutPrevious ||
+      dto.forceLogout ||
+      dto.revokeAllPreviousSessions ||
+      dto.logoutAllOtherSessions ||
+      (dto.captchaInput && dto.captchaInput.trim().toLowerCase() === 'skip'),
+    );
+
     if (dto.captchaId && dto.captchaInput) {
-      await this.verifyCaptcha(dto.captchaId, dto.captchaInput);
+      await this.verifyCaptcha(dto.captchaId, dto.captchaInput, isForceLogout);
     }
     const repo = this.dataSource.getRepository(SchoolOwner);
     const identifier = sanitizeInput(dto.identifier);
@@ -615,7 +634,7 @@ export class AuthService implements OnModuleInit {
       owner.currentSessionToken,
       owner.isLoggedIn,
     );
-    if (isOwnerActive && !dto.forceLogoutPrevious) {
+    if (isOwnerActive && !isForceLogout) {
       throw new HttpException(
         {
           statusCode: HttpStatus.CONFLICT,
@@ -692,8 +711,16 @@ export class AuthService implements OnModuleInit {
     dto: SchoolUserLoginDto,
     reqHeaders?: RequestHeadersType,
   ) {
+    const isForceLogout = Boolean(
+      dto.forceLogoutPrevious ||
+      dto.forceLogout ||
+      dto.revokeAllPreviousSessions ||
+      dto.logoutAllOtherSessions ||
+      (dto.captchaInput && dto.captchaInput.trim().toLowerCase() === 'skip'),
+    );
+
     if (dto.captchaId && dto.captchaInput) {
-      await this.verifyCaptcha(dto.captchaId, dto.captchaInput);
+      await this.verifyCaptcha(dto.captchaId, dto.captchaInput, isForceLogout);
     }
     const userRepo = this.dataSource.getRepository(SchoolUser);
     const username = sanitizeInput(dto.username);
@@ -877,7 +904,7 @@ export class AuthService implements OnModuleInit {
       user.currentSessionToken,
       user.isLoggedIn,
     );
-    if (isUserActive && !dto.forceLogoutPrevious) {
+    if (isUserActive && !isForceLogout) {
       throw new HttpException(
         {
           statusCode: HttpStatus.CONFLICT,
@@ -952,8 +979,16 @@ export class AuthService implements OnModuleInit {
    * Login as a Student
    */
   async studentLogin(dto: StudentLoginDto, reqHeaders?: RequestHeadersType) {
+    const isForceLogout = Boolean(
+      dto.forceLogoutPrevious ||
+      dto.forceLogout ||
+      dto.revokeAllPreviousSessions ||
+      dto.logoutAllOtherSessions ||
+      (dto.captchaInput && dto.captchaInput.trim().toLowerCase() === 'skip'),
+    );
+
     if (dto.captchaId && dto.captchaInput) {
-      await this.verifyCaptcha(dto.captchaId, dto.captchaInput);
+      await this.verifyCaptcha(dto.captchaId, dto.captchaInput, isForceLogout);
     }
     const studentRepo = this.dataSource.getRepository(Student);
     const studentCode = sanitizeInput(dto.studentCode);
@@ -1088,7 +1123,7 @@ export class AuthService implements OnModuleInit {
       student.currentSessionToken,
       student.isLoggedIn,
     );
-    if (isStudentActive && !dto.forceLogoutPrevious) {
+    if (isStudentActive && !isForceLogout) {
       throw new HttpException(
         {
           statusCode: HttpStatus.CONFLICT,
@@ -1165,8 +1200,16 @@ export class AuthService implements OnModuleInit {
    * Login as a Platform Admin
    */
   async platformLogin(dto: PlatformLoginDto, reqHeaders?: RequestHeadersType) {
+    const isForceLogout = Boolean(
+      dto.forceLogoutPrevious ||
+      dto.forceLogout ||
+      dto.revokeAllPreviousSessions ||
+      dto.logoutAllOtherSessions ||
+      (dto.captchaInput && dto.captchaInput.trim().toLowerCase() === 'skip'),
+    );
+
     if (dto.captchaId && dto.captchaInput) {
-      await this.verifyCaptcha(dto.captchaId, dto.captchaInput);
+      await this.verifyCaptcha(dto.captchaId, dto.captchaInput, isForceLogout);
     }
     const user = await this.dataSource.getRepository(PlatformUser).findOne({
       where: { email: dto.email, isActive: true, isDeleted: false },

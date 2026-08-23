@@ -31,6 +31,18 @@ export class SchoolUserLoginDto {
   @IsBoolean()
   forceLogoutPrevious?: boolean;
 
+  @IsOptional()
+  @IsBoolean()
+  forceLogout?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  revokeAllPreviousSessions?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  logoutAllOtherSessions?: boolean;
+
   @ApiPropertyOptional({
     example: 'cap_123456789',
     description: 'Backend generated Captcha ID',

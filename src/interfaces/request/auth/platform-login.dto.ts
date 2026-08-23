@@ -26,6 +26,18 @@ export class PlatformLoginDto {
   forceLogoutPrevious?: boolean;
 
   @IsOptional()
+  @IsBoolean()
+  forceLogout?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  revokeAllPreviousSessions?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  logoutAllOtherSessions?: boolean;
+
+  @IsOptional()
   @IsString()
   captchaId?: string;
 

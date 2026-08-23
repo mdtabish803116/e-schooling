@@ -256,6 +256,25 @@ export class AcademicService implements OnModuleInit {
     }
     data.name = name;
 
+    // Validate Academic Session
+    let targetSessionId = data.academicSessionId;
+    if (targetSessionId) {
+      const validSession = await this.sessionRepo.findOne({
+        where: { id: targetSessionId, schoolId, isDeleted: false },
+      });
+      if (!validSession) {
+        throw new BadRequestException(
+          'The selected academic session does not belong to this school.',
+        );
+      }
+    } else {
+      const activeSession = await this.sessionRepo.findOne({
+        where: { schoolId, isCurrent: true, isDeleted: false },
+      });
+      targetSessionId = activeSession?.id || undefined;
+    }
+    data.academicSessionId = targetSessionId;
+
     const normalizedInput = data.name.replace(/\s+/g, '').toLowerCase();
 
     if (data.classTeacherId) {
@@ -267,10 +286,17 @@ export class AcademicService implements OnModuleInit {
       }
     }
 
-    // Check if class with same normalized name exists in the school
-    const existingClasses = await this.classRepo.find({ where: { schoolId } });
+    // Check if class with same normalized name exists in the school FOR THIS ACADEMIC SESSION
+    const existingClasses = await this.classRepo.find({
+      where: {
+        schoolId,
+        ...(targetSessionId ? { academicSessionId: targetSessionId } : {}),
+      },
+    });
     const match = existingClasses.find(
-      (c) => c.name.replace(/\s+/g, '').toLowerCase() === normalizedInput,
+      (c) =>
+        c.name.replace(/\s+/g, '').toLowerCase() === normalizedInput &&
+        String(c.academicSessionId || '') === String(targetSessionId || ''),
     );
 
     if (match) {
@@ -279,6 +305,7 @@ export class AcademicService implements OnModuleInit {
         match.isDeleted = false;
         match.isActive = true;
         match.name = data.name; // Keep input casing
+        match.academicSessionId = targetSessionId || null;
         match.dailyAttendanceLimit =
           data.dailyAttendanceLimit ?? match.dailyAttendanceLimit;
         if (data.classCode !== undefined) match.classCode = data.classCode;
@@ -300,11 +327,13 @@ export class AcademicService implements OnModuleInit {
         if (defaultSection) {
           defaultSection.isDeleted = false;
           defaultSection.isActive = true;
+          defaultSection.academicSessionId = targetSessionId || null;
           defaultSection.updatedById = userId;
           await this.sectionRepo.save(defaultSection);
         } else {
           const newDefaultSection = this.sectionRepo.create({
             schoolId,
+            academicSessionId: targetSessionId || null,
             classId: saved.id,
             name: 'default',
             isDefault: true,
@@ -352,17 +381,19 @@ export class AcademicService implements OnModuleInit {
 
       if (!match.isActive) {
         throw new BadRequestException(
-          'This class already exists with inactive status',
+          'This class already exists with inactive status in this academic session.',
         );
       }
 
-      throw new BadRequestException('This class already exists');
+      throw new BadRequestException(
+        'A class with this name already exists in this academic session.',
+      );
     }
 
     const newClass = this.classRepo.create({
       ...data,
       schoolId,
-      academicSessionId: data.academicSessionId || null,
+      academicSessionId: targetSessionId || null,
       createdById: userId,
       updatedById: userId,
     });
@@ -371,7 +402,7 @@ export class AcademicService implements OnModuleInit {
     // Automatically create a default section since hasSections is false
     const newDefaultSection = this.sectionRepo.create({
       schoolId,
-      academicSessionId: data.academicSessionId || null,
+      academicSessionId: targetSessionId || null,
       classId: savedClass.id,
       name: 'default',
       isDefault: true,
@@ -409,7 +440,11 @@ export class AcademicService implements OnModuleInit {
     academicSessionId?: string,
   ) {
     let classes = await this.classRepo.find({
-      where: { schoolId, isDeleted: false },
+      where: {
+        schoolId,
+        isDeleted: false,
+        ...(academicSessionId ? { academicSessionId: String(academicSessionId) } : {}),
+      },
       order: { createdAt: 'ASC' },
     });
 
@@ -555,12 +590,16 @@ export class AcademicService implements OnModuleInit {
     if (data.name) {
       const normalizedInput = data.name.replace(/\s+/g, '').toLowerCase();
       const existingClasses = await this.classRepo.find({
-        where: { schoolId },
+        where: {
+          schoolId,
+          ...(existing.academicSessionId ? { academicSessionId: existing.academicSessionId } : {}),
+        },
       });
       const match = existingClasses.find(
         (c) =>
           c.id !== id &&
-          c.name.replace(/\s+/g, '').toLowerCase() === normalizedInput,
+          c.name.replace(/\s+/g, '').toLowerCase() === normalizedInput &&
+          String(c.academicSessionId || '') === String(existing.academicSessionId || ''),
       );
 
       if (match) {
@@ -644,11 +683,11 @@ export class AcademicService implements OnModuleInit {
 
         if (!match.isActive) {
           throw new BadRequestException(
-            'This class already exists with inactive status',
+            'This class already exists with inactive status in this academic session.',
           );
         }
 
-        throw new BadRequestException('This class already exists');
+        throw new BadRequestException('A class with this name already exists in this academic session.');
       }
     }
 
@@ -702,6 +741,23 @@ export class AcademicService implements OnModuleInit {
       where: { id, schoolId, isDeleted: false },
     });
     if (!existing) throw new NotFoundException('Class not found');
+
+    // Check active student enrollments
+    const activeEnrollments = await this.dataSource
+      .getRepository(StudentEnrollment)
+      .count({
+        where: {
+          schoolId,
+          classId: id,
+          isActive: true,
+          isDeleted: false,
+        },
+      });
+    if (activeEnrollments > 0) {
+      throw new BadRequestException(
+        `Cannot delete this class because it contains ${activeEnrollments} active enrolled student(s). Please transfer or unenroll students first.`,
+      );
+    }
 
     // Soft-delete the class
     existing.isDeleted = true;
@@ -1787,6 +1843,215 @@ export class AcademicService implements OnModuleInit {
 
     Object.assign(existing, { ...data, updatedById: userId });
     return await this.subjectRepo.save(existing);
+  }
+
+  async getSubjectDetails(schoolId: string, id: string) {
+    const subject = await this.subjectRepo.findOne({
+      where: { id, schoolId, isDeleted: false },
+    });
+    if (!subject) throw new NotFoundException('Subject not found');
+
+    // 1. Fetch Mapped Classes & Sections
+    const mappings = await this.mappingRepo.find({
+      where: { subjectId: id, schoolId, isDeleted: false },
+      relations: ['class', 'section'],
+    });
+
+    const classesMap = new Map<string, { classId: string; className: string }>();
+    const sectionsList: Array<{
+      sectionId: string;
+      name: string;
+      classId: string;
+      className: string;
+      studentCount?: number;
+      teacherId?: string;
+      teacherName?: string;
+    }> = [];
+
+    const teacherIds = new Set<string>();
+
+    for (const m of mappings) {
+      if (m.class) {
+        classesMap.set(String(m.class.id), {
+          classId: String(m.class.id),
+          className: m.class.name,
+        });
+      }
+      if (m.section && m.class) {
+        sectionsList.push({
+          sectionId: String(m.section.id),
+          name: m.section.name,
+          classId: String(m.class.id),
+          className: m.class.name,
+          teacherId: m.teacherId ? String(m.teacherId) : undefined,
+        });
+        if (m.teacherId) teacherIds.add(String(m.teacherId));
+      }
+    }
+
+    // 2. Fetch Teacher details
+    let teachers: Array<{
+      teacherId: string;
+      teacherName: string;
+      employeeCode?: string;
+      sectionId?: string;
+      name?: string;
+    }> = [];
+
+    if (teacherIds.size > 0) {
+      const users = await this.dataSource.query(
+        `SELECT id, full_name, email FROM "e_schooling"."school_users" WHERE id = ANY($1)`,
+        [Array.from(teacherIds)],
+      );
+      const userMap = new Map<string, string>(
+        users.map((u: any) => [String(u.id), String(u.full_name || 'Teacher')]),
+      );
+
+      teachers = Array.from(teacherIds).map((tId) => ({
+        teacherId: tId,
+        teacherName: userMap.get(tId) || 'Teacher',
+        name: userMap.get(tId) || 'Teacher',
+      }));
+    }
+
+    // 3. Timetable slots for this subject
+    const timetableSlots = await this.dataSource.query(
+      `
+      SELECT 
+        ts.id, ts.day, ts.room_no,
+        tp.period_number, tp.name as period_name, tp.start_time, tp.end_time,
+        c.name as class_name, s.name as section_name,
+        su.name as teacher_name
+      FROM "e_schooling"."academic_timetable_slots" ts
+      LEFT JOIN "e_schooling"."academic_timetable_periods" tp ON tp.id = ts.period_id
+      LEFT JOIN "e_schooling"."classes" c ON c.id = ts.class_id
+      LEFT JOIN "e_schooling"."sections" s ON s.id = ts.section_id
+      LEFT JOIN "e_schooling"."school_users" su ON su.id = ts.teacher_id
+      WHERE ts.subject_id = $1 AND ts.school_id = $2 AND ts.is_delete = false
+      ORDER BY COALESCE(tp.display_order, 1) ASC;
+      `,
+      [id, schoolId],
+    );
+
+    // 4. Counts: Exams, Homework, Subject Attendance Sessions
+    const [examCountRows, homeworkCountRows, attendanceCountRows] = await Promise.all([
+      this.dataSource.query(
+        `SELECT COUNT(*) FROM "e_schooling"."exam_subjects" WHERE subject_id = $1`,
+        [id],
+      ).catch(() => [{ count: 0 }]),
+      this.dataSource.query(
+        `SELECT COUNT(*) FROM "e_schooling"."homework" WHERE subject_id = $1 AND is_delete = false`,
+        [id],
+      ).catch(() => [{ count: 0 }]),
+      this.dataSource.query(
+        `SELECT COUNT(*) FROM "e_schooling"."subject_attendance_sessions" WHERE subject_id = $1 AND school_id = $2 AND is_delete = false`,
+        [id, schoolId],
+      ).catch(() => [{ count: 0 }]),
+    ]);
+
+    return {
+      ...subject,
+      classes: Array.from(classesMap.values()),
+      sections: sectionsList,
+      teachers,
+      timetableSlots: timetableSlots || [],
+      counts: {
+        classes: classesMap.size,
+        sections: sectionsList.length,
+        teachers: teachers.length,
+        exams: Number(examCountRows?.[0]?.count) || 0,
+        homework: Number(homeworkCountRows?.[0]?.count) || 0,
+        attendanceSessions: Number(attendanceCountRows?.[0]?.count) || 0,
+      },
+    };
+  }
+
+  async deleteSubject(schoolId: string, id: string, userId: string) {
+    const subject = await this.subjectRepo.findOne({
+      where: { id, schoolId, isDeleted: false },
+    });
+    if (!subject) throw new NotFoundException('Subject not found');
+
+    // Dependency check
+    const [attendanceCount, timetableCount, examCount] = await Promise.all([
+      this.dataSource.query(
+        `SELECT COUNT(*) FROM "e_schooling"."subject_attendance_sessions" WHERE subject_id = $1 AND is_delete = false`,
+        [id],
+      ).catch(() => [{ count: 0 }]),
+      this.dataSource.query(
+        `SELECT COUNT(*) FROM "e_schooling"."academic_timetable_slots" WHERE subject_id = $1 AND is_delete = false`,
+        [id],
+      ).catch(() => [{ count: 0 }]),
+      this.dataSource.query(
+        `SELECT COUNT(*) FROM "e_schooling"."exam_subjects" WHERE subject_id = $1`,
+        [id],
+      ).catch(() => [{ count: 0 }]),
+    ]);
+
+    const hasAttendance = Number(attendanceCount?.[0]?.count) > 0;
+    const hasTimetable = Number(timetableCount?.[0]?.count) > 0;
+    const hasExams = Number(examCount?.[0]?.count) > 0;
+
+    if (hasAttendance || hasTimetable || hasExams) {
+      throw new BadRequestException(
+        `Cannot delete subject "${subject.name}" because active dependencies exist (${hasAttendance ? 'Attendance Records, ' : ''}${hasTimetable ? 'Timetable Slots, ' : ''}${hasExams ? 'Exams' : ''}). Deactivate the subject instead.`,
+      );
+    }
+
+    subject.isDeleted = true;
+    subject.isActive = false;
+    subject.updatedById = userId;
+    await this.subjectRepo.save(subject);
+
+    // Soft delete mappings as well
+    await this.dataSource.query(
+      `UPDATE "e_schooling"."class_section_subjects" SET "is_delete" = true, "updated_by_id" = $1 WHERE "subject_id" = $2 AND "school_id" = $3`,
+      [userId, id, schoolId],
+    );
+
+    return { success: true, message: `Subject "${subject.name}" has been deleted.` };
+  }
+
+  async toggleSubjectStatus(schoolId: string, id: string, status: string, userId: string) {
+    const subject = await this.subjectRepo.findOne({
+      where: { id, schoolId, isDeleted: false },
+    });
+    if (!subject) throw new NotFoundException('Subject not found');
+
+    const isActive = status.toUpperCase() === 'ACTIVE';
+    subject.isActive = isActive;
+    subject.updatedById = userId;
+    return await this.subjectRepo.save(subject);
+  }
+
+  async configureSubjectMarks(schoolId: string, id: string, payload: any, userId: string) {
+    const subject = await this.subjectRepo.findOne({
+      where: { id, schoolId, isDeleted: false },
+    });
+    if (!subject) throw new NotFoundException('Subject not found');
+
+    if (payload.maxMarks !== undefined) subject['maxMarks'] = payload.maxMarks;
+    if (payload.passMarks !== undefined) subject['passMarks'] = payload.passMarks;
+    if (payload.theoryMarks !== undefined) subject['theoryMarks'] = payload.theoryMarks;
+    if (payload.practicalMarks !== undefined) subject['practicalMarks'] = payload.practicalMarks;
+    subject.updatedById = userId;
+
+    return await this.subjectRepo.save(subject);
+  }
+
+  async updateSubjectCredit(schoolId: string, id: string, credit: number, userId: string) {
+    const subject = await this.subjectRepo.findOne({
+      where: { id, schoolId, isDeleted: false },
+    });
+    if (!subject) throw new NotFoundException('Subject not found');
+
+    subject['credit'] = credit;
+    subject.updatedById = userId;
+    return await this.subjectRepo.save(subject);
+  }
+
+  async getSubjectDashboard(schoolId: string, id: string) {
+    return this.getSubjectDetails(schoolId, id);
   }
 
   // MAPPINGS

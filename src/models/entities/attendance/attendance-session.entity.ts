@@ -73,9 +73,18 @@ export class AttendanceSession {
     name: 'taken_by',
     type: 'bigint',
     nullable: true,
-    comment: 'Reference to SchoolUser',
+    comment: 'Reference to SchoolUser or SchoolOwner',
   })
   takenBy: string;
+
+  @Column({
+    name: 'taken_by_name',
+    type: 'varchar',
+    length: 255,
+    nullable: true,
+    comment: 'Name of the user who took attendance',
+  })
+  takenByName: string;
 
   @Column({
     name: 'is_active',

@@ -26,6 +26,15 @@ export class District {
 
   @Index()
   @Column({
+    name: 'state_code',
+    type: 'varchar',
+    nullable: true,
+    comment: 'State code reference e.g. BR, MH, UP',
+  })
+  stateCode: string;
+
+  @Index()
+  @Column({
     name: 'name',
     type: 'varchar',
     nullable: false,

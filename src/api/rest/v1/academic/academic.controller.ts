@@ -276,6 +276,16 @@ export class AcademicController {
     return this.academicService.getSubjects(schoolId, academicSessionId);
   }
 
+  @ApiOperation({ summary: 'Get subject details with full relationships' })
+  @Permission(ResourceEnum.SUBJECTS, ActionEnum.VIEW)
+  @Get('subjects/:id')
+  async getSubjectDetails(
+    @Param('schoolId') schoolId: string,
+    @Param('id') id: string,
+  ) {
+    return this.academicService.getSubjectDetails(schoolId, id);
+  }
+
   @ApiOperation({ summary: 'Update a subject' })
   @Permission(ResourceEnum.SUBJECTS, ActionEnum.UPDATE)
   @Patch('subjects/:id')
@@ -286,6 +296,78 @@ export class AcademicController {
     @Body() dto: UpdateSubjectDto,
   ) {
     return this.academicService.updateSubject(schoolId, id, dto, user.id);
+  }
+
+  @ApiOperation({ summary: 'Delete a subject with dependency checks' })
+  @Permission(ResourceEnum.SUBJECTS, ActionEnum.DELETE)
+  @Delete('subjects/:id')
+  async deleteSubject(
+    @Param('schoolId') schoolId: string,
+    @Param('id') id: string,
+    @CurrentUser() user: AuthContext,
+  ) {
+    return this.academicService.deleteSubject(schoolId, id, user.id);
+  }
+
+  @ApiOperation({ summary: 'Toggle subject active/inactive status' })
+  @Permission(ResourceEnum.SUBJECTS, ActionEnum.UPDATE)
+  @Patch('subjects/:id/status')
+  async toggleSubjectStatus(
+    @Param('schoolId') schoolId: string,
+    @Param('id') id: string,
+    @CurrentUser() user: AuthContext,
+    @Body() body: { status: string },
+  ) {
+    return this.academicService.toggleSubjectStatus(
+      schoolId,
+      id,
+      body.status,
+      user.id,
+    );
+  }
+
+  @ApiOperation({ summary: 'Configure subject marks' })
+  @Permission(ResourceEnum.SUBJECTS, ActionEnum.UPDATE)
+  @Post('subjects/:id/marks-config')
+  async configureSubjectMarks(
+    @Param('schoolId') schoolId: string,
+    @Param('id') id: string,
+    @CurrentUser() user: AuthContext,
+    @Body() body: any,
+  ) {
+    return this.academicService.configureSubjectMarks(
+      schoolId,
+      id,
+      body,
+      user.id,
+    );
+  }
+
+  @ApiOperation({ summary: 'Update subject credit' })
+  @Permission(ResourceEnum.SUBJECTS, ActionEnum.UPDATE)
+  @Post('subjects/:id/credit')
+  async updateSubjectCredit(
+    @Param('schoolId') schoolId: string,
+    @Param('id') id: string,
+    @CurrentUser() user: AuthContext,
+    @Body() body: { credit: number },
+  ) {
+    return this.academicService.updateSubjectCredit(
+      schoolId,
+      id,
+      body.credit,
+      user.id,
+    );
+  }
+
+  @ApiOperation({ summary: 'Get subject dashboard analytics' })
+  @Permission(ResourceEnum.SUBJECTS, ActionEnum.VIEW)
+  @Get('subjects/:id/dashboard')
+  async getSubjectDashboard(
+    @Param('schoolId') schoolId: string,
+    @Param('id') id: string,
+  ) {
+    return this.academicService.getSubjectDashboard(schoolId, id);
   }
 
   // MAPPINGS
