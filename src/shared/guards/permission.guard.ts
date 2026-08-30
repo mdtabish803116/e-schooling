@@ -1,18 +1,26 @@
 import {
-  Injectable,
   CanActivate,
   ExecutionContext,
   ForbiddenException,
+  Injectable,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { DataSource } from 'typeorm';
+import { AuthContext } from '../../interfaces/auth-context.interface';
+import { SchoolOwnerMember } from '../../models/entities/school/school-owner-member.entity';
+import { School } from '../../models/entities/school/school.entity';
 import { RBACService } from '../../services/school-roles/rbac.service';
 import {
   PERMISSION_KEY,
   PermissionMetadata,
 } from '../decorators/permission.decorator';
-import { SchoolOwnerMember } from '../../models/entities/school/school-owner-member.entity';
-import { School } from '../../models/entities/school/school.entity';
+
+interface RequestWithUser {
+  user?: AuthContext;
+  params?: Record<string, string>;
+  body?: Record<string, unknown>;
+  query?: Record<string, string>;
+}
 
 @Injectable()
 export class PermissionGuard implements CanActivate {
@@ -29,7 +37,7 @@ export class PermissionGuard implements CanActivate {
         context.getClass(),
       ]);
 
-    const request = context.switchToHttp().getRequest();
+    const request = context.switchToHttp().getRequest<RequestWithUser>();
     const user = request.user;
 
     if (!user) {
@@ -40,10 +48,17 @@ export class PermissionGuard implements CanActivate {
     }
 
     // SCHOOL ID TENANT VALIDATION & OWNERSHIP CHECK
-    const routeSchoolId =
-      request.params?.schoolId ||
-      request.body?.schoolId ||
+    const rawSchoolId =
+      request.params?.schoolId ??
+      request.body?.schoolId ??
       request.query?.schoolId;
+    const routeSchoolId =
+      typeof rawSchoolId === 'string'
+        ? rawSchoolId
+        : typeof rawSchoolId === 'number'
+          ? `${rawSchoolId}`
+          : '';
+
     if (routeSchoolId && routeSchoolId !== 'undefined') {
       if (user.actorType === 'school_owner') {
         const membership = await this.dataSource
@@ -61,10 +76,19 @@ export class PermissionGuard implements CanActivate {
           const school = await this.dataSource.getRepository(School).findOne({
             where: { id: routeSchoolId, isDeleted: false },
           });
+          const rawOwnerId = (school as unknown as Record<string, unknown>)
+            ?.ownerId;
+          const schoolOwnerId =
+            typeof rawOwnerId === 'string'
+              ? rawOwnerId
+              : typeof rawOwnerId === 'number'
+                ? `${rawOwnerId}`
+                : '';
+
           if (
             school &&
             (String(school.createdById) === String(user.id) ||
-              (school as any).ownerId === String(user.id))
+              schoolOwnerId === String(user.id))
           ) {
             hasAccess = true;
           }
@@ -114,7 +138,7 @@ export class PermissionGuard implements CanActivate {
       requiredPermission.action,
     );
 
-    // Fallback: If route requires 'view' and user doesn't have it, check if they have 'view_assigned'
+    // Fallback: If route requires 'view' and user doesn't have it, check if they have 'view_assigned' or core lookups
     if (!hasPermission && requiredPermission.action === 'view') {
       const hasViewAssigned = await this.rbacService.hasPermission(
         user.id,
@@ -122,6 +146,19 @@ export class PermissionGuard implements CanActivate {
         'view_assigned',
       );
       if (hasViewAssigned) {
+        hasPermission = true;
+      }
+
+      // Allow school_user to view core academic lookups (classes, sections, subjects, rooms, academic_sessions)
+      const isCoreLookup = [
+        'classes',
+        'sections',
+        'subjects',
+        'rooms',
+        'academic_sessions',
+      ].includes(String(requiredPermission.resource).toLowerCase());
+
+      if (!hasPermission && user.actorType === 'school_user' && isCoreLookup) {
         hasPermission = true;
       }
 
