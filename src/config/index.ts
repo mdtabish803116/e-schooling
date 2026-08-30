@@ -1,5 +1,3 @@
-import * as dotenv from 'dotenv';
-
 export class Config {
   static getSecret(key: string, type: NumberConstructor): number | undefined;
   static getSecret(key: string, type: BooleanConstructor): boolean | undefined;
@@ -49,7 +47,7 @@ export class Config {
       connectionTimeoutMillis:
         typeof parsedConfig.connectionTimeoutMillis === 'number'
           ? parsedConfig.connectionTimeoutMillis
-          : 3000,
+          : 30000,
     };
   }
 
