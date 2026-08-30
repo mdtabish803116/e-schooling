@@ -57,8 +57,11 @@ export class OtpService {
     } else {
       dispatchResult = await this.emailService.sendEmail({
         to: cleanRecipient,
-        subject: `Your Verification Code (${purpose})`,
-        body: `<p>Your verification code is <strong>${otpCode}</strong>. Valid for ${expiryMinutes} minutes.</p>`,
+        templateId: process.env.MSG91_EMAIL_OTP_TEMPLATE_ID || undefined,
+        variables: {
+          company_name: process.env.COMPANY_NAME || 'eSchooling',
+          otp: otpCode,
+        }
       });
     }
 
