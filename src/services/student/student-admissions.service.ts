@@ -98,8 +98,8 @@ export class StudentAdmissionsService {
     queryRunner?: any,
   ): Promise<string> {
     const manager = queryRunner ? queryRunner.manager : this.dataSource.manager;
-    if (customCode && customCode.trim()) {
-      const cleanCode = customCode.trim().toUpperCase();
+    if (customCode !== undefined && customCode !== null && String(customCode).trim() !== '') {
+      const cleanCode = String(customCode).trim().toUpperCase();
       const existing = await manager.getRepository(Student).findOne({
         where: { schoolId, studentCode: cleanCode, isDeleted: false },
       });
@@ -141,8 +141,8 @@ export class StudentAdmissionsService {
     queryRunner?: any,
   ): Promise<string> {
     const manager = queryRunner ? queryRunner.manager : this.dataSource.manager;
-    if (customNo && customNo.trim()) {
-      const cleanNo = customNo.trim().toUpperCase();
+    if (customNo !== undefined && customNo !== null && String(customNo).trim() !== '') {
+      const cleanNo = String(customNo).trim().toUpperCase();
       const existing = await manager.getRepository(Student).findOne({
         where: { schoolId, admissionNumber: cleanNo, isDeleted: false },
       });
@@ -185,8 +185,8 @@ export class StudentAdmissionsService {
     queryRunner?: any,
   ): Promise<string> {
     const manager = queryRunner ? queryRunner.manager : this.dataSource.manager;
-    if (customRoll && customRoll.trim()) {
-      const cleanRoll = customRoll.trim();
+    if (customRoll !== undefined && customRoll !== null && String(customRoll).trim() !== '') {
+      const cleanRoll = String(customRoll).trim();
       const parsed = parseInt(cleanRoll, 10);
       if (isNaN(parsed) || parsed <= 0) {
         throw new BadRequestException(
@@ -428,8 +428,9 @@ export class StudentAdmissionsService {
         queryRunner,
       );
 
+      const rawPassword = dto.dob || dto.admissionNumber || 'Student@123';
       const salt = await bcrypt.genSalt(10);
-      const passwordHash = await bcrypt.hash(dto.dob, salt);
+      const passwordHash = await bcrypt.hash(rawPassword, salt);
 
       const student = new Student();
       student.schoolId = schoolId;

@@ -4,6 +4,7 @@ import {
   Delete,
   Get,
   Param,
+  Patch,
   Post,
   Put,
   Query,
@@ -72,6 +73,35 @@ export class TimetableController {
     @Body() payload: CreatePeriodPayload,
   ) {
     return this.timetableService.createPeriod(schoolId, payload);
+  }
+
+  @ApiOperation({ summary: 'Update a period' })
+  @Put('periods/:id')
+  async updatePeriod(
+    @Param('schoolId') schoolId: string,
+    @Param('id') id: string,
+    @Body() payload: Partial<CreatePeriodPayload>,
+  ) {
+    return this.timetableService.updatePeriod(schoolId, id, payload);
+  }
+
+  @ApiOperation({ summary: 'Patch update a period' })
+  @Patch('periods/:id')
+  async patchPeriod(
+    @Param('schoolId') schoolId: string,
+    @Param('id') id: string,
+    @Body() payload: Partial<CreatePeriodPayload>,
+  ) {
+    return this.timetableService.updatePeriod(schoolId, id, payload);
+  }
+
+  @ApiOperation({ summary: 'Delete a period' })
+  @Delete('periods/:id')
+  async deletePeriod(
+    @Param('schoolId') schoolId: string,
+    @Param('id') id: string,
+  ) {
+    return this.timetableService.deletePeriod(schoolId, id);
   }
 
   @ApiOperation({ summary: 'Get all timetable slots' })

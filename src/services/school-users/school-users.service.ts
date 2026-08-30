@@ -424,7 +424,12 @@ export class SchoolUsersService {
       profile.schoolUserId = userId;
     }
 
-    Object.assign(profile, dto);
+    const profileData = (dto as any).profile
+      ? { ...dto, ...(dto as any).profile }
+      : { ...dto };
+    delete (profileData as any).profile;
+
+    Object.assign(profile, profileData);
     const savedProfile = await profileRepo.save(profile);
     return {
       message: 'User profile updated successfully',

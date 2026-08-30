@@ -244,6 +244,52 @@ export class TimetableService {
     };
   }
 
+  // 6a. Update Period
+  async updatePeriod(
+    schoolId: string,
+    id: string,
+    payload: Partial<CreatePeriodPayload>,
+  ) {
+    const period = await this.periodRepo.findOne({
+      where: { id, schoolId, isDeleted: false },
+    });
+    if (!period) throw new NotFoundException('Period not found');
+
+    if (payload.name) period.name = payload.name;
+    if (payload.startTime) period.startTime = payload.startTime;
+    if (payload.endTime) period.endTime = payload.endTime;
+    if (payload.type) period.type = payload.type;
+    if (payload.displayOrder != null) period.displayOrder = payload.displayOrder;
+
+    const saved = await this.periodRepo.save(period);
+    return {
+      id: saved.id,
+      name: saved.name,
+      startTime: saved.startTime,
+      endTime: saved.endTime,
+      type: saved.type,
+      displayOrder: saved.displayOrder,
+    };
+  }
+
+  // 6b. Delete Period
+  async deletePeriod(schoolId: string, id: string) {
+    const period = await this.periodRepo.findOne({
+      where: { id, schoolId, isDeleted: false },
+    });
+    if (!period) throw new NotFoundException('Period not found');
+
+    period.isDeleted = true;
+    period.isActive = false;
+    await this.periodRepo.save(period);
+
+    return {
+      success: true,
+      message: 'Period deleted successfully',
+      id,
+    };
+  }
+
   // Helper to format slot response
   private async formatSlot(slot: TimetableSlot) {
     let className = '';
