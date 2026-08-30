@@ -162,6 +162,15 @@ export class PermissionGuard implements CanActivate {
         hasPermission = true;
       }
 
+      // Fallback for announcements: allow authenticated school owners and school users
+      if (
+        !hasPermission &&
+        (requiredPermission.resource === 'announcements' ||
+          requiredPermission.resource === 'ANNOUNCEMENTS')
+      ) {
+        hasPermission = true;
+      }
+
       // Fallback for academic_mapping: allow if user has permission to view sections, classes, or subjects
       if (
         !hasPermission &&

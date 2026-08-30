@@ -19,6 +19,7 @@ import { TransportModule } from './v1/transport/transport.module';
 import { BackgroundJobsModule } from './v1/background-jobs/background-jobs.module';
 import { LookupsModule } from './v1/lookups/lookups.module';
 import { ExamModule } from './v1/exam/exam.module';
+import { AnnouncementsModule } from './v1/announcements/announcements.module';
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { ExamModule } from './v1/exam/exam.module';
     BackgroundJobsModule,
     LookupsModule,
     ExamModule,
+    AnnouncementsModule,
   ],
   controllers: [],
   providers: [],
