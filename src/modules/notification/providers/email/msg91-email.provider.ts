@@ -34,23 +34,20 @@ export class Msg91EmailProvider implements IEmailProvider {
       const toArray = recipients.map((email) => ({ email }));
 
       const payload: Record<string, any> = {
-        to: toArray,
+        recipients: [
+          {
+            to: toArray,
+            variables: request.variables || {},
+          },
+        ],
         from: {
           name: this.fromName,
           email: this.fromEmail,
         },
-        domain: this.domain,
-        subject: request.subject,
+        domain: this.domain || (this.fromEmail ? this.fromEmail.split('@')[1] : ''),
       };
-
-      if (request.html || request.body) {
-        payload.body = request.html || request.body;
-      }
-
-      if (request.templateId) {
-        payload.template_id = request.templateId;
-        payload.variables = request.variables || {};
-      }
+      
+      payload.template_id = request.templateId;
 
       const response = await fetch('https://control.msg91.com/api/v5/email/send', {
         method: 'POST',
@@ -63,11 +60,18 @@ export class Msg91EmailProvider implements IEmailProvider {
 
       const responseData = await response.json();
 
-      if (!response.ok || (responseData && responseData.type === 'error')) {
+      if (!response.ok || (responseData && responseData.type === 'error') || responseData.hasError) {
         this.logger.error(`MSG91 Email Error: ${JSON.stringify(responseData)}`);
+        
+        let detailedError = responseData.message || 'Failed to send Email via MSG91';
+        if (responseData.errors && typeof responseData.errors === 'object') {
+          const errorDetails = Object.values(responseData.errors).flat().join(' | ');
+          detailedError = `${detailedError} - ${errorDetails}`;
+        }
+        
         return {
           success: false,
-          error: responseData.message || 'Failed to send Email via MSG91',
+          error: detailedError,
           providerResponse: responseData,
         };
       }

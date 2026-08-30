@@ -1,6 +1,6 @@
 export interface ISendEmailRequest {
   to: string | string[]; // Recipient email address(es)
-  subject: string;
+  subject?: string;
   body?: string; // HTML or plain text body
   html?: string;
   templateId?: string; // MSG91 or provider email template ID
