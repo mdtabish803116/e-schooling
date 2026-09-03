@@ -2,15 +2,14 @@ import { Config } from '../../../config/index';
 import * as path from 'path';
 
 export const migrations = () => {
-  const defaultMigrations = [
-    path.join(
-      process.cwd(),
-      'dist/core/database/postgres/migrations/**/*{.ts,.js}',
-    ),
-  ];
-  const migrationsList = [
-    ...defaultMigrations,
-    // Add other project migrations here if any
-  ];
-  return migrationsList;
+  const rootDir = process.cwd();
+  const isTsNode =
+    process.argv.some((arg) => arg.includes('ts-node')) ||
+    !__dirname.includes('dist');
+
+  const pattern = isTsNode
+    ? path.join(rootDir, 'src/core/database/postgres/migrations/**/*{.ts,.js}')
+    : path.join(rootDir, 'dist/core/database/postgres/migrations/**/*{.ts,.js}');
+
+  return [pattern.replace(/\\/g, '/')];
 };

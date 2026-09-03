@@ -2368,17 +2368,11 @@ export class AcademicService implements OnModuleInit {
   }
 
   async getCurrentAcademicSession(schoolId: string) {
-    let session = await this.sessionRepo.findOne({
+    const session = await this.sessionRepo.findOne({
       where: { schoolId, isCurrent: true, isDeleted: false },
     });
     if (!session) {
-      session = await this.sessionRepo.findOne({
-        where: { schoolId, isDeleted: false },
-        order: { startDate: 'DESC', createdAt: 'DESC' },
-      });
-    }
-    if (!session) {
-      throw new NotFoundException('No active academic session found');
+      throw new NotFoundException('No active academic session found for this school');
     }
     return session;
   }

@@ -7,6 +7,7 @@ import {
 import { Reflector } from '@nestjs/core';
 import { DataSource } from 'typeorm';
 import { AuthContext } from '../../interfaces/auth-context.interface';
+import { AcademicSession } from '../../models/entities/academic/academic-session.entity';
 import { SchoolOwnerMember } from '../../models/entities/school/school-owner-member.entity';
 import { School } from '../../models/entities/school/school.entity';
 import { RBACService } from '../../services/school-roles/rbac.service';
@@ -21,6 +22,24 @@ interface RequestWithUser {
   body?: Record<string, unknown>;
   query?: Record<string, string>;
 }
+
+const SESSION_DEPENDENT_RESOURCES = [
+  'classes',
+  'sections',
+  'subjects',
+  'academic_mapping',
+  'students',
+  'student_credentials',
+  'attendance',
+  'take_attendance',
+  'timetable',
+  'exams',
+  'fees',
+  'finance_invoice',
+  'homework',
+  'reports',
+  'rooms',
+];
 
 @Injectable()
 export class PermissionGuard implements CanActivate {
@@ -106,6 +125,32 @@ export class PermissionGuard implements CanActivate {
         throw new ForbiddenException({
           message: `Access Restricted: Your staff account is assigned to School #${user.schoolId} and cannot access School #${routeSchoolId}. Please return to your assigned school portal.`,
         });
+      }
+
+      // ACTIVE ACADEMIC SESSION REQUIREMENT FOR OPERATIONAL MODULES
+      if (
+        requiredPermission &&
+        SESSION_DEPENDENT_RESOURCES.includes(
+          String(requiredPermission.resource).toLowerCase(),
+        )
+      ) {
+        const activeSession = await this.dataSource
+          .getRepository(AcademicSession)
+          .findOne({
+            where: {
+              schoolId: routeSchoolId,
+              isCurrent: true,
+              isDeleted: false,
+            },
+          });
+
+        if (!activeSession) {
+          throw new ForbiddenException({
+            message:
+              'No active academic session found for this school. Please create and activate an academic session first.',
+            code: 'NO_ACTIVE_ACADEMIC_SESSION',
+          });
+        }
       }
     }
 

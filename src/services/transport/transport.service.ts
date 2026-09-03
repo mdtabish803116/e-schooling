@@ -550,51 +550,103 @@ export class TransportService {
   }
 
   // Transport Settings (DB Driven)
-  async getSettings(schoolId: string): Promise<TransportSettings> {
-    let settings = await this.settingsRepository.findOne({
-      where: { schoolId },
-    });
-    if (!settings) {
-      const defaultSettings = this.settingsRepository.create({
-        schoolId,
-        autoAssignSeatOnAllocation: true,
-        maxOverCapacityPercent: 0,
-        requireDriverLicenseVerification: true,
-        mandatoryPreTripInspection: true,
-        speedLimitKmvh: 50,
-        gpsTrackingEnabled: true,
-        gpsProvider: 'FleetX Live GPS Telematics',
-        gpsApiKey: 'fltx_live_sec_8921x49',
-        emergencyContactPhone: '+91 98765 43210',
-        notifyOnTripStart: true,
-        notifyOnApproach: true,
-        proximityRadiusKm: 1.5,
-        notifyOnBoarding: true,
-        defaultFeePricingModel: 'STOP_BASED',
-        billingCycle: 'MONTHLY',
-        lateFeePercentage: 5,
-        allowVacationDiscount: true,
-        licenseExpiryAlertDays: 30,
-        fitnessExpiryAlertDays: 30,
-        insuranceExpiryAlertDays: 30,
-      });
-      settings = await this.settingsRepository.save(defaultSettings);
+  private async ensureSettingsTable(): Promise<void> {
+    try {
+      await this.settingsRepository.query(`
+        CREATE SCHEMA IF NOT EXISTS "e_schooling";
+        CREATE TABLE IF NOT EXISTS "e_schooling"."transport_settings" (
+          "id" BIGSERIAL PRIMARY KEY,
+          "school_id" bigint NOT NULL UNIQUE,
+          "auto_assign_seat_on_allocation" boolean NOT NULL DEFAULT true,
+          "max_over_capacity_percent" integer NOT NULL DEFAULT 0,
+          "require_driver_license_verification" boolean NOT NULL DEFAULT true,
+          "mandatory_pre_trip_inspection" boolean NOT NULL DEFAULT true,
+          "speed_limit_kmvh" integer NOT NULL DEFAULT 50,
+          "gps_tracking_enabled" boolean NOT NULL DEFAULT true,
+          "gps_provider" varchar(150) NOT NULL DEFAULT 'FleetX Live GPS Telematics',
+          "gps_api_key" varchar(255),
+          "emergency_contact_phone" varchar(50) NOT NULL DEFAULT '+91 98765 43210',
+          "notify_on_trip_start" boolean NOT NULL DEFAULT true,
+          "notify_on_approach" boolean NOT NULL DEFAULT true,
+          "proximity_radius_km" float NOT NULL DEFAULT 1.5,
+          "notify_on_boarding" boolean NOT NULL DEFAULT true,
+          "default_fee_pricing_model" varchar(50) NOT NULL DEFAULT 'STOP_BASED',
+          "billing_cycle" varchar(50) NOT NULL DEFAULT 'MONTHLY',
+          "late_fee_percentage" integer NOT NULL DEFAULT 5,
+          "allow_vacation_discount" boolean NOT NULL DEFAULT true,
+          "license_expiry_alert_days" integer NOT NULL DEFAULT 30,
+          "fitness_expiry_alert_days" integer NOT NULL DEFAULT 30,
+          "insurance_expiry_alert_days" integer NOT NULL DEFAULT 30,
+          "created_at" timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          "updated_at" timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
+    } catch (err) {
+      console.warn('Could not auto-create transport_settings table:', err);
     }
-    return settings;
+  }
+
+  async getSettings(schoolId: string): Promise<TransportSettings> {
+    try {
+      let settings = await this.settingsRepository.findOne({
+        where: { schoolId },
+      });
+      if (!settings) {
+        const defaultSettings = this.settingsRepository.create({
+          schoolId,
+          autoAssignSeatOnAllocation: true,
+          maxOverCapacityPercent: 0,
+          requireDriverLicenseVerification: true,
+          mandatoryPreTripInspection: true,
+          speedLimitKmvh: 50,
+          gpsTrackingEnabled: true,
+          gpsProvider: 'FleetX Live GPS Telematics',
+          gpsApiKey: 'fltx_live_sec_8921x49',
+          emergencyContactPhone: '+91 98765 43210',
+          notifyOnTripStart: true,
+          notifyOnApproach: true,
+          proximityRadiusKm: 1.5,
+          notifyOnBoarding: true,
+          defaultFeePricingModel: 'STOP_BASED',
+          billingCycle: 'MONTHLY',
+          lateFeePercentage: 5,
+          allowVacationDiscount: true,
+          licenseExpiryAlertDays: 30,
+          fitnessExpiryAlertDays: 30,
+          insuranceExpiryAlertDays: 30,
+        });
+        settings = await this.settingsRepository.save(defaultSettings);
+      }
+      return settings;
+    } catch (err: any) {
+      if (err?.message?.includes('transport_settings') || err?.code === '42P01') {
+        await this.ensureSettingsTable();
+        return this.getSettings(schoolId);
+      }
+      throw err;
+    }
   }
 
   async updateSettings(
     schoolId: string,
     payload: Partial<TransportSettings>,
   ): Promise<TransportSettings> {
-    let settings = await this.settingsRepository.findOne({
-      where: { schoolId },
-    });
-    if (!settings) {
-      settings = this.settingsRepository.create({ schoolId, ...payload });
-    } else {
-      Object.assign(settings, payload);
+    try {
+      let settings = await this.settingsRepository.findOne({
+        where: { schoolId },
+      });
+      if (!settings) {
+        settings = this.settingsRepository.create({ schoolId, ...payload });
+      } else {
+        Object.assign(settings, payload);
+      }
+      return await this.settingsRepository.save(settings);
+    } catch (err: any) {
+      if (err?.message?.includes('transport_settings') || err?.code === '42P01') {
+        await this.ensureSettingsTable();
+        return this.updateSettings(schoolId, payload);
+      }
+      throw err;
     }
-    return this.settingsRepository.save(settings);
   }
 }

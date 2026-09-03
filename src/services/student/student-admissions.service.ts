@@ -350,21 +350,9 @@ export class StudentAdmissionsService {
         where: { schoolId, isCurrent: true, isDeleted: false },
       });
       if (!targetSession) {
-        targetSession = await sessionRepo.findOne({
-          where: { schoolId, isDeleted: false },
-          order: { createdAt: 'DESC' },
-        });
-      }
-      if (!targetSession) {
-        const newSession = sessionRepo.create({
-          schoolId,
-          name: '2025-2026',
-          startDate: '2025-04-01',
-          endDate: '2026-03-31',
-          isCurrent: true,
-          isActive: true,
-        });
-        targetSession = await sessionRepo.save(newSession);
+        throw new BadRequestException(
+          'No active academic session found for this school. Please create and activate an academic session first.',
+        );
       }
     }
     dto.academicSessionId = targetSession.id;
@@ -1077,18 +1065,12 @@ export class StudentAdmissionsService {
     let resolvedSessionId = dto.targetSessionId;
     if (!resolvedSessionId) {
       const sessionRepo = this.dataSource.getRepository(AcademicSession);
-      let activeSession = await sessionRepo.findOne({
+      const activeSession = await sessionRepo.findOne({
         where: { schoolId, isCurrent: true, isDeleted: false },
       });
       if (!activeSession) {
-        activeSession = await sessionRepo.findOne({
-          where: { schoolId, isDeleted: false },
-          order: { createdAt: 'DESC' },
-        });
-      }
-      if (!activeSession) {
-        throw new NotFoundException(
-          'No active academic session found in the database. Please create a session first.',
+        throw new BadRequestException(
+          'No active academic session found for this school. Please create and activate an academic session first.',
         );
       }
       resolvedSessionId = activeSession.id;
