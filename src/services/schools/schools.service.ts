@@ -189,25 +189,14 @@ export class SchoolsService {
       member.createdById = caller.id;
       await queryRunner.manager.save(member);
 
-      // Auto-create initial active academic session (e.g. 2026-2027)
-      const currentYear = new Date().getFullYear();
-      const initialSession = new AcademicSession();
-      initialSession.schoolId = savedSchool.id;
-      initialSession.name = `${currentYear}-${currentYear + 1}`;
-      initialSession.startDate = `${currentYear}-04-01`;
-      initialSession.endDate = `${currentYear + 1}-03-31`;
-      initialSession.isCurrent = true;
-      initialSession.isActive = true;
-      initialSession.isDeleted = false;
-      initialSession.createdById = caller.id;
-      await queryRunner.manager.save(initialSession);
+      // NOTE: No default academic session is auto-created.
+      // Owners must explicitly create academic sessions from the dashboard.
 
       await queryRunner.commitTransaction();
 
       return {
         message: 'School registered successfully.',
         school: savedSchool,
-        initialSession,
       };
     } catch (error) {
       await queryRunner.rollbackTransaction();
