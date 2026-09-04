@@ -97,12 +97,36 @@ export class GlobalHttpExceptionFilter implements ExceptionFilter {
       `[${status}] ${errorCodeFinal} ${request.method} ${request.url}: ${Array.isArray(message) ? message.join(', ') : message}`,
     );
 
-    response.status(status).json({
+    const errorPayload = {
       success: false,
       statusCode: status,
       error: errorCodeFinal,
       message,
-    });
+    };
+
+    const isEncryptedReq =
+      (request as any)?.isEncryptedPayload === true ||
+      (request as any)?.clientRequestedEncryption === true ||
+      request.headers?.['x-payload-encrypted'] === '1' ||
+      request.headers?.['x-payload-encrypted'] === 'true';
+
+    if (isEncryptedReq) {
+      try {
+        const { ApiCryptoService, API_CRYPTO_CONSTANTS } = require('../crypto/api-crypto.service');
+        const encrypted = ApiCryptoService.encrypt(errorPayload);
+        response.setHeader(API_CRYPTO_CONSTANTS.HEADER_ENCRYPTED, '1');
+        response.setHeader(
+          API_CRYPTO_CONSTANTS.HEADER_VERSION,
+          API_CRYPTO_CONSTANTS.KEY_VERSION_STRING,
+        );
+        response.status(status).json(encrypted);
+        return;
+      } catch (err: any) {
+        this.logger.error(`Failed to encrypt error response: ${err.message}`);
+      }
+    }
+
+    response.status(status).json(errorPayload);
   }
 
   private httpStatusToDefaultCode(status: number): string {
