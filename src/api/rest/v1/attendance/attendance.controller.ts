@@ -118,6 +118,28 @@ export class AttendanceController {
     return this.attendanceService.takeAttendance(caller, schoolId, dto);
   }
 
+  @ApiOperation({ summary: 'Mark student attendance (Alias endpoint)' })
+  @Permission(ResourceEnum.ATTENDANCE, ActionEnum.CREATE)
+  @Post('students')
+  async markStudentAttendance(
+    @Param('schoolId') schoolId: string,
+    @CurrentUser() caller: AuthContext,
+    @Body() dto: TakeAttendanceDto,
+  ) {
+    return this.attendanceService.takeAttendance(caller, schoolId, dto);
+  }
+
+  @ApiOperation({ summary: 'Bulk mark student attendance (Alias endpoint)' })
+  @Permission(ResourceEnum.ATTENDANCE, ActionEnum.CREATE)
+  @Post('students/bulk')
+  async markStudentAttendanceBulk(
+    @Param('schoolId') schoolId: string,
+    @CurrentUser() caller: AuthContext,
+    @Body() dto: TakeAttendanceDto,
+  ) {
+    return this.attendanceService.takeAttendance(caller, schoolId, dto);
+  }
+
   @ApiOperation({ summary: 'Get list of real students for attendance marking' })
   @Permission(ResourceEnum.ATTENDANCE, ActionEnum.VIEW)
   @Get('students')
@@ -258,6 +280,36 @@ export class AttendanceController {
     );
   }
 
+  @ApiOperation({ summary: 'Get teachers attendance list (Alias endpoint)' })
+  @Permission(ResourceEnum.ATTENDANCE, ActionEnum.VIEW)
+  @Get('teachers')
+  async getTeachersAttendanceList(
+    @Param('schoolId') schoolId: string,
+    @CurrentUser() caller: AuthContext,
+    @Query('date') date?: string,
+  ) {
+    return this.attendanceService.getStaffAttendanceList(
+      caller,
+      schoolId,
+      date,
+    );
+  }
+
+  @ApiOperation({ summary: 'Get teacher attendance history (Alias endpoint)' })
+  @Permission(ResourceEnum.ATTENDANCE, ActionEnum.VIEW)
+  @Get('teachers/:staffId/history')
+  async getTeacherAttendanceHistory(
+    @Param('schoolId') schoolId: string,
+    @Param('staffId') staffId: string,
+    @CurrentUser() caller: AuthContext,
+  ) {
+    return this.attendanceService.getStaffAttendanceHistory(
+      caller,
+      schoolId,
+      staffId,
+    );
+  }
+
   @ApiOperation({ summary: 'Sync biometric punches' })
   @Permission(ResourceEnum.ATTENDANCE, ActionEnum.CREATE)
   @Post('biometric/sync')
@@ -343,6 +395,27 @@ export class AttendanceController {
       Number(threshold) || 75,
       academicSessionId,
     );
+  }
+
+  @ApiOperation({ summary: 'Get daily attendance report' })
+  @Permission(ResourceEnum.ATTENDANCE, ActionEnum.VIEW)
+  @Get('reports/daily')
+  async getDailyReport(
+    @Param('schoolId') schoolId: string,
+    @CurrentUser() caller: AuthContext,
+    @CurrentAcademicSession() sessionFromHeader: string | null,
+    @Query('date') date?: string,
+    @Query('classId') classId?: string,
+    @Query('sectionId') sectionId?: string,
+    @Query('academicSessionId') querySessionId?: string,
+  ) {
+    const academicSessionId = querySessionId || sessionFromHeader || undefined;
+    return this.attendanceService.getDailyReport(caller, schoolId, {
+      date,
+      classId,
+      sectionId,
+      academicSessionId,
+    });
   }
 
   @ApiOperation({ summary: 'Get monthly attendance matrix report' })

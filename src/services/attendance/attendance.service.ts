@@ -326,105 +326,8 @@ interface StatusItemOverview {
 }
 
 @Injectable()
-export class AttendanceService implements OnModuleInit {
+export class AttendanceService {
   constructor(private readonly dataSource: DataSource) {}
-
-  async onModuleInit() {
-    try {
-      await this.dataSource.query(`
-        CREATE TABLE IF NOT EXISTS "e_schooling"."attendance_locks" (
-          "id" BIGSERIAL PRIMARY KEY,
-          "school_id" bigint NOT NULL,
-          "date" date NOT NULL,
-          "is_locked" boolean NOT NULL DEFAULT true,
-          "locked_by" varchar,
-          "created_by_id" bigint,
-          "created_at" TIMESTAMP NOT NULL DEFAULT now(),
-          "updated_at" TIMESTAMP NOT NULL DEFAULT now()
-        );
-      `);
-      await this.dataSource.query(`
-        CREATE INDEX IF NOT EXISTS "IDX_attendance_locks_school_date" ON "e_schooling"."attendance_locks" ("school_id", "date");
-      `);
-      await this.dataSource.query(`
-        CREATE TABLE IF NOT EXISTS "e_schooling"."attendance_settings" (
-          "id" BIGSERIAL PRIMARY KEY,
-          "school_id" bigint NOT NULL UNIQUE,
-          "defaulter_threshold" numeric DEFAULT 75,
-          "notify_parents" boolean DEFAULT true,
-          "allow_future_attendance" boolean DEFAULT false,
-          "auto_lock_past_days" int DEFAULT 7,
-          "late_arrival_penalty" boolean DEFAULT false,
-          "half_day_time_cutoff" varchar DEFAULT '11:30 AM',
-          "created_at" TIMESTAMP NOT NULL DEFAULT now(),
-          "updated_at" TIMESTAMP NOT NULL DEFAULT now()
-        );
-      `);
-      await this.dataSource.query(`
-        CREATE TABLE IF NOT EXISTS "e_schooling"."subject_attendance_sessions" (
-          "id"                   BIGSERIAL PRIMARY KEY,
-          "school_id"            BIGINT NOT NULL,
-          "academic_session_id"  BIGINT NULL,
-          "class_id"             BIGINT NOT NULL,
-          "section_id"           BIGINT NOT NULL,
-          "subject_id"           BIGINT NOT NULL,
-          "teacher_id"           BIGINT NULL,
-          "timetable_slot_id"    BIGINT NULL,
-          "date"                 DATE NOT NULL,
-          "period_number"        INTEGER NOT NULL DEFAULT 1,
-          "session_title"        VARCHAR(255) NULL,
-          "is_locked"            BOOLEAN NOT NULL DEFAULT false,
-          "locked_by"            VARCHAR(150) NULL,
-          "locked_at"            TIMESTAMP NULL,
-          "is_active"            BOOLEAN NOT NULL DEFAULT true,
-          "is_delete"            BOOLEAN NOT NULL DEFAULT false,
-          "created_by_id"        BIGINT NULL,
-          "updated_by_id"        BIGINT NULL,
-          "created_at"           TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          "updated_at"           TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-        );
-        CREATE TABLE IF NOT EXISTS "e_schooling"."subject_attendance_records" (
-          "id"                    BIGSERIAL PRIMARY KEY,
-          "session_id"            BIGINT NOT NULL REFERENCES "e_schooling"."subject_attendance_sessions"("id") ON DELETE CASCADE,
-          "student_enrollment_id" BIGINT NULL,
-          "student_id"            BIGINT NULL,
-          "attendance_mark"       VARCHAR(50) NOT NULL DEFAULT 'present',
-          "remarks"               TEXT NULL,
-          "is_active"             BOOLEAN NOT NULL DEFAULT true,
-          "is_delete"             BOOLEAN NOT NULL DEFAULT false,
-          "created_by_id"         BIGINT NULL,
-          "updated_by_id"         BIGINT NULL,
-          "created_at"            TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          "updated_at"            TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-        );
-
-        CREATE TABLE IF NOT EXISTS "e_schooling"."staff_attendance" (
-          "id"            BIGSERIAL PRIMARY KEY,
-          "school_id"     BIGINT NOT NULL,
-          "staff_id"      BIGINT NOT NULL,
-          "employee_code" VARCHAR(100) NULL,
-          "staff_name"    VARCHAR(255) NULL,
-          "role"          VARCHAR(100) NULL,
-          "department"    VARCHAR(100) NULL,
-          "date"          DATE NOT NULL,
-          "status"        VARCHAR(50) NOT NULL DEFAULT 'Present',
-          "check_in"      VARCHAR(50) NULL DEFAULT '08:15 AM',
-          "check_out"     VARCHAR(50) NULL DEFAULT '04:30 PM',
-          "source"        VARCHAR(50) NOT NULL DEFAULT 'MANUAL',
-          "remarks"       TEXT NULL,
-          "is_locked"     BOOLEAN NOT NULL DEFAULT false,
-          "is_active"     BOOLEAN NOT NULL DEFAULT true,
-          "is_deleted"    BOOLEAN NOT NULL DEFAULT false,
-          "created_at"    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          "updated_at"    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-        );
-        CREATE INDEX IF NOT EXISTS "IDX_staff_attendance_school_date" ON "e_schooling"."staff_attendance" ("school_id", "date");
-        CREATE UNIQUE INDEX IF NOT EXISTS "IDX_staff_attendance_unique" ON "e_schooling"."staff_attendance" ("school_id", "staff_id", "date");
-      `);
-    } catch (e) {
-      console.warn('Auto-creating attendance tables:', e);
-    }
-  }
 
   private parseDateFlexible(input?: string): string {
     if (!input || input.trim() === '') {
@@ -1242,6 +1145,60 @@ export class AttendanceService implements OnModuleInit {
       },
       order: { date: 'DESC' },
     });
+  }
+
+  async getDailyReport(
+    caller: AuthContext,
+    schoolId: string,
+    query: {
+      date?: string;
+      classId?: string;
+      sectionId?: string;
+      academicSessionId?: string;
+    },
+  ) {
+    await this.assertAccessToSchool(caller, schoolId);
+    const targetDate = this.parseDateFlexible(query.date);
+
+    const sessionQb = this.dataSource
+      .getRepository(AttendanceSession)
+      .createQueryBuilder('session')
+      .where('session.school_id = :schoolId', { schoolId: String(schoolId) })
+      .andWhere('session.is_delete = false')
+      .andWhere('session.date = :targetDate', { targetDate });
+
+    if (query.classId) {
+      sessionQb.andWhere('session.class_id = :classId', {
+        classId: String(query.classId),
+      });
+    }
+    if (query.sectionId) {
+      sessionQb.andWhere('session.section_id = :sectionId', {
+        sectionId: String(query.sectionId),
+      });
+    }
+
+    const sessions = await sessionQb.getMany();
+    if (!sessions.length) {
+      return [];
+    }
+
+    const sessionIds = sessions.map((s) => s.id);
+    const records = await this.dataSource
+      .getRepository(AttendanceRecord)
+      .createQueryBuilder('rec')
+      .where('rec.session_id IN (:...sessionIds)', { sessionIds })
+      .andWhere('rec.is_delete = false')
+      .getMany();
+
+    return records.map((r) => ({
+      id: r.id,
+      sessionId: r.sessionId,
+      studentEnrollmentId: r.studentEnrollmentId,
+      attendanceMark: r.attendanceMark,
+      status: String(r.attendanceMark).toUpperCase(),
+      remarks: r.remarks,
+    }));
   }
 
   async getMonthlyReport(
