@@ -206,6 +206,25 @@ export class SchoolsService {
     }
   }
 
+  async softDeleteSchool(caller: AuthContext, schoolId: string) {
+    if (caller.actorType !== 'school_owner') {
+      throw new ForbiddenException('Only school owners can delete schools');
+    }
+    await this.assertOwnershipOfSchool(caller.id, schoolId);
+    const schoolRepo = this.dataSource.getRepository(School);
+    const school = await schoolRepo.findOne({
+      where: { id: schoolId, isDeleted: false },
+    });
+    if (!school) throw new NotFoundException('School not found or already deleted');
+
+    school.isDeleted = true;
+    school.isActive = false;
+    school.updatedById = caller.id;
+    await schoolRepo.save(school);
+
+    return { message: 'School has been successfully deleted.' };
+  }
+
   async updateSchool(
     caller: AuthContext,
     schoolId: string,
@@ -272,7 +291,7 @@ export class SchoolsService {
 
     const schoolIds = memberships.map((m) => m.schoolId);
     const schools = await this.dataSource.getRepository(School).find({
-      where: { id: In(schoolIds) },
+      where: { id: In(schoolIds), isDeleted: false },
       order: { createdAt: 'DESC' },
     });
 
@@ -354,7 +373,7 @@ export class SchoolsService {
     }
     const school = await this.dataSource
       .getRepository(School)
-      .findOne({ where: { id: schoolId } });
+      .findOne({ where: { id: schoolId, isDeleted: false } });
     if (!school) throw new NotFoundException('School not found');
 
     // 1. Fetch active academic session for current active academic year

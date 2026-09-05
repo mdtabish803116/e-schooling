@@ -159,6 +159,27 @@ export class AcademicController {
     );
   }
 
+  @ApiOperation({ summary: 'Assign Co-Class Teacher' })
+  @Permission(ResourceEnum.CLASSES, ActionEnum.UPDATE)
+  @Post('classes/:id/assign-co-teacher')
+  async assignCoClassTeacher(
+    @Param('schoolId') schoolId: string,
+    @Param('id') id: string,
+    @CurrentUser() user: AuthContext,
+    @Body() body: { teacherId?: string | null; coClassTeacherId?: string | null },
+  ) {
+    const teacherId =
+      body.teacherId !== undefined
+        ? body.teacherId
+        : (body.coClassTeacherId ?? null);
+    return this.academicService.assignCoClassTeacher(
+      schoolId,
+      id,
+      teacherId,
+      user.id,
+    );
+  }
+
   // SECTIONS
   @ApiOperation({ summary: 'Create a new section' })
   @Permission(ResourceEnum.SECTIONS, ActionEnum.CREATE)

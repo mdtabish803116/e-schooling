@@ -797,6 +797,55 @@ export class AcademicService implements OnModuleInit {
     return { success: true, teacherId };
   }
 
+  async assignCoClassTeacher(
+    schoolId: string,
+    classId: string,
+    teacherId: string | null,
+    userId: string,
+  ) {
+    const cls = await this.classRepo.findOne({
+      where: { id: classId, schoolId, isDeleted: false },
+    });
+    if (!cls) throw new NotFoundException('Class not found');
+
+    const existingAssignment = await this.assignmentRepo.findOne({
+      where: {
+        classId,
+        schoolId,
+        sectionId: IsNull(),
+        isClassTeacher: false,
+        isDeleted: false,
+      },
+    });
+
+    if (teacherId) {
+      if (existingAssignment) {
+        existingAssignment.teacherId = teacherId;
+        existingAssignment.isActive = true;
+        existingAssignment.updatedById = userId;
+        await this.assignmentRepo.save(existingAssignment);
+      } else {
+        const newAssignment = this.assignmentRepo.create({
+          schoolId,
+          classId,
+          sectionId: null,
+          teacherId,
+          isClassTeacher: false,
+          isActive: true,
+          createdById: userId,
+          updatedById: userId,
+        });
+        await this.assignmentRepo.save(newAssignment);
+      }
+    } else if (existingAssignment) {
+      existingAssignment.isActive = false;
+      existingAssignment.updatedById = userId;
+      await this.assignmentRepo.save(existingAssignment);
+    }
+
+    return { success: true, teacherId };
+  }
+
   async assignSectionTeacher(
     schoolId: string,
     sectionId: string,

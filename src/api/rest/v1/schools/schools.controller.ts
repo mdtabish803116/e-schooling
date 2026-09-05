@@ -3,6 +3,7 @@ import {
   Post,
   Get,
   Patch,
+  Delete,
   Body,
   Param,
   UseGuards,
@@ -170,5 +171,18 @@ export class SchoolsController {
     @Body() dto: UpdateSchoolDto,
   ) {
     return this.schoolsService.updateSchool(caller, schoolId, dto);
+  }
+  @ApiOperation({ summary: 'Soft-delete a school (sets isDeleted=true, isActive=false)' })
+  @ApiResponse({
+    status: 200,
+    description: 'School soft-deleted successfully',
+    schema: { example: { message: 'School has been successfully deleted.' } },
+  })
+  @Delete(':schoolId')
+  async deleteSchool(
+    @CurrentUser() caller: AuthContext,
+    @Param('schoolId') schoolId: string,
+  ) {
+    return this.schoolsService.softDeleteSchool(caller, schoolId);
   }
 }
