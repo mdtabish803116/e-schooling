@@ -186,8 +186,11 @@ export class AnnouncementsService implements OnModuleInit {
     creatorName?: string,
     creatorRole?: string,
   ) {
-    const targets: TargetItem[] = Array.isArray(dto.targets)
-      ? (dto.targets as TargetItem[])
+    const rawTargets = dto.targets || dto.targetAudience;
+    const targets: TargetItem[] = Array.isArray(rawTargets)
+      ? rawTargets.map((t) =>
+          typeof t === 'string' ? { targetType: t, targetName: t } : t,
+        )
       : [{ targetType: 'EVERYONE', targetName: 'Everyone' }];
 
     const recipientSummary = this.computeRecipientSummary(targets);

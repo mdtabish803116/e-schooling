@@ -41,5 +41,8 @@ export class CreateAnnouncementDto {
   targets?: any[];
 
   @ApiPropertyOptional()
+  targetAudience?: any;
+
+  @ApiPropertyOptional()
   attachments?: any[];
 }
